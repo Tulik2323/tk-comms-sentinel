@@ -4,6 +4,9 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
+const fs      = require('fs');
+const http    = require('http');
+const https   = require('https');
 
 const { initDb }       = require('./db/database');
 
@@ -110,15 +113,48 @@ app.use((err, req, res, next) => {
     console.warn('[Reports] לא ניתן לטעון מתזמן:', e.message);
   }
 
-  app.listen(PORT, () => {
-  console.log(`
+  // --- Listener: HTTPS direct (standalone) or HTTP (dev / behind iisnode) ---
+  // The standalone build terminates TLS itself (no IIS in front). Two ways to
+  // supply a certificate, checked in order:
+  //   1. PFX  — TLS_PFX_PATH (+ TLS_PFX_PASSWORD). The installer generates a
+  //      self-signed .pfx via Windows' New-SelfSignedCertificate.
+  //   2. PEM  — TLS_CERT_PATH + TLS_KEY_PATH, for a customer-supplied cert.
+  // With no cert configured, fall back to plain HTTP on PORT (development).
+  const httpsPort = parseInt(process.env.HTTPS_PORT || '9443', 10);
+
+  const banner = (proto, port) => {
+    const demo = process.env.DEMO_MODE === 'true' ? 'ON' : 'OFF';
+    console.log(`
 ╔═══════════════════════════════════════════╗
-║       NetMonitor Backend — v1.0.0        ║
-║  פורט: ${PORT.toString().padEnd(5)}  Demo: ${process.env.DEMO_MODE === 'true' ? 'ON ' : 'OFF'}              ║
-╚═══════════════════════════════════════════╝
-  `);
-    console.log(`[Server] http://localhost:${PORT}/api/health`);
-  });
+║      TK Comms Sentinel — Backend v1.0.0   ║
+╚═══════════════════════════════════════════╝`);
+    console.log(`[Server] ${proto}://localhost:${port}/api/health  (Demo: ${demo})`);
+  };
+
+  const pfxPath  = process.env.TLS_PFX_PATH;
+  const certPath = process.env.TLS_CERT_PATH;
+  const keyPath  = process.env.TLS_KEY_PATH;
+
+  let tlsOptions = null;
+  try {
+    if (pfxPath && fs.existsSync(pfxPath)) {
+      tlsOptions = { pfx: fs.readFileSync(pfxPath), passphrase: process.env.TLS_PFX_PASSWORD || '' };
+    } else if (certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+      tlsOptions = { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) };
+    }
+  } catch (e) {
+    console.error(`[Server] cannot read TLS certificate: ${e.message}`);
+    process.exit(1);
+  }
+
+  if (tlsOptions) {
+    https.createServer(tlsOptions, app).listen(httpsPort, () => banner('https', httpsPort));
+  } else {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[Server] WARNING: no TLS certificate configured (TLS_PFX_PATH or TLS_CERT_PATH/TLS_KEY_PATH) — starting HTTP only.');
+    }
+    http.createServer(app).listen(PORT, () => banner('http', PORT));
+  }
 })();
 
 module.exports = app;
