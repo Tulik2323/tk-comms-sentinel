@@ -1,0 +1,49 @@
+# === Dependencies ===
+node_modules/
+
+# === Environment / secrets (NEVER commit) ===
+.env
+.env.local
+*.env.local
+
+# === Database DATA (source code like database.js/schema.sql IS tracked) ===
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.db.bak-*
+*.pre-nodesqlite
+
+# === Certificates / keys ===
+certs/
+*.pem
+*.pfx
+*.key
+*.crt
+*.p12
+
+# === Logs ===
+logs/
+iisnode-logs/
+*.log
+
+# === Build output ===
+frontend/dist/
+dist/
+build/
+out/
+
+# === Installer build artifacts (added in later steps) ===
+# Portable Node runtime and NSSM are fetched/vendored at build time,
+# not committed here (kept out of git to stay small).
+vendor/node/
+vendor/nssm/
+*.exe
+!install/**/*.exe
+
+# === OS / editor / tooling junk ===
+.claude/
+.impeccable/
+Thumbs.db
+Desktop.ini
+.DS_Store

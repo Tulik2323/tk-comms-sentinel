@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <!-- גרסת favicon: מגן + TK בלבד. הטבעות והעין נמחקות ל-16px, ומורידות קריאות. -->
+  <defs>
+    <linearGradient id="fg" x1="60" y1="40" x2="190" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4FC3F7"/>
+      <stop offset="0.52" stop-color="#6FD68A"/>
+      <stop offset="1" stop-color="#A5E063"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="240" height="240" rx="52" fill="#0B1B2E"/>
+
+  <path d="M120 36 L188 62 L188 122 C188 162 158 184 120 200 C82 184 52 162 52 122 L52 62 Z"
+        fill="none" stroke="url(#fg)" stroke-width="9" stroke-linejoin="round"/>
+
+  <g stroke="url(#fg)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M74 84 H116"/>
+    <path d="M95 84 V152"/>
+    <path d="M132 84 V152"/>
+    <path d="M132 118 L166 86"/>
+    <path d="M132 118 L168 152"/>
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+ip,name,community,snmp_version,location,notes
+10.0.1.1,Core-Switch-01,public,2c,Server Room,Main core switch - HPE Comware
+10.0.1.2,Core-Switch-02,public,2c,Server Room,Secondary core switch - HPE Comware
+10.0.1.10,Access-SW-Floor1,public,2c,Floor 1 IDF,48-port access switch - Aruba 2930F
+10.0.1.11,Access-SW-Floor2,public,2c,Floor 2 IDF,48-port access switch - Aruba 2930F
+10.0.1.12,Access-SW-Floor3,public,2c,Floor 3 IDF,48-port access switch - Aruba 2930F
+10.0.1.20,Distribution-01,public,2c,Main IDF,Distribution switch
+10.0.1.21,Distribution-02,public,2c,Secondary IDF,Distribution switch

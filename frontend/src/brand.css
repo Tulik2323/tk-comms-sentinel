@@ -1,0 +1,347 @@
+/* ============================================================
+   TK Comms Sentinel — זהות מותג ומסך אימות
+   ============================================================ */
+
+:root {
+  /* אות המותג: כחול → ירוק */
+  --tk-blue:   #4FC3F7;
+  --tk-mid:    #6FD68A;
+  --tk-green:  #A5E063;
+  --tk-grad:   linear-gradient(115deg, var(--tk-blue) 0%, var(--tk-mid) 52%, var(--tk-green) 100%);
+
+  /* נייבי עמוק — רקע חדר הבקרה */
+  --tk-void:   #060F1C;
+  --tk-deep:   #0B1B2E;
+  --tk-panel:  #10243B;
+  --tk-line:   #1D3A57;
+
+  /* טיפוגרפיה: פונטים מקומיים בלבד. רשת פנימית של בית חולים חוסמת
+     CDN חיצוני, וטעינת פונט מרוחק הייתה משאירה את הכותרות ריקות. */
+  --tk-font-display: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
+  --tk-font-ui:      'Segoe UI', 'Assistant', system-ui, -apple-system, sans-serif;
+  --tk-font-mono:    'Cascadia Mono', 'Consolas', ui-monospace, 'Courier New', monospace;
+}
+
+/* ===== הסמל ===== */
+.tk-mark { display: block; }
+.tk-mark .tk-ring { transform-box: view-box; transform-origin: 120px 118px; }
+
+.tk-mark-live .tk-ring-1 { animation: tk-spin 54s linear infinite; }
+.tk-mark-live .tk-ring-2 { animation: tk-spin 38s linear infinite reverse; }
+.tk-mark-live .tk-ring-3 { animation: tk-spin 72s linear infinite; }
+
+@keyframes tk-spin { to { transform: rotate(360deg); } }
+
+/* פעימת מסלולים — המערכת חיה עוד לפני שנכנסים אליה */
+.tk-mark-live .tk-trace { animation: tk-trace-pulse 3.4s ease-in-out infinite; }
+.tk-mark-live .tk-trace:nth-of-type(2) { animation-delay: 0.25s; }
+.tk-mark-live .tk-trace:nth-of-type(3) { animation-delay: 0.50s; }
+.tk-mark-live .tk-trace:nth-of-type(4) { animation-delay: 0.75s; }
+.tk-mark-live .tk-trace:nth-of-type(5) { animation-delay: 1.00s; }
+.tk-mark-live .tk-trace:nth-of-type(6) { animation-delay: 1.25s; }
+.tk-mark-live .tk-trace:nth-of-type(7) { animation-delay: 1.50s; }
+
+@keyframes tk-trace-pulse {
+  0%, 100% { stroke-opacity: 0.82; }
+  50%      { stroke-opacity: 1; }
+}
+
+.tk-mark-live .tk-pupil {
+  transform-box: view-box;
+  transform-origin: 120px 199px;
+  animation: tk-watch 5.5s ease-in-out infinite;
+}
+@keyframes tk-watch {
+  0%, 92%, 100% { transform: scale(1); }
+  95%           { transform: scale(0.82); }
+}
+
+/* ===== פריסת מסך האימות ===== */
+.tk-auth {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  background: var(--tk-void);
+  font-family: var(--tk-font-ui);
+  position: relative;
+  overflow: hidden;
+  /* העמודות נפרסות שמאל→ימין כך שהמותג בשמאל והטופס בימין.
+     הטקסט בתוך כל עמודה חוזר ל-RTL. */
+  direction: ltr;
+}
+.tk-brand, .tk-panel { direction: rtl; }
+
+/* אווירה: זוהר רך + סריג טכני דועך */
+.tk-auth::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(60rem 40rem at 78% 18%, rgba(79,195,247,0.13), transparent 62%),
+    radial-gradient(48rem 38rem at 22% 86%, rgba(165,224,99,0.10), transparent 60%);
+  pointer-events: none;
+}
+.tk-auth::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg,  rgba(79,195,247,0.045) 0 1px, transparent 1px 68px),
+    repeating-linear-gradient(90deg, rgba(79,195,247,0.045) 0 1px, transparent 1px 68px);
+  -webkit-mask-image: radial-gradient(80% 70% at 50% 40%, #000 35%, transparent 100%);
+          mask-image: radial-gradient(80% 70% at 50% 40%, #000 35%, transparent 100%);
+  pointer-events: none;
+}
+
+/* ----- צד המותג ----- */
+.tk-brand {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  text-align: center;
+  padding: 5vh 4vw;
+  gap: 1.75rem;
+}
+
+/* נעילה אנכית: הסמל למעלה, הכיתוב מתחתיו */
+.tk-brand-lockup {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 1rem;
+}
+.tk-brand-logo {
+  width: clamp(150px, 17vw, 232px);
+  height: auto;
+  display: block;
+  /* לקובץ יש רקע נייבי צרוב, שהיה מופיע כריבוע על רקע הדף.
+     הטבעות מגיעות עד ~71% מהרדיוס, אז ההעלמה מתחילה אחריהן
+     ומוחקת רק את הפינות — הסמל נראה מרחף. */
+  -webkit-mask-image: radial-gradient(circle, #000 70%, transparent 87%);
+          mask-image: radial-gradient(circle, #000 70%, transparent 87%);
+}
+
+.tk-wordmark {
+  font-family: var(--tk-font-display);
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  font-size: clamp(1.05rem, 1.45vw, 1.45rem);
+  line-height: 1;
+  margin: 0;
+  color: #F2F7FC;
+  direction: ltr;
+}
+/* הגרדיאנט חי בסמל בלבד. הטקסט נשאר מלא — כך גם ברפרנס,
+   וגרדיאנט על אותיות נשבר בגדלים קטנים ומוריד ניגודיות. */
+.tk-wordmark span { color: inherit; }
+.tk-tagline {
+  font-family: var(--tk-font-display);
+  direction: ltr;
+  margin: 0.35rem 0 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #7FA3C4;
+}
+
+.tk-headline {
+  font-size: clamp(1.55rem, 2.6vw, 2.4rem);
+  line-height: 1.18;
+  font-weight: 700;
+  margin: 0;
+  color: #EAF2FA;
+  max-width: 22ch;
+}
+/* ההדגשה נעשית בקו תחתון בצבעי המותג ולא במילוי האות עצמה:
+   הטקסט שומר על ניגודיות מלאה, והגרדיאנט נשאר אלמנט גרפי. */
+.tk-headline em {
+  font-style: normal;
+  color: inherit;
+  position: relative;
+  white-space: nowrap;
+}
+.tk-headline em::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: -0.06em;
+  height: 0.085em;
+  border-radius: 3px;
+  background: var(--tk-grad);
+}
+.tk-sub {
+  margin: 0; max-width: 44ch;
+  color: #90AEC9; font-size: 0.9rem; line-height: 1.7;
+}
+
+/* שורת מדדים — מרמזת שהניטור כבר רץ */
+.tk-stats {
+  display: flex; gap: 2.25rem; flex-wrap: wrap;
+  justify-content: center;
+  padding-top: 1rem;
+  border-top: 1px solid var(--tk-line);
+}
+.tk-stat-value { justify-content: center; }
+.tk-stat-label {
+  font-family: var(--tk-font-mono);
+  font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: #5B7B99; margin: 0 0 0.35rem;
+}
+.tk-stat-value {
+  font-family: var(--tk-font-mono);
+  font-size: 0.95rem; color: #CFE3F2; margin: 0;
+  display: flex; align-items: center; gap: 0.45rem;
+  direction: ltr;
+}
+.tk-live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--tk-green);
+  animation: tk-beacon 2.2s ease-out infinite;
+}
+@keyframes tk-beacon {
+  0%   { box-shadow: 0 0 0 0 rgba(165,224,99,0.55); }
+  70%  { box-shadow: 0 0 0 9px rgba(165,224,99,0); }
+  100% { box-shadow: 0 0 0 0 rgba(165,224,99,0); }
+}
+
+/* ----- צד הטופס ----- */
+.tk-panel {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  padding: 4vh 4vw;
+  background: linear-gradient(180deg, rgba(11,27,46,0.55), rgba(6,15,28,0.85));
+  /* גבול פיזי ולא לוגי: הפאנל תמיד בצד ימין, אז הקצה הגובל הוא השמאלי */
+  border-left: 1px solid var(--tk-line);
+}
+.tk-card {
+  width: 100%; max-width: 25rem;
+  background: rgba(16,36,59,0.72);
+  border: 1px solid var(--tk-line);
+  border-radius: 14px;
+  padding: 2rem 1.85rem;
+  -webkit-backdrop-filter: blur(14px);
+          backdrop-filter: blur(14px);
+  box-shadow: 0 26px 60px -22px rgba(0,0,0,0.85);
+}
+/* קו האות בראש הכרטיס */
+.tk-card-edge {
+  height: 2px;
+  margin: -2rem -1.85rem 1.6rem;
+  border-radius: 14px 14px 0 0;
+  background: var(--tk-grad);
+  opacity: 0.85;
+}
+
+.tk-card h2 { margin: 0 0 0.3rem; font-size: 1.2rem; font-weight: 700; color: #EAF2FA; }
+.tk-card-hint { margin: 0 0 1.5rem; font-size: 0.83rem; color: #7FA3C4; }
+
+.tk-field { margin-bottom: 1.05rem; }
+.tk-label {
+  display: block; margin-bottom: 0.4rem;
+  font-size: 0.72rem; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: #7FA3C4;
+}
+.tk-input {
+  width: 100%; padding: 0.7rem 0.85rem;
+  background: rgba(6,15,28,0.75);
+  border: 1px solid var(--tk-line);
+  border-radius: 9px;
+  color: #EAF2FA; font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+}
+.tk-input:focus {
+  border-color: var(--tk-blue);
+  background: rgba(6,15,28,0.95);
+  box-shadow: 0 0 0 3px rgba(79,195,247,0.16);
+}
+.tk-input::placeholder { color: #48678A; }
+
+.tk-code {
+  font-family: var(--tk-font-mono);
+  font-size: 1.5rem; text-align: center;
+  letter-spacing: 0.55em; text-indent: 0.55em;
+  direction: ltr;
+}
+
+.tk-submit {
+  width: 100%; margin-top: 0.35rem;
+  padding: 0.78rem 1rem;
+  border: none; border-radius: 9px;
+  background: var(--tk-grad);
+  color: #06121F;
+  font-family: inherit; font-size: 0.95rem; font-weight: 700;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  transition: filter 0.18s, transform 0.12s;
+}
+.tk-submit:hover:not(:disabled)  { filter: brightness(1.09); }
+.tk-submit:active:not(:disabled) { transform: translateY(1px); }
+.tk-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.tk-ghost {
+  width: 100%; margin-top: 0.6rem;
+  padding: 0.6rem 1rem;
+  background: transparent;
+  border: 1px solid var(--tk-line); border-radius: 9px;
+  color: #90AEC9; font-family: inherit; font-size: 0.88rem;
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.tk-ghost:hover { background: rgba(29,58,87,0.4); color: #EAF2FA; }
+
+/* הודעות בשלוש דרגות — תואם ל-401 / 403 / 503 מהשרת */
+.tk-msg {
+  display: flex; gap: 0.6rem; align-items: flex-start;
+  padding: 0.7rem 0.85rem; border-radius: 9px;
+  font-size: 0.84rem; line-height: 1.5; margin-bottom: 1.1rem;
+  border: 1px solid;
+}
+.tk-msg-error { background: rgba(127,29,29,0.28); border-color: #B91C1C; color: #FEC9C9; }
+.tk-msg-warn  { background: rgba(120,53,15,0.28); border-color: #C2610C; color: #FCD9A8; }
+.tk-msg-info  { background: rgba(12,74,110,0.28); border-color: #0E7490; color: #BAE6FD; }
+.tk-msg-icon  { flex-shrink: 0; margin-top: 1px; }
+
+.tk-qr {
+  display: block; margin: 0 auto 1rem;
+  width: 172px; border-radius: 10px;
+  border: 3px solid #EAF2FA;
+}
+
+.tk-foot {
+  margin-top: 1.4rem; padding-top: 1rem;
+  border-top: 1px solid var(--tk-line);
+  font-family: var(--tk-font-mono);
+  font-size: 0.66rem; letter-spacing: 0.1em;
+  color: #4E6E8D; text-align: center; direction: ltr;
+}
+
+/* כניסה מדורגת */
+.tk-rise { animation: tk-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.tk-d1 { animation-delay: 0.06s; }
+.tk-d2 { animation-delay: 0.14s; }
+.tk-d3 { animation-delay: 0.22s; }
+.tk-d4 { animation-delay: 0.30s; }
+@keyframes tk-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ----- מסכים צרים ----- */
+@media (max-width: 940px) {
+  .tk-auth { grid-template-columns: 1fr; }
+  .tk-brand { padding: 3.5vh 7vw 0; gap: 1.25rem; }
+  .tk-headline { font-size: 1.65rem; max-width: none; }
+  .tk-sub, .tk-stats { display: none; }
+  .tk-panel { border-left: none; padding: 3vh 7vw 6vh; }
+  .tk-brand-logo { width: clamp(110px, 30vw, 150px); }
+}
+
+/* ----- העדפת תנועה מופחתת ----- */
+@media (prefers-reduced-motion: reduce) {
+  .tk-mark-live .tk-ring,
+  .tk-mark-live .tk-trace,
+  .tk-mark-live .tk-pupil,
+  .tk-live-dot,
+  .tk-rise {
+    animation: none !important;
+  }
+  .tk-rise { opacity: 1; transform: none; }
+}
