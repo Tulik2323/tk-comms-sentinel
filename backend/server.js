@@ -73,10 +73,13 @@ app.use('/api/port-changes',  portChangesRouter);
 app.use('/api/trends',        trendsRouter);
 
 // Health check
+// version נקרא מ-package.json, לא קשיח — אחרת אי אפשר להבחין בין גרסאות
+// אחרי עדכון (update.ps1 בודק את ה-endpoint הזה בדיוק כדי לאמת עדכון).
+const { version: APP_VERSION } = require('./package.json');
 app.get('/api/health', (req, res) => {
   res.json({
     status:    'ok',
-    version:   '1.0.0',
+    version:   APP_VERSION,
     timestamp: new Date().toISOString(),
     demoMode:  process.env.DEMO_MODE === 'true',
     uptime:    process.uptime()
@@ -135,9 +138,9 @@ app.use((err, req, res, next) => {
     const demo = process.env.DEMO_MODE === 'true' ? 'ON' : 'OFF';
     console.log(`
 ╔═══════════════════════════════════════════╗
-║      TK Comms Sentinel — Backend v1.0.0   ║
+║           TK Comms Sentinel — Backend      ║
 ╚═══════════════════════════════════════════╝`);
-    console.log(`[Server] ${proto}://localhost:${port}/api/health  (Demo: ${demo})`);
+    console.log(`[Server] v${APP_VERSION}  ${proto}://localhost:${port}/api/health  (Demo: ${demo})`);
   };
 
   const pfxPath  = process.env.TLS_PFX_PATH;

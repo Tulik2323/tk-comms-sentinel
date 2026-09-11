@@ -35,7 +35,8 @@
 param(
   [string] $Root   = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
   [string] $OutDir = '',
-  [switch] $VersionOnly
+  [switch] $VersionOnly,
+  [string] $VersionOverride = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,9 +49,11 @@ function Assert-Path([string]$Path, [string]$Hint) {
 }
 Assert-Path (Join-Path $feDist 'index.html') 'Build the frontend: npm run build in frontend\.'
 
-# Read version -- this names the versions\<version>\ folder.
+# Read version -- this names the versions\<version>\ folder. -VersionOverride
+# lets a caller cut a package under a different version number without
+# editing package.json (e.g. building a throwaway version to test update.ps1).
 $pkgJson = Get-Content (Join-Path $Root 'backend\package.json') -Raw | ConvertFrom-Json
-$version = $pkgJson.version
+$version = if ($VersionOverride) { $VersionOverride } else { $pkgJson.version }
 
 Write-Host "Building package v$version $(if ($VersionOnly) { '(version-only)' } else { '(full)' })"
 Write-Host "  Root  : $Root"
