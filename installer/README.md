@@ -64,18 +64,15 @@ The package already contains `node\`, `tools\nssm.exe`, `backend\` (with
 download or `npm install` on the target. Run elevated:
 
 ```powershell
-$Root = 'C:\Program Files\TKCommsSentinel'   # = the copied package folder
+$Root = 'C:\TKCS\package'   # = the extracted package folder (the install root)
 
-# 1. Generate the self-signed cert (capture the two printed lines)
-& "$Root\installer\scripts\new-selfsigned-cert.ps1" -OutDir "$Root\data\certs"
+# 1. Generate the self-signed cert and capture its output
+$cert  = & "$Root\installer\scripts\new-selfsigned-cert.ps1" -OutDir "$Root\data\certs"
+$pfx   = (($cert | Select-String '^TLS_PFX_PATH=').Line     -split '=',2)[1]
+$pfxpw = (($cert | Select-String '^TLS_PFX_PASSWORD=').Line -split '=',2)[1]
 
-# 2. Create $Root\backend\.env from .env.example, then set at least:
-#      NODE_ENV=production
-#      HTTPS_PORT=9443
-#      TLS_PFX_PATH=<from step 1>   TLS_PFX_PASSWORD=<from step 1>
-#      DB_PATH=<absolute path under data\>
-#      JWT_SECRET / JWT_TEMP_SECRET = long random strings
-#      APP_BASE_URL=https://<server>:9443
+# 2. Write backend\.env (random JWT secrets; LDAP/SMTP left empty for local auth)
+& "$Root\installer\scripts\write-env.ps1" -Root $Root -HttpsPort 9443 -PfxPath $pfx -PfxPassword $pfxpw
 
 # 3. Register + start the services
 & "$Root\installer\scripts\svc-install.ps1" -InstallRoot $Root -Start
@@ -86,6 +83,10 @@ $Root = 'C:\Program Files\TKCommsSentinel'   # = the copied package folder
 # 5. Seed the first admin (interactive)
 & "$Root\node\node.exe" "$Root\backend\scripts\seed-admin.js"
 ```
+
+`write-env.ps1` refuses to overwrite an existing `.env` (use `-Force`), so it
+never silently rotates the JWT secret. LDAP/SMTP are configured later in
+Admin > Settings or by editing `.env`.
 
 Verify: `https://<server>:9443/api/health` returns `{"status":"ok",...}`.
 
