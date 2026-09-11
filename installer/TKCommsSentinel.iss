@@ -36,7 +36,10 @@ Compression=lzma2/normal
 SolidCompression=yes
 WizardStyle=modern
 SetupLogging=yes
-UninstallDisplayIcon={app}\node\node.exe
+SetupIconFile=assets\icon.ico
+WizardImageFile=assets\wizard-large.png
+WizardSmallImageFile=assets\wizard-small.png
+UninstallDisplayIcon={app}\icon.ico
 ; The app terminates its own TLS -- nothing else to configure here.
 DisableWelcomePage=no
 
@@ -48,6 +51,7 @@ Source: "{#PackageDir}\versions\*";   DestDir: "{app}\versions";   Flags: recurs
 Source: "{#PackageDir}\node\*";       DestDir: "{app}\node";       Flags: recursesubdirs createallsubdirs
 Source: "{#PackageDir}\tools\*";      DestDir: "{app}\tools";      Flags: recursesubdirs createallsubdirs
 Source: "{#PackageDir}\installer\*";  DestDir: "{app}\installer";  Flags: recursesubdirs createallsubdirs
+Source: "assets\icon.ico";            DestDir: "{app}";            Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
@@ -206,8 +210,25 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  if (CurPageID = wpFinished) and InstallFailed then
-    MsgBox(InstallFailureMessage, mbError, MB_OK);
+  if CurPageID = wpFinished then
+  begin
+    if InstallFailed then
+      MsgBox(InstallFailureMessage, mbError, MB_OK)
+    else
+      // Append to Inno's own finish text rather than replacing it. Every
+      // account -- including this freshly created admin -- must enroll in
+      // two-factor authentication (scan a QR code) on its very first login;
+      // this is the application's own security design, not something this
+      // installer can skip. Worth saying up front so it doesn't look like
+      // a lockout.
+      WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+        'Open: https://localhost:' + HttpsPort + #13#10#13#10 +
+        'The first login for any account, including the ' +
+        'admin account you just created, requires setting up two-factor ' +
+        'authentication: you will be shown a QR code to scan with an ' +
+        'authenticator app (e.g. Google Authenticator or Microsoft ' +
+        'Authenticator) before you get full access.';
+  end;
 end;
 
 function InitializeSetup: Boolean;
