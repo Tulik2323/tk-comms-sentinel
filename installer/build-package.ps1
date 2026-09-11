@@ -102,6 +102,20 @@ if (-not $VersionOnly) {
   Assert-Path $vendorNssm                         'Run the vendor download step (NSSM).'
 
   Copy-Tree $vendorNode (Join-Path $OutDir 'node')
+
+  # npm was only needed above, to install backend dependencies (using
+  # vendor\node's own copy, not this one -- see $npmForInstall). The running
+  # app only ever calls node.exe directly (server.js / poller-service.js /
+  # scripts\*.js); npm's CLI is dead weight at runtime. Strip it from THIS
+  # output copy only -- never from vendor\node, which future builds still
+  # need. Cuts thousands of files (~12 MB) from the shipped package and
+  # noticeably speeds up Inno Setup compiles.
+  $outNode = Join-Path $OutDir 'node'
+  foreach ($p in @('node_modules\npm','node_modules\corepack','npm','npm.cmd','npx','npx.cmd','corepack','corepack.cmd')) {
+    $full = Join-Path $outNode $p
+    if (Test-Path -LiteralPath $full) { Remove-Item -LiteralPath $full -Recurse -Force }
+  }
+
   Copy-Tree (Join-Path $Root 'installer\scripts') (Join-Path $OutDir 'installer\scripts')
   New-Item -ItemType Directory -Path (Join-Path $OutDir 'tools') -Force | Out-Null
   Copy-Item -Path $vendorNssm -Destination (Join-Path $OutDir 'tools\nssm.exe') -Force
