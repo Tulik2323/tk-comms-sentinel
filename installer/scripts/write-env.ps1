@@ -13,11 +13,21 @@
 
   ASCII-only, and the file is written without a BOM so dotenv parses the first
   key correctly.
+
+  PFX credentials: pass -PfxInfoFile pointing at the pfx-info.env written by
+  new-selfsigned-cert.ps1 (its default output path is <Root>\data\certs\
+  pfx-info.env) and this script reads PFX_PATH/PFX_PASSWORD from that file
+  directly. Prefer this over passing -PfxPath/-PfxPassword from a captured
+  variable: capturing a script's console output ("$x = & script.ps1 ...")
+  proved unreliable in the field and produced an empty TLS_PFX_PASSWORD in a
+  real install. Reading a file the other script wrote itself has no such
+  failure mode.
 #>
 [CmdletBinding()]
 param(
   [string] $Root        = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
   [int]    $HttpsPort   = 9443,
+  [string] $PfxInfoFile = '',
   [string] $PfxPath     = '',
   [string] $PfxPassword = '',
   [string] $CertPath    = '',
@@ -37,10 +47,32 @@ if ((Test-Path -LiteralPath $envPath) -and -not $Force) {
   throw ".env already exists: $envPath  (use -Force to overwrite)"
 }
 
+# Preferred path: read PFX credentials from the file new-selfsigned-cert.ps1
+# wrote itself (see PfxInfoFile default below and the .DESCRIPTION note).
+if (-not $PfxInfoFile -and -not $PfxPath -and -not $CertPath) {
+  $PfxInfoFile = Join-Path $Root 'data\certs\pfx-info.env'
+}
+if ($PfxInfoFile) {
+  if (-not (Test-Path -LiteralPath $PfxInfoFile)) { throw "PFX info file not found: $PfxInfoFile" }
+  $info = @{}
+  foreach ($line in Get-Content -LiteralPath $PfxInfoFile) {
+    if ($line -match '^([^=]+)=(.*)$') { $info[$matches[1]] = $matches[2] }
+  }
+  if (-not $info.ContainsKey('PFX_PATH') -or -not $info.ContainsKey('PFX_PASSWORD')) {
+    throw "PFX info file missing PFX_PATH/PFX_PASSWORD: $PfxInfoFile"
+  }
+  $PfxPath     = $info['PFX_PATH']
+  $PfxPassword = $info['PFX_PASSWORD']
+}
+
 # Defaults derived from Root / machine name.
 if (-not $PfxPath -and -not $CertPath) { $PfxPath = Join-Path $Root 'data\certs\server.pfx' }
 if (-not $DbPath)     { $DbPath     = Join-Path $Root 'data\netmonitor.db' }
 if (-not $AppBaseUrl) { $AppBaseUrl = "https://$($env:COMPUTERNAME):$HttpsPort" }
+
+if ($PfxPath -and -not $PfxPassword) {
+  throw "PfxPath is set but PfxPassword is empty -- refusing to write a .env with an unusable cert. Pass -PfxInfoFile instead of -PfxPath/-PfxPassword by hand."
+}
 
 function New-Secret {
   # 64 hex chars = 256 bits.

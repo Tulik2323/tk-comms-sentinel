@@ -66,13 +66,12 @@ download or `npm install` on the target. Run elevated:
 ```powershell
 $Root = 'C:\TKCS\package'   # = the extracted package folder (the install root)
 
-# 1. Generate the self-signed cert and capture its output
-$cert  = & "$Root\installer\scripts\new-selfsigned-cert.ps1" -OutDir "$Root\data\certs"
-$pfx   = (($cert | Select-String '^TLS_PFX_PATH=').Line     -split '=',2)[1]
-$pfxpw = (($cert | Select-String '^TLS_PFX_PASSWORD=').Line -split '=',2)[1]
+# 1. Generate the self-signed cert (writes data\certs\pfx-info.env itself)
+& "$Root\installer\scripts\new-selfsigned-cert.ps1" -OutDir "$Root\data\certs"
 
-# 2. Write backend\.env (random JWT secrets; LDAP/SMTP left empty for local auth)
-& "$Root\installer\scripts\write-env.ps1" -Root $Root -HttpsPort 9443 -PfxPath $pfx -PfxPassword $pfxpw
+# 2. Write backend\.env, reading the cert credentials from that file
+#    (random JWT secrets; LDAP/SMTP left empty for local auth)
+& "$Root\installer\scripts\write-env.ps1" -Root $Root -HttpsPort 9443
 
 # 3. Register + start the services
 & "$Root\installer\scripts\svc-install.ps1" -InstallRoot $Root -Start
@@ -84,9 +83,27 @@ $pfxpw = (($cert | Select-String '^TLS_PFX_PASSWORD=').Line -split '=',2)[1]
 & "$Root\node\node.exe" "$Root\backend\scripts\seed-admin.js"
 ```
 
+Step 2 reads `PFX_PATH`/`PFX_PASSWORD` from `data\certs\pfx-info.env` by
+default (`write-env.ps1 -PfxInfoFile` to point elsewhere). **Do not** capture
+step 1's console output into a variable and pass it as `-PfxPath`/
+`-PfxPassword` by hand -- that path was tried and failed in the field
+(`$cert = & new-selfsigned-cert.ps1 ...` silently produced an empty password,
+which reached a running service before being noticed). `write-env.ps1` also
+refuses to write a `.env` with a `PfxPath` set but no password, so this class
+of mistake fails loudly instead of producing a service that silently falls
+back to plain HTTP.
+
 `write-env.ps1` refuses to overwrite an existing `.env` (use `-Force`), so it
 never silently rotates the JWT secret. LDAP/SMTP are configured later in
 Admin > Settings or by editing `.env`.
+
+**Verified on a clean test server (SRV-APPS, 2026-09-11):** full install --
+cert, `.env`, both NSSM services, firewall rule, seeded admin -- then logged
+into the UI over `https://<server>:9443` in a browser. Two bugs were found
+and fixed during that run: `server.js` loaded `.env` relative to the process
+working directory (broke under NSSM, since fixed to load by `__dirname`),
+and the fragile PFX-credential capture described above (now a file, per
+step 1/2 above).
 
 Verify: `https://<server>:9443/api/health` returns `{"status":"ok",...}`.
 

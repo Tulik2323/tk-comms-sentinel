@@ -9,10 +9,13 @@
   (https.createServer({ pfx, passphrase })), then removes the temporary
   certificate from the Windows store.
 
-  On success it prints, on their own lines, values the installer can capture
-  and write into backend\.env:
-    TLS_PFX_PATH=<path>
-    TLS_PFX_PASSWORD=<password>
+  Writes the path and password to a companion file, <OutDir>\pfx-info.env,
+  as PFX_PATH=... / PFX_PASSWORD=... lines. A caller reads that file with
+  Get-Content instead of capturing this script's console output: capturing
+  script output via "$x = & script.ps1" proved unreliable in the field
+  (empty values reached backend\.env after a real install run), so treat the
+  file as the source of truth, not the printed TLS_PFX_PATH=/TLS_PFX_PASSWORD=
+  lines below (kept only for human eyes watching the console).
 
 .NOTES
   ASCII-only on purpose: Windows PowerShell 5.1 reads unmarked .ps1 files as
@@ -72,8 +75,17 @@ finally {
 Write-Host "[cert] Thumbprint: $($cert.Thumbprint)"
 Write-Host "[cert] Valid until: $($cert.NotAfter.ToString('yyyy-MM-dd'))"
 
-# Emit the capture lines on the OUTPUT stream (not Write-Host) so a caller can
-# collect them with  $o = & new-selfsigned-cert.ps1 ...  as well as see them
-# on the console when run via powershell.exe -File.
+# Source of truth for callers: a plain file on disk, written directly by this
+# process. No console-output capture involved, so nothing can be lost to a
+# quirk of how the caller invoked us (variable assignment, piping, a repeated
+# paste, etc.) -- that is exactly what went wrong the first time this was
+# wired up by capturing "$x = & new-selfsigned-cert.ps1 ...".
+$infoPath = Join-Path $OutDir 'pfx-info.env'
+$infoText = "PFX_PATH=$pfxPath`r`nPFX_PASSWORD=$PfxPassword`r`n"
+[System.IO.File]::WriteAllText($infoPath, $infoText, (New-Object System.Text.ASCIIEncoding))
+Write-Host "[cert] Wrote credentials file: $infoPath"
+
+# Also emit on the OUTPUT stream for a caller that prefers to capture output
+# directly (works when invoked exactly once per PowerShell statement).
 Write-Output "TLS_PFX_PATH=$pfxPath"
 Write-Output "TLS_PFX_PASSWORD=$PfxPassword"
