@@ -99,8 +99,22 @@ function Get-CurrentVersion([string]$InstallRoot) {
 }
 
 # --- 1. Locate the new version in the source package ---
+# Tolerate one extra wrapping folder (e.g. a zip built with includeBaseDirectory,
+# so extracting lands versions\ one level deeper than SourcePackageDir) --
+# look inside a single subfolder automatically instead of making the caller
+# guess the exact archive layout.
 $srcVersionsDir = Join-Path $SourcePackageDir 'versions'
-if (-not (Test-Path -LiteralPath $srcVersionsDir)) { throw "Not a version package (no versions\ folder): $SourcePackageDir" }
+if (-not (Test-Path -LiteralPath $srcVersionsDir)) {
+  $subdirs = Get-ChildItem -LiteralPath $SourcePackageDir -Directory
+  $nested  = $subdirs | Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'versions') }
+  if ($nested.Count -eq 1) {
+    Write-Host "[update] versions\ not directly under $SourcePackageDir -- using nested folder '$($nested[0].Name)'."
+    $SourcePackageDir = $nested[0].FullName
+    $srcVersionsDir   = Join-Path $SourcePackageDir 'versions'
+  } else {
+    throw "Not a version package (no versions\ folder, directly or one level down): $SourcePackageDir"
+  }
+}
 $found = Get-ChildItem -LiteralPath $srcVersionsDir -Directory
 if ($found.Count -ne 1) { throw "Expected exactly one version folder under $srcVersionsDir, found $($found.Count)" }
 $newVersion = $found[0].Name
