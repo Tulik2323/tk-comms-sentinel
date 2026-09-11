@@ -1,5 +1,7 @@
 // server.js — נקודת כניסה ראשית של ה-backend
-require('dotenv').config();
+// טען .env לפי מיקום הקובץ, לא לפי cwd — תחת שירות (NSSM) ה-cwd אינו backend,
+// והטעינה התלוית-cwd נכשלה בשקט (TLS/DB לא נטענו). כמו ב-poller-service.js.
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const express = require('express');
 const cors    = require('cors');
