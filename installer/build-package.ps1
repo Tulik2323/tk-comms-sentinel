@@ -1,50 +1,58 @@
 <#
 .SYNOPSIS
-  Assemble a self-contained, offline-ready TK Comms Sentinel package from the
-  workspace: portable Node + NSSM + backend (with production node_modules) +
-  built frontend + the installer scripts.
+  Assemble a TK Comms Sentinel package from the workspace, in the versioned
+  install layout: portable Node + NSSM + versions\<version>\ (backend with
+  production node_modules + built frontend) + installer scripts.
 
 .DESCRIPTION
   Runs on the build machine (which has internet, for the npm install). The
   resulting package needs no internet on the target: node_modules is baked in.
-  Layout produced (this folder IS the install root):
+
+  Default (full package, for a first install):
 
     <OutDir>\
-      node\               portable Node runtime
-      tools\nssm.exe       service manager
-      backend\             app + production node_modules
-      frontend\dist\       built UI
-      installer\scripts\   cert / service / firewall scripts
-      data\                empty (DB, certs, .env created at install time)
+      versions\<version>\
+        backend\             app + production node_modules
+        frontend\dist\       built UI
+      node\                  portable Node runtime (shared across versions)
+      tools\nssm.exe         service manager (shared)
+      installer\scripts\     cert / service / firewall / activate / update scripts
+      data\                  empty (DB, certs, .env created at install time)
 
-  Prerequisite: vendor\node\node.exe and vendor\nssm\nssm.exe must exist
-  (run the vendor download step first). ASCII-only for PS 5.1.
+  No "current" junction is created here -- junctions do not survive being
+  zipped, so activate-version.ps1 creates/updates it on the TARGET machine
+  after extraction (see installer\README.md).
+
+  With -VersionOnly, only versions\<version>\ is produced (no node/tools/
+  installer/data) -- a small update package for update.ps1 to apply to an
+  existing install, without re-shipping the Node runtime or NSSM.
+
+  Prerequisite: vendor\node\node.exe and vendor\nssm\nssm.exe must exist for
+  a full package (run the vendor download step first; not needed with
+  -VersionOnly). ASCII-only for PS 5.1.
 #>
 [CmdletBinding()]
 param(
   [string] $Root   = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
-  [string] $OutDir = ''
+  [string] $OutDir = '',
+  [switch] $VersionOnly
 )
 
 $ErrorActionPreference = 'Stop'
 if (-not $OutDir) { $OutDir = Join-Path $Root 'package' }
 
-$vendorNode = Join-Path $Root 'vendor\node'
-$vendorNssm = Join-Path $Root 'vendor\nssm\nssm.exe'
-$feDist     = Join-Path $Root 'frontend\dist'
+$feDist = Join-Path $Root 'frontend\dist'
 
 function Assert-Path([string]$Path, [string]$Hint) {
   if (-not (Test-Path -LiteralPath $Path)) { throw "Missing: $Path`n  -> $Hint" }
 }
-Assert-Path (Join-Path $vendorNode 'node.exe') 'Run the vendor download step (portable Node).'
-Assert-Path $vendorNssm                         'Run the vendor download step (NSSM).'
-Assert-Path (Join-Path $feDist 'index.html')    'Build the frontend: npm run build in frontend\.'
+Assert-Path (Join-Path $feDist 'index.html') 'Build the frontend: npm run build in frontend\.'
 
-# Read version for the summary.
+# Read version -- this names the versions\<version>\ folder.
 $pkgJson = Get-Content (Join-Path $Root 'backend\package.json') -Raw | ConvertFrom-Json
 $version = $pkgJson.version
 
-Write-Host "Building package v$version"
+Write-Host "Building package v$version $(if ($VersionOnly) { '(version-only)' } else { '(full)' })"
 Write-Host "  Root  : $Root"
 Write-Host "  OutDir: $OutDir"
 Write-Host ""
@@ -61,35 +69,49 @@ function Copy-Tree([string]$From, [string]$To, [string[]]$ExtraArgs = @()) {
   if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE): $From -> $To" }
 }
 
+$versionDir = Join-Path $OutDir "versions\$version"
+
 # --- backend (source only; production deps installed below) ---
 $xd = @('node_modules','logs','certs','iisnode-logs')
 $xf = @('.env','netmonitor.db*','*.db','*.db-shm','*.db-wal','*.db-journal')
-Copy-Tree (Join-Path $Root 'backend') (Join-Path $OutDir 'backend') (@('/XD') + $xd + @('/XF') + $xf)
+Copy-Tree (Join-Path $Root 'backend') (Join-Path $versionDir 'backend') (@('/XD') + $xd + @('/XF') + $xf)
 
 # --- frontend build ---
-Copy-Tree $feDist (Join-Path $OutDir 'frontend\dist')
-
-# --- portable node + nssm + installer scripts ---
-Copy-Tree $vendorNode (Join-Path $OutDir 'node')
-Copy-Tree (Join-Path $Root 'installer\scripts') (Join-Path $OutDir 'installer\scripts')
-New-Item -ItemType Directory -Path (Join-Path $OutDir 'tools') -Force | Out-Null
-Copy-Item -Path $vendorNssm -Destination (Join-Path $OutDir 'tools\nssm.exe') -Force
-
-# --- empty data dir (DB, certs, .env land here at install time) ---
-New-Item -ItemType Directory -Path (Join-Path $OutDir 'data') -Force | Out-Null
+Copy-Tree $feDist (Join-Path $versionDir 'frontend\dist')
 
 # --- install production dependencies with the PORTABLE node's npm (offline-ready output) ---
-Write-Host "Installing backend production dependencies with portable npm..."
-$npmCmd = Join-Path $OutDir 'node\npm.cmd'
-Push-Location (Join-Path $OutDir 'backend')
+# VersionOnly still needs A node to run npm install; use the vendored one if
+# present, else require the caller to have Node on PATH (falls back to "node").
+$npmForInstall = if (Test-Path (Join-Path $Root 'vendor\node\npm.cmd')) { Join-Path $Root 'vendor\node\npm.cmd' } else { 'npm' }
+Write-Host "Installing backend production dependencies..."
+Push-Location (Join-Path $versionDir 'backend')
 try {
-  & $npmCmd install --omit=dev --no-audit --no-fund --loglevel=error
+  & $npmForInstall install --omit=dev --no-audit --no-fund --loglevel=error
   if ($LASTEXITCODE -ne 0) { throw "npm install failed ($LASTEXITCODE)" }
 } finally {
   Pop-Location
 }
 
+if (-not $VersionOnly) {
+  $vendorNode = Join-Path $Root 'vendor\node'
+  $vendorNssm = Join-Path $Root 'vendor\nssm\nssm.exe'
+  Assert-Path (Join-Path $vendorNode 'node.exe') 'Run the vendor download step (portable Node).'
+  Assert-Path $vendorNssm                         'Run the vendor download step (NSSM).'
+
+  Copy-Tree $vendorNode (Join-Path $OutDir 'node')
+  Copy-Tree (Join-Path $Root 'installer\scripts') (Join-Path $OutDir 'installer\scripts')
+  New-Item -ItemType Directory -Path (Join-Path $OutDir 'tools') -Force | Out-Null
+  Copy-Item -Path $vendorNssm -Destination (Join-Path $OutDir 'tools\nssm.exe') -Force
+
+  # Empty data dir (DB, certs, .env land here at install time).
+  New-Item -ItemType Directory -Path (Join-Path $OutDir 'data') -Force | Out-Null
+}
+
 $sizeMB = [math]::Round(((Get-ChildItem -Recurse -File $OutDir | Measure-Object Length -Sum).Sum)/1MB, 1)
 Write-Host ""
 Write-Host "Package ready: $OutDir  ($sizeMB MB)"
-Write-Host "Next on a target server: follow installer\README.md (generate cert, write .env, svc-install, open-firewall, seed-admin)."
+if ($VersionOnly) {
+  Write-Host "Version-only package for update.ps1. Apply it to an existing install; see installer\README.md."
+} else {
+  Write-Host "Full package. On a target server: run activate-version.ps1, then follow installer\README.md."
+}

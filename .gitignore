@@ -38,6 +38,7 @@ out/
 # distribution package are fetched/built on the build machine, never committed.
 vendor/
 package/
+package-*/
 dist-pkg/
 *.exe
 !install/**/*.exe

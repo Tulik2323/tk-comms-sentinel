@@ -1,11 +1,18 @@
 // server.js — נקודת כניסה ראשית של ה-backend
-// טען .env לפי מיקום הקובץ, לא לפי cwd — תחת שירות (NSSM) ה-cwd אינו backend,
+// טען .env ממיקום קבוע, לא לפי cwd — תחת שירות (NSSM) ה-cwd אינו backend,
 // והטעינה התלוית-cwd נכשלה בשקט (TLS/DB לא נטענו). כמו ב-poller-service.js.
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+//
+// במבנה המגורס (versions\x.y.z\backend מוצמד דרך current junction), ה-.env
+// יושב ב-data\ המשותפת, לא בתוך backend\ הגרסתי — כדי שעדכון גרסה לא ידרוס
+// אותו. הנתיב מגיע דרך TKCS_DATA_DIR שה-service מזריק (svc-install.ps1).
+// בלי המשתנה (למשל הרצה ידנית, או פריסה שטוחה ישנה) — נופל ל-__dirname,
+// כלומר .env בתוך backend\ עצמו.
+const path = require('path');
+const dataDirForEnv = process.env.TKCS_DATA_DIR || __dirname;
+require('dotenv').config({ path: path.join(dataDirForEnv, '.env') });
 
 const express = require('express');
 const cors    = require('cors');
-const path    = require('path');
 const fs      = require('fs');
 const http    = require('http');
 const https   = require('https');

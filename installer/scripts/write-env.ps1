@@ -1,12 +1,19 @@
 <#
 .SYNOPSIS
-  Generate backend\.env for a standalone TK Comms Sentinel install.
+  Generate data\.env for a standalone TK Comms Sentinel install.
 
 .DESCRIPTION
   Writes the environment file the backend reads at startup: HTTPS port, TLS
   certificate paths, database path, and freshly generated random JWT secrets.
   LDAP and SMTP are left empty (local admin auth works out of the box; the
   operator fills these in later via Admin > Settings or by editing .env).
+
+  Lives in data\, not backend\: in the versioned install layout, backend\ is
+  inside versions\x.y.z\ (replaced on every update) while data\ is shared and
+  never touched by an update. The running service finds it via the
+  TKCS_DATA_DIR environment variable that svc-install.ps1 sets (server.js and
+  poller-service.js fall back to their own directory when that variable is
+  not set, e.g. a pre-versioned flat install).
 
   Refuses to overwrite an existing .env unless -Force is given, so re-running
   never silently rotates the JWT secret (which would invalidate live sessions).
@@ -39,9 +46,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$backendDir = Join-Path $Root 'backend'
-if (-not (Test-Path -LiteralPath $backendDir)) { throw "backend directory not found: $backendDir" }
-$envPath = Join-Path $backendDir '.env'
+$dataDir = Join-Path $Root 'data'
+if (-not (Test-Path -LiteralPath $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null }
+$envPath = Join-Path $dataDir '.env'
 
 if ((Test-Path -LiteralPath $envPath) -and -not $Force) {
   throw ".env already exists: $envPath  (use -Force to overwrite)"

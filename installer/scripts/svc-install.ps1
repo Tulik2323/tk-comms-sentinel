@@ -14,6 +14,14 @@
   Stop is delivered as a console Ctrl-C so the app's SIGINT/SIGTERM handlers
   close the database cleanly.
 
+  BackendDir defaults to <InstallRoot>\current\backend -- the versioned
+  install layout's stable path (current is a directory junction to the active
+  versions\x.y.z\). An update only swaps that junction; it never touches this
+  service configuration, so no reinstall/reconfigure is needed after an
+  update. Each service also gets TKCS_DATA_DIR=<DataDir> in its environment,
+  which server.js / poller-service.js use to find data\.env regardless of
+  which version is currently active.
+
   Must run elevated (Administrator).
 
 .NOTES
@@ -36,7 +44,7 @@ $ErrorActionPreference = 'Stop'
 # Fill defaults that depend on InstallRoot.
 if (-not $NssmExe)    { $NssmExe    = Join-Path $InstallRoot 'tools\nssm.exe' }
 if (-not $NodeExe)    { $NodeExe    = Join-Path $InstallRoot 'node\node.exe' }
-if (-not $BackendDir) { $BackendDir = Join-Path $InstallRoot 'backend' }
+if (-not $BackendDir) { $BackendDir = Join-Path $InstallRoot 'current\backend' }
 if (-not $DataDir)    { $DataDir    = Join-Path $InstallRoot 'data' }
 
 $logDir = Join-Path $DataDir 'logs'
@@ -87,6 +95,10 @@ function Set-NssmService {
   Invoke-Nssm set $Name DisplayName        $DisplayName
   Invoke-Nssm set $Name Description        $Description
   Invoke-Nssm set $Name Start              SERVICE_AUTO_START
+
+  # TKCS_DATA_DIR tells server.js / poller-service.js where to find data\.env,
+  # independent of which versions\x.y.z\ the "current" junction points at.
+  Invoke-Nssm set $Name AppEnvironmentExtra "TKCS_DATA_DIR=$DataDir"
 
   # Graceful stop: send Ctrl-C and give the process 15s to close the DB.
   Invoke-Nssm set $Name AppStopMethodConsole 15000

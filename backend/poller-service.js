@@ -4,7 +4,12 @@
 // לולאת ה-polling הייתה נקטעת ומתחילה מחדש בלי קשר למצב הרשת. תהליך
 // ייעודי מריץ אותה ברציפות. הכתיבה למסד בטוחה במקביל ל-web מאז המעבר
 // ל-node:sqlite (נעילות OS + WAL) — ראה db/database.js.
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+//
+// .env נטען ממיקום קבוע (לא cwd) — ראה ההערה המקבילה ב-server.js לגבי
+// TKCS_DATA_DIR ומבנה versions\ המגורס.
+const path = require('path');
+const dataDirForEnv = process.env.TKCS_DATA_DIR || __dirname;
+require('dotenv').config({ path: path.join(dataDirForEnv, '.env') });
 
 const { initDb }      = require('./db/database');
 const { startPoller } = require('./services/poller');
