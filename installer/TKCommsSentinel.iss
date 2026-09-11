@@ -246,7 +246,35 @@ begin
   end;
 end;
 
+// Standard location Inno writes an uninstall registry entry to, keyed by
+// AppId -- this is how we recognize an existing install, independent of
+// which directory it was installed to (InstallLocation is read from the
+// same key below, once we know it exists).
+const
+  UninstallKey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{8EBEE28B-2762-4C8A-AC9E-B83E0FA3F228}_is1';
+
 function InitializeSetup: Boolean;
+var
+  ExistingPath, Msg: string;
+  Choice: Integer;
 begin
   Result := True;
+  if not RegKeyExists(HKLM, UninstallKey) then Exit;
+
+  ExistingPath := '';
+  RegQueryStringValue(HKLM, UninstallKey, 'InstallLocation', ExistingPath);
+
+  Msg := 'TK Comms Sentinel is already installed';
+  if ExistingPath <> '' then Msg := Msg + ' at:' + #13#10 + ExistingPath;
+  Msg := Msg + '.' + #13#10#13#10 +
+    'Continuing will reconfigure the Windows services and firewall rule, ' +
+    'and (re-)create the admin account with whatever username/password ' +
+    'you enter next. Your existing database, TLS certificate, and ' +
+    'settings are left untouched.' + #13#10#13#10 +
+    'Click Yes to continue (repair/reconfigure). Click No to cancel -- ' +
+    'use "Uninstall TK Comms Sentinel" in Control Panel first if you want ' +
+    'a completely clean reinstall.';
+
+  Choice := MsgBox(Msg, mbConfirmation, MB_YESNO);
+  Result := (Choice = IDYES);
 end;
