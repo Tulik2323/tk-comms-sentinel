@@ -4,7 +4,10 @@
 //
 // הסיסמה נקראת מהמקלדת ולא מארגומנט — ארגומנטים נשמרים בהיסטוריית
 // ה-shell וגלויים ברשימת התהליכים לכל משתמש בשרת.
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+// .env: TKCS_DATA_DIR when set (מבנה מגורס), אחרת backend\ (מבנה שטוח) —
+// ראה ההערה המקבילה ב-seed-admin.js.
+const path = require('path');
+require('dotenv').config({ path: path.join(process.env.TKCS_DATA_DIR || path.join(__dirname, '..'), '.env') });
 
 const bcrypt     = require('bcryptjs');
 const { initDb } = require('../db/database');

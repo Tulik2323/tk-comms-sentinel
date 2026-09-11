@@ -1,6 +1,12 @@
 // scripts/seed-admin.js — יצירת חשבון admin ראשון
 // הרצה: node scripts/seed-admin.js <username> <password>
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+//
+// .env נטען מ-TKCS_DATA_DIR כשהוא מוגדר (מבנה מגורס, data\ משותפת), אחרת
+// נופל ל-backend\ (מבנה שטוח ישן) — כמו server.js/poller-service.js. בלי זה
+// הסקריפט מוצא .env לא-קיים בשקט, DB_PATH חוזר לברירת מחדל, וה-admin נוצר
+// ב-DB שונה מזה שהשרת האמיתי קורא ממנו.
+const path = require('path');
+require('dotenv').config({ path: path.join(process.env.TKCS_DATA_DIR || path.join(__dirname, '..'), '.env') });
 
 const bcrypt = require('bcryptjs');
 const { initDb } = require('../db/database');

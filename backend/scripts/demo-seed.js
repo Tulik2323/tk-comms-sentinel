@@ -1,5 +1,7 @@
 // scripts/demo-seed.js — זרע נתוני demo: admin user + מכשירים מדומים
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+// .env: TKCS_DATA_DIR כשמוגדר, אחרת backend\ — ראה ההערה ב-seed-admin.js.
+const path = require('path');
+require('dotenv').config({ path: path.join(process.env.TKCS_DATA_DIR || path.join(__dirname, '..'), '.env') });
 
 const bcrypt = require('bcryptjs');
 const { initDb } = require('../db/database');

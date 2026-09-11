@@ -8,7 +8,9 @@
 //   node scripts/blackout-probe.js 10              (כל 10 שניות)
 //
 // עצירה: Ctrl+C, או סגירת החלון.
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+// .env: TKCS_DATA_DIR כשמוגדר, אחרת backend\ — ראה ההערה ב-seed-admin.js.
+const _path0 = require('path');
+require('dotenv').config({ path: _path0.join(process.env.TKCS_DATA_DIR || _path0.join(__dirname, '..'), '.env') });
 
 const fs      = require('fs');
 const path    = require('path');
