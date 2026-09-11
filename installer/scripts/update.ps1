@@ -64,14 +64,27 @@ function Get-EnvValue([string]$Path, [string]$Key) {
 
 # Low-level HTTPS GET that does not go through Invoke-WebRequest / WinHttp --
 # see .DESCRIPTION for why. Returns $true if the response contains "\"status\":\"ok\"".
+#
+# The certificate-validation callback MUST be cast to the delegate type
+# explicitly. A bare scriptblock passed positionally to New-Object's
+# constructor-argument matching does not reliably bind as a
+# RemoteCertificateValidationCallback -- when it fails to bind, the SSL
+# handshake fails certificate validation (self-signed cert), every attempt
+# throws, and the loop times out and reports "unhealthy" even when the
+# server is perfectly fine. That bug shipped in the first version of this
+# function and produced a false failure (and a false "rollback also failed")
+# in the field on SRV-APPS. $lastError makes any future failure visible
+# instead of silently swallowed.
 function Test-HealthEndpoint([int]$Port, [int]$TimeoutSec) {
-  $deadline = (Get-Date).AddSeconds($TimeoutSec)
+  $deadline  = (Get-Date).AddSeconds($TimeoutSec)
+  $lastError = $null
+  $callback  = [System.Net.Security.RemoteCertificateValidationCallback]{ $true }
   while ((Get-Date) -lt $deadline) {
+    $tcp = $null; $ssl = $null
     try {
       $tcp = New-Object System.Net.Sockets.TcpClient
       $tcp.Connect('127.0.0.1', $Port)
-      $ssl = New-Object System.Net.Security.SslStream(
-        $tcp.GetStream(), $false, { param($s,$c,$ch,$e) $true })
+      $ssl = New-Object System.Net.Security.SslStream($tcp.GetStream(), $false, $callback)
       $ssl.AuthenticateAsClient('localhost')
       $req = "GET /api/health HTTP/1.1`r`nHost: localhost`r`nConnection: close`r`n`r`n"
       $bytes = [System.Text.Encoding]::ASCII.GetBytes($req)
@@ -79,13 +92,18 @@ function Test-HealthEndpoint([int]$Port, [int]$TimeoutSec) {
       $ssl.Flush()
       $reader = New-Object System.IO.StreamReader($ssl)
       $body = $reader.ReadToEnd()
-      $reader.Dispose(); $ssl.Dispose(); $tcp.Close()
+      $reader.Dispose()
       if ($body -match '"status"\s*:\s*"ok"') { return $true }
+      $lastError = "unexpected response: " + $body.Substring(0, [Math]::Min(200, $body.Length))
     } catch {
-      # Server not up yet, or still restarting -- keep polling until timeout.
+      $lastError = $_.Exception.Message
+    } finally {
+      if ($ssl) { $ssl.Dispose() }
+      if ($tcp) { $tcp.Close() }
     }
     Start-Sleep -Milliseconds 1000
   }
+  Write-Host "[update] Health check never succeeded within ${TimeoutSec}s. Last error: $lastError"
   return $false
 }
 
