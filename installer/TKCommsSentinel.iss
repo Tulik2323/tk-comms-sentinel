@@ -159,6 +159,7 @@ end;
 procedure RunPostInstallSteps;
 var
   AppDir, NodeExe, SeedParams: string;
+  AlreadyConfigured: Boolean;
 begin
   AppDir := ExpandConstant('{app}');
   NodeExe := AppDir + '\node\node.exe';
@@ -176,11 +177,25 @@ begin
   if not RunStep('Activate version', 'powershell.exe',
     PS('activate-version.ps1', '-InstallRoot "' + AppDir + '"')) then Exit;
 
-  if not RunStep('Generate TLS certificate', 'powershell.exe',
-    PS('new-selfsigned-cert.ps1', '-OutDir "' + AppDir + '\data\certs"')) then Exit;
+  // Re-running Setup over an existing install (repair, or installing the
+  // same version again) must never touch an existing data\.env: the cert
+  // step below would regenerate server.pfx with a new password, and since
+  // write-env.ps1 correctly refuses to overwrite an existing .env, the old
+  // (now-mismatched) password would be left on disk -- breaking TLS the
+  // next time the service restarts, silently, until then. So: only
+  // generate a certificate and config the first time.
+  AlreadyConfigured := FileExists(AppDir + '\data\.env');
 
-  if not RunStep('Write configuration', 'powershell.exe',
-    PS('write-env.ps1', '-Root "' + AppDir + '" -HttpsPort ' + HttpsPort)) then Exit;
+  if AlreadyConfigured then
+    Log('[TKCS] data\.env already exists -- skipping cert generation and config write (leaving them untouched).')
+  else
+  begin
+    if not RunStep('Generate TLS certificate', 'powershell.exe',
+      PS('new-selfsigned-cert.ps1', '-OutDir "' + AppDir + '\data\certs"')) then Exit;
+
+    if not RunStep('Write configuration', 'powershell.exe',
+      PS('write-env.ps1', '-Root "' + AppDir + '" -HttpsPort ' + HttpsPort)) then Exit;
+  end;
 
   if not RunStep('Register Windows services', 'powershell.exe',
     PS('svc-install.ps1', '-InstallRoot "' + AppDir + '" -Start')) then Exit;
