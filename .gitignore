@@ -33,11 +33,12 @@ dist/
 build/
 out/
 
-# === Installer build artifacts (added in later steps) ===
-# Portable Node runtime and NSSM are fetched/vendored at build time,
-# not committed here (kept out of git to stay small).
-vendor/node/
-vendor/nssm/
+# === Installer build artifacts ===
+# Portable Node runtime, NSSM, downloaded archives, and the assembled
+# distribution package are fetched/built on the build machine, never committed.
+vendor/
+package/
+dist-pkg/
 *.exe
 !install/**/*.exe
 

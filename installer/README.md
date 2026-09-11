@@ -41,35 +41,49 @@ All are ASCII-only (Windows PowerShell 5.1 compatible) and must run elevated.
   data\               netmonitor.db, certs\, .env   (updates never touch this)
 ```
 
-## Manual bring-up on a clean test server (before the EXE exists)
+## Build the distributable package (on the build machine)
 
-Prerequisites staged under `<InstallRoot>`: `backend\`, `frontend\dist\`
-(build with `npm run build` in `frontend\`), `node\node.exe` (portable Node
-24), `tools\nssm.exe`.
+One-time: fetch the vendored binaries into `vendor\` (portable Node 24 from
+nodejs.org, NSSM from nssm.cc) — these are gitignored and never committed.
+Then assemble a self-contained package:
 
 ```powershell
-$Root = 'C:\Program Files\TKCommsSentinel'   # example
-# 1. Install backend dependencies with the portable Node's npm
-& "$Root\node\npm.cmd" --prefix "$Root\backend" install --omit=dev
+& .\installer\build-package.ps1        # -> .\package  (this folder is the install root)
+```
 
-# 2. Generate the self-signed cert (capture the two printed lines)
+`build-package.ps1` copies the backend, the built `frontend\dist`, the
+portable Node, `nssm.exe`, and the installer scripts into `package\`, then runs
+`npm install --omit=dev` with the portable Node so `backend\node_modules` is
+baked in. **The result needs no internet on the target.** Copy `package\` to
+the target server and use its folder as `<InstallRoot>`.
+
+## Bring-up on a clean test server (before the EXE exists)
+
+The package already contains `node\`, `tools\nssm.exe`, `backend\` (with
+`node_modules`), `frontend\dist\`, and `installer\scripts\` — nothing to
+download or `npm install` on the target. Run elevated:
+
+```powershell
+$Root = 'C:\Program Files\TKCommsSentinel'   # = the copied package folder
+
+# 1. Generate the self-signed cert (capture the two printed lines)
 & "$Root\installer\scripts\new-selfsigned-cert.ps1" -OutDir "$Root\data\certs"
 
-# 3. Create $Root\backend\.env from .env.example, then set at least:
+# 2. Create $Root\backend\.env from .env.example, then set at least:
 #      NODE_ENV=production
 #      HTTPS_PORT=9443
-#      TLS_PFX_PATH=<from step 2>   TLS_PFX_PASSWORD=<from step 2>
+#      TLS_PFX_PATH=<from step 1>   TLS_PFX_PASSWORD=<from step 1>
 #      DB_PATH=<absolute path under data\>
 #      JWT_SECRET / JWT_TEMP_SECRET = long random strings
 #      APP_BASE_URL=https://<server>:9443
 
-# 4. Register + start the services
+# 3. Register + start the services
 & "$Root\installer\scripts\svc-install.ps1" -InstallRoot $Root -Start
 
-# 5. Open the firewall port
+# 4. Open the firewall port
 & "$Root\installer\scripts\open-firewall.ps1" -Port 9443
 
-# 6. Seed the first admin (interactive)
+# 5. Seed the first admin (interactive)
 & "$Root\node\node.exe" "$Root\backend\scripts\seed-admin.js"
 ```
 

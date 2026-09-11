@@ -71,6 +71,9 @@ finally {
 
 Write-Host "[cert] Thumbprint: $($cert.Thumbprint)"
 Write-Host "[cert] Valid until: $($cert.NotAfter.ToString('yyyy-MM-dd'))"
-Write-Host ""
-Write-Host "TLS_PFX_PATH=$pfxPath"
-Write-Host "TLS_PFX_PASSWORD=$PfxPassword"
+
+# Emit the capture lines on the OUTPUT stream (not Write-Host) so a caller can
+# collect them with  $o = & new-selfsigned-cert.ps1 ...  as well as see them
+# on the console when run via powershell.exe -File.
+Write-Output "TLS_PFX_PATH=$pfxPath"
+Write-Output "TLS_PFX_PASSWORD=$PfxPassword"
