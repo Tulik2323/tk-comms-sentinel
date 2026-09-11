@@ -24,12 +24,16 @@
   Old version folders are left on disk (not pruned) so a rollback is always
   possible; pruning old versions is a separate, manual step for now.
 
-  The health check uses a raw TcpClient + SslStream instead of
-  Invoke-WebRequest: in testing, Invoke-WebRequest / ServicePointManager in
-  Windows PowerShell 5.1 failed ("underlying connection was closed") against
-  this exact server/cert combination even though a browser connected fine.
-  TcpClient + SslStream with a permissive certificate callback sidesteps
-  that stack entirely and proved reliable.
+  The health check shells out to the bundled portable Node runtime
+  (<InstallRoot>\node\node.exe) instead of using any Windows-native TLS
+  client. Two different Windows TLS clients were tried and both failed on a
+  hardened test server (SRV-APPS) even though the server was genuinely
+  healthy (confirmed by a real browser connecting fine): Invoke-WebRequest /
+  ServicePointManager ("underlying connection was closed"), then a raw
+  TcpClient + SslStream ("A call to SSPI failed"). Both go through Windows'
+  SChannel TLS provider, which a hardened server's cipher/protocol policy
+  can block outright. Node's own TLS client uses OpenSSL directly -- the
+  same stack the server itself uses -- so it is not subject to that policy.
 
   Must run elevated (Administrator).
 
@@ -41,6 +45,7 @@ param(
   [string] $InstallRoot        = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
   [Parameter(Mandatory = $true)]
   [string] $SourcePackageDir,
+  [string] $NodeExe            = '',
   [string] $WebServiceName     = 'TKCommsSentinel',
   [string] $PollerServiceName  = 'TKCommsSentinelPoller',
   [int]    $HealthTimeoutSec   = 30,
@@ -48,6 +53,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $NodeExe) { $NodeExe = Join-Path $InstallRoot 'node\node.exe' }
+if (-not (Test-Path -LiteralPath $NodeExe)) { throw "node.exe not found: $NodeExe" }
 
 function Copy-Tree([string]$From, [string]$To) {
   robocopy $From $To /E /NFL /NDL /NJH /NJS /NP | Out-Null
@@ -62,48 +69,49 @@ function Get-EnvValue([string]$Path, [string]$Key) {
   return ($line -split '=', 2)[1]
 }
 
-# Low-level HTTPS GET that does not go through Invoke-WebRequest / WinHttp --
-# see .DESCRIPTION for why. Returns $true if the response contains "\"status\":\"ok\"".
-#
-# The certificate-validation callback MUST be cast to the delegate type
-# explicitly. A bare scriptblock passed positionally to New-Object's
-# constructor-argument matching does not reliably bind as a
-# RemoteCertificateValidationCallback -- when it fails to bind, the SSL
-# handshake fails certificate validation (self-signed cert), every attempt
-# throws, and the loop times out and reports "unhealthy" even when the
-# server is perfectly fine. That bug shipped in the first version of this
-# function and produced a false failure (and a false "rollback also failed")
-# in the field on SRV-APPS. $lastError makes any future failure visible
-# instead of silently swallowed.
-function Test-HealthEndpoint([int]$Port, [int]$TimeoutSec) {
+# HTTPS GET via the bundled portable Node runtime -- see .DESCRIPTION for why
+# no Windows-native TLS client (SslStream, Invoke-WebRequest/WinHTTP) is used.
+# A tiny script is written once to a temp file and re-run each poll; Node's
+# own exit code (0 = healthy) is the signal, avoiding any PowerShell-side TLS
+# handling entirely.
+function Test-HealthEndpoint([string]$NodeExe, [int]$Port, [int]$TimeoutSec) {
+  $js = @'
+var https = require("https");
+var port = parseInt(process.argv[2], 10);
+var req = https.get({
+  hostname: "127.0.0.1", port: port, path: "/api/health",
+  rejectUnauthorized: false, timeout: 5000
+}, function (res) {
+  var data = "";
+  res.on("data", function (c) { data += c; });
+  res.on("end", function () {
+    process.exit(/"status"\s*:\s*"ok"/.test(data) ? 0 : 2);
+  });
+});
+req.on("timeout", function () { req.destroy(); process.exit(3); });
+req.on("error", function () { process.exit(1); });
+'@
+  $scriptPath = Join-Path $env:TEMP ("tkcs-health-check-{0}.js" -f [System.Guid]::NewGuid().ToString('N'))
+  [System.IO.File]::WriteAllText($scriptPath, $js, (New-Object System.Text.ASCIIEncoding))
+
   $deadline  = (Get-Date).AddSeconds($TimeoutSec)
   $lastError = $null
-  $callback  = [System.Net.Security.RemoteCertificateValidationCallback]{ $true }
-  while ((Get-Date) -lt $deadline) {
-    $tcp = $null; $ssl = $null
-    try {
-      $tcp = New-Object System.Net.Sockets.TcpClient
-      $tcp.Connect('127.0.0.1', $Port)
-      $ssl = New-Object System.Net.Security.SslStream($tcp.GetStream(), $false, $callback)
-      $ssl.AuthenticateAsClient('localhost')
-      $req = "GET /api/health HTTP/1.1`r`nHost: localhost`r`nConnection: close`r`n`r`n"
-      $bytes = [System.Text.Encoding]::ASCII.GetBytes($req)
-      $ssl.Write($bytes, 0, $bytes.Length)
-      $ssl.Flush()
-      $reader = New-Object System.IO.StreamReader($ssl)
-      $body = $reader.ReadToEnd()
-      $reader.Dispose()
-      if ($body -match '"status"\s*:\s*"ok"') { return $true }
-      $lastError = "unexpected response: " + $body.Substring(0, [Math]::Min(200, $body.Length))
-    } catch {
-      $lastError = $_.Exception.Message
-    } finally {
-      if ($ssl) { $ssl.Dispose() }
-      if ($tcp) { $tcp.Close() }
+  try {
+    while ((Get-Date) -lt $deadline) {
+      & $NodeExe $scriptPath $Port 2>$null | Out-Null
+      if ($LASTEXITCODE -eq 0) { return $true }
+      $lastError = switch ($LASTEXITCODE) {
+        1       { 'connection error (server not up yet?)' }
+        2       { 'reached the server but response was not "status":"ok"' }
+        3       { 'request timed out (5s)' }
+        default { "node exit code $LASTEXITCODE" }
+      }
+      Start-Sleep -Milliseconds 1000
     }
-    Start-Sleep -Milliseconds 1000
+  } finally {
+    Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue
   }
-  Write-Host "[update] Health check never succeeded within ${TimeoutSec}s. Last error: $lastError"
+  Write-Host "[update] Health check never succeeded within ${TimeoutSec}s. Last status: $lastError"
   return $false
 }
 
@@ -181,7 +189,7 @@ $httpsPort  = [int](Get-EnvValue $envPath 'HTTPS_PORT')
 if (-not $httpsPort) { $httpsPort = 9443 }
 
 Write-Host "[update] Health-checking https://localhost:$httpsPort/api/health (timeout ${HealthTimeoutSec}s)..."
-$ok = Test-HealthEndpoint -Port $httpsPort -TimeoutSec $HealthTimeoutSec
+$ok = Test-HealthEndpoint -NodeExe $NodeExe -Port $httpsPort -TimeoutSec $HealthTimeoutSec
 
 if ($ok) {
   Write-Host ""
@@ -202,7 +210,7 @@ Write-Host "[update] Rolling back to $previousVersion..."
 Stop-Both
 & (Join-Path $PSScriptRoot 'activate-version.ps1') -InstallRoot $InstallRoot -Version $previousVersion
 Start-Both
-$rollbackOk = Test-HealthEndpoint -Port $httpsPort -TimeoutSec $HealthTimeoutSec
+$rollbackOk = Test-HealthEndpoint -NodeExe $NodeExe -Port $httpsPort -TimeoutSec $HealthTimeoutSec
 if ($rollbackOk) {
   Write-Host "[update] Rollback to $previousVersion succeeded and is healthy."
 } else {
