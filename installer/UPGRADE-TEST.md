@@ -102,6 +102,19 @@ Auto-rollback only fires when the health check fails, so it is worth
 provoking once rather than trusting it on the day it matters. Build a
 deliberately broken version on the build machine:
 
+> Run on 2026-09-12 against SRV-APPS (1.0.1 active). The drill passed:
+> failure reported after the 30s timeout, `current` repointed to 1.0.1, both
+> services running, `/api/health` back to 1.0.1 with an uptime consistent
+> with a real restart, and a non-zero exit so automation sees the failure.
+>
+> It also justified the design after the fact. Starting the broken version,
+> Windows reported the **web service as started within a second** while the
+> Node process inside it was crash-looping under NSSM; only the poller
+> produced "waiting for service" warnings. A check on service *status* would
+> have passed this drill and left a dead server behind. Service status means
+> "the process was launched", never "the application works" -- which is why
+> the gate here is `/api/health` and must stay that way.
+
 ```powershell
 & C:\dev\tkcs-installer\installer\build-package.ps1 -VersionOnly -VersionOverride '1.0.2-broken' -OutDir 'C:\dev\tkcs-installer\package-broken'
 Add-Content 'C:\dev\tkcs-installer\package-broken\versions\1.0.2-broken\backend\server.js' "`r`nthrow new Error('deliberate failure for rollback drill');"
