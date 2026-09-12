@@ -56,10 +56,24 @@
 
   /* ---------- panel (dashboard proof) ---------- */
   .panel-wrap{ position:relative; }
+  /* Pure-CSS 3D rotation -- no WebGL dependency, so it renders reliably
+     even over a remote desktop / VMRC session where GPU passthrough for
+     WebGL is often unavailable. */
   .badge3d{ position:absolute; top:-30px; inset-inline-end:-22px; width:132px; height:132px;
-    z-index:2; pointer-events:none; }
-  .badge3d canvas{ display:block; }
+    z-index:2; pointer-events:none; perspective:700px; }
   @media (max-width:900px){ .badge3d{ width:92px; height:92px; top:-16px; inset-inline-end:-6px; } }
+  .badge3d-inner{ width:100%; height:100%; position:relative; transform-style:preserve-3d;
+    animation:badge-spin 9s linear infinite; }
+  @media (prefers-reduced-motion: reduce){
+    .badge3d-inner{ animation:none; transform:rotateY(-22deg) rotateX(6deg); }
+  }
+  .badge3d-face{ position:absolute; inset:0; border-radius:20%; overflow:hidden;
+    backface-visibility:hidden; box-shadow:0 14px 30px -14px var(--shadow); }
+  .badge3d-front{ transform:translateZ(10px); }
+  .badge3d-front img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .badge3d-back{ transform:translateZ(-10px) rotateY(180deg);
+    background:linear-gradient(135deg, var(--accent), var(--accent-2)); }
+  @keyframes badge-spin{ from{ transform:rotateY(0deg); } to{ transform:rotateY(360deg); } }
   .panel{ background:var(--surface); border:1px solid var(--edge); border-radius:14px;
     box-shadow:0 20px 44px -30px var(--shadow); overflow:hidden; }
   .panel-bar{ display:flex; justify-content:space-between; align-items:center; padding:11px 16px;
@@ -186,7 +200,12 @@
         <p class="microcopy mono">WINDOWS SERVER · ללא IIS · פועל גם ללא אינטרנט</p>
       </div>
       <div class="panel-wrap">
-        <div id="badge3d" class="badge3d" aria-hidden="true"></div>
+        <div class="badge3d" aria-hidden="true">
+          <div class="badge3d-inner">
+            <div class="badge3d-face badge3d-front"><img src="brand-logo.png" alt=""></div>
+            <div class="badge3d-face badge3d-back"></div>
+          </div>
+        </div>
         <div class="panel">
         <div class="panel-bar mono"><span>OPERATOR VIEW — LIVE</span><span>24H</span></div>
         <div class="panel-body">
@@ -332,63 +351,4 @@
       <div class="footer-mark mono">TK-CS · <a href="index.en.html" style="color:inherit;">English version</a></div>
     </footer>
   </div>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script>
-  (function(){
-    var el = document.getElementById('badge3d');
-    if (!el || typeof THREE === 'undefined') return;
-    try {
-      var w = el.clientWidth || 132, h = el.clientHeight || 132;
-      var scene = new THREE.Scene();
-      var camera = new THREE.PerspectiveCamera(30, w/h, 0.1, 10);
-      camera.position.set(0, 0, 3.3);
-      var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      renderer.setSize(w, h);
-      renderer.outputEncoding = THREE.sRGBEncoding;
-      el.appendChild(renderer.domElement);
-
-      var tex = new THREE.TextureLoader().load('brand-logo.png');
-      tex.encoding = THREE.sRGBEncoding;
-
-      var edgeMat = new THREE.MeshStandardMaterial({ color: 0x0f7ea6, roughness: 0.35, metalness: 0.35 });
-      var backMat = new THREE.MeshStandardMaterial({ color: 0x0b1b2e, roughness: 0.6, metalness: 0.1 });
-      var faceMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, metalness: 0.08 });
-      var mats = [edgeMat, edgeMat, edgeMat, edgeMat, faceMat, backMat];
-      var geo = new THREE.BoxGeometry(1.55, 1.55, 0.22);
-      var mesh = new THREE.Mesh(geo, mats);
-      mesh.rotation.x = 0.16;
-      scene.add(mesh);
-
-      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-      var key = new THREE.DirectionalLight(0xffffff, 0.85);
-      key.position.set(2, 3, 4);
-      scene.add(key);
-      var rim = new THREE.DirectionalLight(0x8fd0ff, 0.4);
-      rim.position.set(-3, -1.5, -2);
-      scene.add(rim);
-
-      var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      function renderOnce(){ renderer.render(scene, camera); }
-      function animate(){
-        mesh.rotation.y += 0.0035;
-        renderOnce();
-        if (!reduceMotion) requestAnimationFrame(animate);
-      }
-      if (reduceMotion) { renderOnce(); } else { animate(); }
-
-      window.addEventListener('resize', function(){
-        var w2 = el.clientWidth, h2 = el.clientHeight;
-        if (!w2 || !h2) return;
-        camera.aspect = w2 / h2;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w2, h2);
-        renderOnce();
-      });
-    } catch (e) {
-      // WebGL unavailable or blocked -- fail silently, the badge is decorative.
-    }
-  })();
-  </script>
 </div>
