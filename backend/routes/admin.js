@@ -31,7 +31,8 @@ router.put('/settings', requireAdmin, (req, res) => {
     'ad_admin_group','ad_viewer_group',
     'default_poll_interval','retention_days',
     'alert_quiet_from','alert_quiet_to',
-    'app_base_url'
+    'app_base_url',
+    'update_feed_url'
   ];
 
   const SENSITIVE = new Set(['smtp_pass', 'ldap_bind_password']);

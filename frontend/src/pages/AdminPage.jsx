@@ -44,6 +44,9 @@ export default function AdminPage() {
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [newUser,  setNewUser]    = useState({ username: '', password: '', role: 'viewer' });
   const [stats,    setStats]      = useState({});
+  const [updateChecking,   setUpdateChecking]   = useState(false);
+  const [updateInfo,       setUpdateInfo]       = useState(null);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
 
   function loadSettings() {
     api.get('/admin/settings').then(r => setSettings(r.data)).catch(console.error);
@@ -78,6 +81,44 @@ export default function AdminPage() {
       setSmtpTest({ ok: false, error: err.response?.data?.error || 'שגיאה בבדיקה' });
     } finally {
       setSmtpTesting(false);
+    }
+  }
+
+  // בדיקת עדכונים — קוראת את הפיד ומשווה לגרסה המותקנת (קריאה בלבד)
+  async function checkUpdates() {
+    setUpdateChecking(true);
+    setUpdateInfo(null);
+    try {
+      const res = await api.get('/updates/check');
+      setUpdateInfo(res.data);
+    } catch (err) {
+      setUpdateInfo({ ok: false, message: err.response?.data?.message || 'שגיאה בבדיקת עדכונים' });
+    } finally {
+      setUpdateChecking(false);
+    }
+  }
+
+  // הפעלת העדכן. פעולה כבדה — דורשת אישור, והמערכת תופעל מחדש.
+  async function installUpdate() {
+    if (!updateInfo?.updateAvailable) return;
+    if (!window.confirm(`להתקין את גרסה ${updateInfo.latest}? המערכת תופעל מחדש במהלך העדכון.`)) return;
+    setUpdateInstalling(true);
+    try {
+      // timeout ארוך — כולל הורדה+חילוץ של חבילת העדכון לפני שהמערכת מתאתחלת
+      const res = await api.post('/updates/install', {
+        version:     updateInfo.latest,
+        downloadUrl: updateInfo.downloadUrl,
+        sha256:      updateInfo.sha256,
+      }, { timeout: 180000 });
+      setUpdateInfo(u => ({ ...u, installResult: res.data }));
+    } catch (err) {
+      // נפילת חיבור/timeout אחרי שהעדכון החל = המערכת כבר מתאתחלת (צפוי)
+      const softer = (err.code === 'ECONNABORTED' || !err.response)
+        ? { started: true, message: 'העדכון הופעל — המערכת מתאתחלת. המתן כדקה ורענן את הדף.' }
+        : { started: false, message: err.response?.data?.message || 'שגיאה בהפעלת העדכון' };
+      setUpdateInfo(u => ({ ...u, installResult: softer }));
+    } finally {
+      setUpdateInstalling(false);
     }
   }
 
@@ -164,6 +205,74 @@ export default function AdminPage() {
       {/* Settings Tab */}
       {tab === 'settings' && (
         <form onSubmit={saveSettings}>
+          <Section title="🔄 עדכוני מערכת">
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+              כתובת הפיד שהמערכת בודקת מולה עדכונים. השאר ריק בשרתים ללא גישה לאינטרנט.
+            </div>
+            <SettingField label="כתובת פיד עדכונים (latest.json)" name="update_feed_url"
+              value={settings.update_feed_url} onChange={handleSettingChange}
+              placeholder="https://<user>.github.io/tkcs-site/latest.json" />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+              שמור את הכתובת לפני בדיקה — הבדיקה משתמשת בערך <b>השמור</b>.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="nm-btn nm-btn-ghost"
+                onClick={checkUpdates} disabled={updateChecking}>
+                {updateChecking ? 'בודק…' : '🔍 בדוק עדכונים'}
+              </button>
+              {updateInfo?.current && (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  גרסה מותקנת: <b style={{ color: 'var(--text-primary)' }}>{updateInfo.current}</b>
+                </span>
+              )}
+            </div>
+
+            {updateInfo && (
+              <div style={{
+                marginTop: 10, padding: '10px 12px', borderRadius: 6, fontSize: 13,
+                border: '1px solid',
+                background:  !updateInfo.ok ? 'rgba(30,58,138,0.25)'
+                           : updateInfo.updateAvailable ? 'rgba(120,53,15,0.30)'
+                           : 'rgba(22,101,52,0.25)',
+                borderColor: !updateInfo.ok ? '#2563eb'
+                           : updateInfo.updateAvailable ? '#d97706'
+                           : '#16a34a',
+                color:       !updateInfo.ok ? '#bfdbfe'
+                           : updateInfo.updateAvailable ? '#fde68a'
+                           : '#bbf7d0',
+              }}>
+                <div style={{ fontWeight: 600 }}>
+                  {!updateInfo.ok
+                    ? `ℹ️ ${updateInfo.message}`
+                    : updateInfo.updateAvailable
+                      ? `⬆️ עדכון זמין: ${updateInfo.latest}`
+                      : `✅ המערכת מעודכנת (${updateInfo.current})`}
+                </div>
+                {updateInfo.ok && updateInfo.updateAvailable && updateInfo.notes && (
+                  <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12, whiteSpace: 'pre-wrap' }}>
+                    {updateInfo.notes}
+                  </div>
+                )}
+                {updateInfo.ok && updateInfo.updateAvailable && (
+                  <div style={{ marginTop: 10 }}>
+                    <button type="button" className="nm-btn nm-btn-primary"
+                      onClick={installUpdate} disabled={updateInstalling}>
+                      {updateInstalling ? 'מפעיל…' : `⬇️ התקן עדכון ${updateInfo.latest}`}
+                    </button>
+                  </div>
+                )}
+                {updateInfo.installResult && (
+                  <div style={{ marginTop: 8, fontSize: 12,
+                    color: updateInfo.installResult.started ? '#bbf7d0' : '#fde68a' }}>
+                    {updateInfo.installResult.started ? '✅ ' : 'ℹ️ '}
+                    {updateInfo.installResult.message}
+                  </div>
+                )}
+              </div>
+            )}
+          </Section>
+
           <Section title="📧 SMTP — שליחת התראות במייל">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
               <SettingField label="SMTP Host" name="smtp_host" value={settings.smtp_host}
