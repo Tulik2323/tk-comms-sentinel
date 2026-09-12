@@ -34,7 +34,6 @@
   .wrap{ max-width:1180px; margin:0 auto; padding-inline:clamp(20px,4vw,48px); }
   img{ max-width:100%; }
 
-  /* ---------- header ---------- */
   header{ display:flex; align-items:center; justify-content:space-between;
     padding:20px clamp(20px,4vw,48px); border-bottom:1px solid var(--edge); }
   .brand{ display:flex; align-items:center; gap:10px; }
@@ -44,7 +43,6 @@
   nav a{ color:inherit; text-decoration:none; }
   nav a:hover{ color:var(--ink); }
 
-  /* ---------- buttons ---------- */
   .btn{ display:inline-flex; align-items:center; gap:8px; padding:12px 21px; border-radius:9px;
     font-weight:700; font-size:14px; text-decoration:none; border:1px solid transparent; cursor:pointer;
     transition:transform .15s ease, background .15s ease, border-color .15s ease; }
@@ -55,7 +53,6 @@
   .btn-ghost:hover{ border-color:var(--accent); color:var(--accent); }
   .btn-sm{ padding:8px 16px; font-size:13px; }
 
-  /* ---------- hero ---------- */
   .hero{ padding:clamp(46px,7vw,84px) 0 clamp(54px,7vw,90px);
     display:grid; grid-template-columns:1fr 1.05fr; gap:clamp(28px,5vw,60px); align-items:center; }
   @media (max-width:900px){ .hero{ grid-template-columns:1fr; } }
@@ -67,7 +64,6 @@
   .cta-row{ display:flex; gap:14px; flex-wrap:wrap; align-items:center; }
   .microcopy{ margin-top:16px; font-size:12.5px; color:var(--ink-faint); }
 
-  /* ---------- panel (dashboard proof) ---------- */
   .panel{ background:var(--surface); border:1px solid var(--edge); border-radius:14px;
     box-shadow:0 20px 44px -30px var(--shadow); overflow:hidden; }
   .panel-bar{ display:flex; justify-content:space-between; align-items:center; padding:11px 16px;
@@ -84,13 +80,11 @@
   .spark i{ width:3px; background:var(--ink-faint); border-radius:1px; display:block; }
   .row.crit .spark i{ background:var(--crit); } .row.warn .spark i{ background:var(--warn); }
 
-  /* ---------- section shell ---------- */
   section{ padding:clamp(48px,6.5vw,86px) 0; border-top:1px solid var(--edge); }
   .section-head{ max-width:62ch; margin-bottom:clamp(28px,4vw,42px); }
   h2{ font-family:'Newsreader',serif; font-weight:600; font-size:clamp(24px,3vw,32px); margin:0 0 12px; text-wrap:balance; }
   .section-head p{ color:var(--ink-dim); font-size:15.5px; max-width:58ch; margin:0; }
 
-  /* ---------- problem ---------- */
   .problem{ display:grid; grid-template-columns:1fr 1fr; gap:clamp(28px,5vw,64px); align-items:start; }
   @media (max-width:860px){ .problem{ grid-template-columns:1fr; } }
   .problem p{ font-size:15.5px; color:var(--ink-dim); margin:0 0 14px; line-height:1.7; }
@@ -101,7 +95,6 @@
     border-inline-start:2px solid var(--accent); border-radius:0 6px 6px 0; }
   .stake-list b{ color:var(--ink); font-weight:700; }
 
-  /* ---------- feature sheet ---------- */
   .feat-group{ margin-bottom:30px; } .feat-group:last-child{ margin-bottom:0; }
   .feat-cat{ display:flex; align-items:center; gap:10px; font-size:11.5px; font-weight:700;
     letter-spacing:.05em; color:var(--accent); margin-bottom:12px; }
@@ -114,7 +107,6 @@
   .feat-name{ font-size:15.5px; font-weight:700; margin:0 0 4px; }
   .feat-desc{ font-size:14px; color:var(--ink-dim); margin:0; }
 
-  /* ---------- how it works ---------- */
   .flow{ display:grid; grid-template-columns:repeat(3,1fr); gap:0; border:1px solid var(--edge); border-radius:12px; overflow:hidden; }
   @media (max-width:760px){ .flow{ grid-template-columns:1fr; } }
   .flow-step{ padding:26px 24px; border-inline-start:1px solid var(--edge); }
@@ -124,7 +116,6 @@
   .flow-step h3{ font-size:16.5px; margin:0 0 8px; font-weight:700; }
   .flow-step p{ font-size:14px; color:var(--ink-dim); margin:0; }
 
-  /* ---------- big demo panel ---------- */
   .demo-panel{ border:1px solid var(--edge); border-radius:14px; background:var(--surface); overflow:hidden;
     box-shadow:0 20px 44px -30px var(--shadow); }
   .demo-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:1px; background:var(--edge); }
@@ -137,21 +128,18 @@
   .alert-item .m b{ color:var(--crit); }
   .demo-note{ font-size:11.5px; color:var(--ink-faint); padding:10px 20px; border-top:1px dashed var(--edge); }
 
-  /* ---------- stats ---------- */
   .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--edge); border:1px solid var(--edge); border-radius:12px; overflow:hidden; }
   @media (max-width:700px){ .stats{ grid-template-columns:1fr; } }
   .stat{ background:var(--surface); padding:26px 22px; }
   .stat-num{ font-size:clamp(24px,3vw,32px); font-weight:700; color:var(--accent); display:block; margin-bottom:6px; font-family:'Newsreader',serif; }
   .stat-label{ font-size:13.5px; color:var(--ink-dim); }
 
-  /* ---------- download ---------- */
   .dl-row{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px; padding:24px 22px; }
   .dl-tag{ display:inline-block; border:1px solid var(--edge); border-radius:20px; padding:5px 13px; font-size:11.5px; margin-bottom:10px; }
   .dl-os{ font-size:13px; color:var(--ink-dim); }
   .dl-foot{ font-size:12px; color:var(--ink-faint); padding:14px 22px; border-top:1px dashed var(--edge); }
   .dl-foot a{ color:var(--accent); }
 
-  /* ---------- changelog ---------- */
   .rev-table{ width:100%; border-collapse:collapse; font-size:13.5px; }
   .rev-table th{ text-align:start; font-size:11px; letter-spacing:.05em; color:var(--ink-faint); font-weight:700;
     padding:8px 10px; border-bottom:1px solid var(--edge); }
@@ -159,7 +147,6 @@
   .rev-table td.rev{ color:var(--accent); font-weight:700; }
   .rev-table td.desc{ color:var(--ink); }
 
-  /* ---------- footer ---------- */
   footer{ padding:20px 0 60px; }
   .footer-cta{ display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:24px;
     margin-top:36px; padding-top:24px; border-top:1px solid var(--edge); }
@@ -170,137 +157,137 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-<div dir="rtl" lang="he">
+<div dir="ltr" lang="en">
   <header>
     <div class="brand"><img src="brand-logo.png" alt="TK Comms Sentinel"><b>TK Comms Sentinel</b></div>
     <nav>
-      <a href="#features">המערכת</a>
-      <a href="#how">איך זה עובד</a>
-      <a href="#download">גרסאות</a>
-      <a class="btn btn-ghost btn-sm" href="#download">הורדה</a>
+      <a href="#features">Product</a>
+      <a href="#how">How it works</a>
+      <a href="#download">Releases</a>
+      <a class="btn btn-ghost btn-sm" href="#download">Download</a>
     </nav>
   </header>
 
   <div class="wrap">
     <section class="hero" style="border-top:none;">
       <div>
-        <p class="eyebrow">ניטור רשת ותשתית תקשורת, בזמן אמת</p>
-        <h1>הצוות כבר יודע <em>מה עומד ליפול</em> — לפני שהמשתמשים ידווחו.</h1>
-        <p class="lede">TK COMMS SENTINEL נותנת לכל סוויץ', פורט וקישור ברשת שלכם סטטוס חי — עם מספיק היסטוריה כדי לדעת אם ה"איטיות" חדשה, ומספיק דיוק כדי לנקוב בפורט המדויק. נבנתה ונבחנה מול רשת בית חולים אמיתית — הסביבה הכי פחות סלחנית לכשל שיש.</p>
+        <p class="eyebrow">Network &amp; comms infrastructure monitoring, live</p>
+        <h1>The team already knows <em>what's about to fail</em> — before the users report it.</h1>
+        <p class="lede">TK COMMS SENTINEL gives every switch, port, and link on your network a live status — with enough history to know if "slow" is new, and enough precision to name the exact port. Built and proven against a real hospital network — about as unforgiving an environment as it gets.</p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="#download">הורדת המתקין</a>
-          <a class="btn btn-ghost" href="#contact">בקשת הדגמה</a>
+          <a class="btn btn-primary" href="#download">Download the installer</a>
+          <a class="btn btn-ghost" href="#contact">Request a demo</a>
         </div>
-        <p class="microcopy mono">WINDOWS SERVER · ללא IIS · פועל גם ללא אינטרנט</p>
+        <p class="microcopy mono">WINDOWS SERVER · NO IIS REQUIRED · WORKS FULLY OFFLINE</p>
       </div>
       <div class="panel">
         <div class="panel-bar mono"><span>OPERATOR VIEW — LIVE</span><span>24H</span></div>
         <div class="panel-body">
-          <div class="row crit"><span class="dot crit"></span><div><div class="name">SW-ER-01 · Gi1/0/12</div><div class="meta mono">92% ניצולת · 3 התראות</div></div><div class="spark"><i style="height:40%"></i><i style="height:60%"></i><i style="height:85%"></i><i style="height:95%"></i><i style="height:70%"></i></div></div>
-          <div class="row warn"><span class="dot warn"></span><div><div class="name">SW-ICU-02 · Gi2/0/4</div><div class="meta mono">81% ניצולת · התראה אחת</div></div><div class="spark"><i style="height:30%"></i><i style="height:50%"></i><i style="height:75%"></i><i style="height:65%"></i><i style="height:80%"></i></div></div>
-          <div class="row"><span class="dot ok"></span><div><div class="name">SW-LAB-03 · Gi1/0/30</div><div class="meta mono">44% ניצולת</div></div><div class="spark"><i style="height:20%"></i><i style="height:35%"></i><i style="height:25%"></i><i style="height:40%"></i><i style="height:30%"></i></div></div>
-          <div class="row warn"><span class="dot warn"></span><div><div class="name">SW-RAD-01 · Gi1/0/8</div><div class="meta mono">76% · שגיאות פורט</div></div><div class="spark"><i style="height:45%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:60%"></i><i style="height:72%"></i></div></div>
+          <div class="row crit"><span class="dot crit"></span><div><div class="name">SW-ER-01 · Gi1/0/12</div><div class="meta mono">92% utilization · 3 alerts</div></div><div class="spark"><i style="height:40%"></i><i style="height:60%"></i><i style="height:85%"></i><i style="height:95%"></i><i style="height:70%"></i></div></div>
+          <div class="row warn"><span class="dot warn"></span><div><div class="name">SW-ICU-02 · Gi2/0/4</div><div class="meta mono">81% utilization · 1 alert</div></div><div class="spark"><i style="height:30%"></i><i style="height:50%"></i><i style="height:75%"></i><i style="height:65%"></i><i style="height:80%"></i></div></div>
+          <div class="row"><span class="dot ok"></span><div><div class="name">SW-LAB-03 · Gi1/0/30</div><div class="meta mono">44% utilization</div></div><div class="spark"><i style="height:20%"></i><i style="height:35%"></i><i style="height:25%"></i><i style="height:40%"></i><i style="height:30%"></i></div></div>
+          <div class="row warn"><span class="dot warn"></span><div><div class="name">SW-RAD-01 · Gi1/0/8</div><div class="meta mono">76% · port errors</div></div><div class="spark"><i style="height:45%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:60%"></i><i style="height:72%"></i></div></div>
         </div>
       </div>
     </section>
 
     <section class="problem">
       <div>
-        <p class="eyebrow">למה זה קריטי</p>
-        <h2>רשתות תשתית קריטיות הן לא IT רגיל</h2>
-        <p>ברשת שאסור לה ליפול — בית חולים, מוסד פיננסי, מתקן תעשייתי — יושבים עשרות סוויצ'ים ומאות פורטים. תקלה בפורט בודד לא תמיד "מפילה" משהו בבירור: לעיתים היא רק מאיטה, מגמגמת, או מנתקת מכשיר אחד בזמן שהרשת סביבו נראית תקינה.</p>
-        <p>כלי ניטור IT כלליים בנויים לרשת משרדית אחידה, לא לפריסה פיזית של עשרות מחלקות עם ציוד ריבוי-יצרנים שנוסף עם השנים. <strong>TK COMMS SENTINEL</strong> נבנתה ונבחנה מול רשת בית חולים אמיתית — ומאז מתאימה לכל רשת ארגונית עם אותה רמת דרישה לאמינות.</p>
+        <p class="eyebrow">Why this matters</p>
+        <h2>Critical infrastructure networks are not ordinary IT</h2>
+        <p>In a network that isn't allowed to go down — a hospital, a financial institution, an industrial site — dozens of switches and hundreds of ports carry equipment that can't drop for a moment. A single failing port doesn't always announce itself clearly: sometimes it just slows down, stutters, or drops one device while the network around it looks perfectly healthy.</p>
+        <p>General-purpose IT monitoring tools are built for a uniform office network, not for the physical layout of dozens of departments with multi-vendor equipment added over the years. <strong>TK COMMS SENTINEL</strong> was built and proven against a real hospital network — and now fits any enterprise network with the same reliability bar.</p>
       </div>
       <ul class="stake-list">
-        <li><b>עומס פורט חורג</b><span>&nbsp;— מזוהה ומדווח לפני שהאיטיות מורגשת בעמדה הקלינית.</span></li>
-        <li><b>מתג שנופל</b><span>&nbsp;— התראה מיידית, עם הבחנה בין תקלת מכשיר לנפילת נתיב רחבה.</span></li>
-        <li><b>ציוד לא מזוהה</b><span>&nbsp;— איתור לפי IP או MAC, עד לסוויץ' והפורט הפיזי המדויק.</span></li>
+        <li><b>Port overload</b><span>&nbsp;— caught and reported before the slowdown is felt at the clinical workstation.</span></li>
+        <li><b>A switch going down</b><span>&nbsp;— immediate alert, distinguishing a single device fault from a wider path outage.</span></li>
+        <li><b>Unidentified equipment</b><span>&nbsp;— located by IP or MAC, down to the exact switch and physical port.</span></li>
       </ul>
     </section>
 
     <section id="features">
       <div class="section-head">
-        <p class="eyebrow">מה המערכת עושה בפועל</p>
-        <h2>שלוש קבוצות יכולת</h2>
-        <p>ראייה, אבחון, ועמידות — כל אחת נותנת מענה לשלב אחר בחיים של תקלת רשת.</p>
+        <p class="eyebrow">What the system actually does</p>
+        <h2>Three groups of capability</h2>
+        <p>Visibility, diagnosis, and resilience — each answering a different stage in the life of a network fault.</p>
       </div>
       <div class="feat-group">
-        <div class="feat-cat mono">VIS — ראייה</div>
-        <div class="feat-row"><div class="feat-code mono">VIS-01</div><div><p class="feat-name">ניטור SNMP רב-יצרני</p><p class="feat-desc">Aruba, HPE Comware, Check Point ומתגי L2/L3 נוספים — נסרקים במקביל, בלי צורך בהתקנת agent על אף מכשיר.</p></div></div>
-        <div class="feat-row"><div class="feat-code mono">VIS-02</div><div><p class="feat-name">לוח בקרה בזמן אמת</p><p class="feat-desc">עומס רוחב פס, זמינות מכשירים, תקלות פעילות והפורטים הבעייתיים ביותר ב-24 השעות האחרונות — במבט אחד.</p></div></div>
-        <div class="feat-row"><div class="feat-code mono">VIS-03</div><div><p class="feat-name">טופולוגיית LLDP אוטומטית</p><p class="feat-desc">זיהוי קישורי uplink בין מתגים אוטומטית, כדי שהמערכת (ואתם) לא תבלבלו עמדת קצה עם ציוד תשתית.</p></div></div>
+        <div class="feat-cat mono">VIS — Visibility</div>
+        <div class="feat-row"><div class="feat-code mono">VIS-01</div><div><p class="feat-name">Multi-vendor SNMP monitoring</p><p class="feat-desc">Aruba, HPE Comware, Check Point, and other L2/L3 switches — polled in parallel, no agent required on any device.</p></div></div>
+        <div class="feat-row"><div class="feat-code mono">VIS-02</div><div><p class="feat-name">Real-time dashboard</p><p class="feat-desc">Bandwidth load, device availability, active faults, and the worst-performing ports over the last 24 hours — at a glance.</p></div></div>
+        <div class="feat-row"><div class="feat-code mono">VIS-03</div><div><p class="feat-name">Automatic LLDP topology</p><p class="feat-desc">Uplink connections between switches are detected automatically, so the system — and you — never mistake an end device for infrastructure.</p></div></div>
       </div>
       <div class="feat-group">
-        <div class="feat-cat mono">DIA — אבחון</div>
-        <div class="feat-row"><div class="feat-code mono">DIA-01</div><div><p class="feat-name">היסטוריית תעבורה לכל פורט</p><p class="feat-desc">גרף 48 שעות אחורה לכל ממשק בנפרד — תעבורה ושגיאות — לחקירת תקלה אחרי שהיא כבר קרתה.</p></div></div>
-        <div class="feat-row"><div class="feat-code mono">DIA-02</div><div><p class="feat-name">איתור לפי IP או MAC</p><p class="feat-desc">הזינו כתובת — המערכת מאתרת באיזה סוויץ' ובאיזה פורט פיזי מחובר הציוד, גם כשהחיפוש עובר דרך ניתוב L3.</p></div></div>
-        <div class="feat-row"><div class="feat-code mono">DIA-03</div><div><p class="feat-name">התראות מייל ממוקדות</p><p class="feat-desc">קישור ישיר למכשיר ולפורט הספציפי בהתראה — לא "יש בעיה איפשהו ברשת", אלא איפה בדיוק.</p></div></div>
+        <div class="feat-cat mono">DIA — Diagnosis</div>
+        <div class="feat-row"><div class="feat-code mono">DIA-01</div><div><p class="feat-name">Per-port traffic history</p><p class="feat-desc">A 48-hour graph for every interface individually — throughput and errors — for investigating a fault after it already happened.</p></div></div>
+        <div class="feat-row"><div class="feat-code mono">DIA-02</div><div><p class="feat-name">Find by IP or MAC</p><p class="feat-desc">Enter an address — the system locates which switch and which physical port the device is actually connected to, even when the lookup crosses L3 routing.</p></div></div>
+        <div class="feat-row"><div class="feat-code mono">DIA-03</div><div><p class="feat-name">Targeted email alerts</p><p class="feat-desc">A direct link to the specific device and port in the alert — not "something's wrong somewhere on the network," but exactly where.</p></div></div>
       </div>
       <div class="feat-group">
-        <div class="feat-cat mono">SEC — עמידות ואבטחה</div>
-        <div class="feat-row"><div class="feat-code mono">SEC-01</div><div><p class="feat-name">התחברות ארגונית מאובטחת</p><p class="feat-desc">Active Directory דרך LDAPS, אימות דו-שלבי (2FA), וחשבון חירום מקומי נפרד לשעת משבר.</p></div></div>
-        <div class="feat-row"><div class="feat-code mono">SEC-02</div><div><p class="feat-name">פועלת במלואה ללא אינטרנט</p><p class="feat-desc">מתאימה לרשת מבודדת (air-gapped). אין תלות בשירות ענן חיצוני כלשהו לצורך פעולה שוטפת.</p></div></div>
-        <div class="feat-row"><div class="feat-code mono">SEC-03</div><div><p class="feat-name">יומן ביקורת מלא</p><p class="feat-desc">כל שינוי הרשאה, כניסה למערכת ושינוי סף התראה נרשם באופן קבוע ומתועד.</p></div></div>
+        <div class="feat-cat mono">SEC — Resilience &amp; security</div>
+        <div class="feat-row"><div class="feat-code mono">SEC-01</div><div><p class="feat-name">Enterprise-grade sign-in</p><p class="feat-desc">Active Directory over LDAPS, mandatory two-factor authentication, and a separate local emergency account for outages.</p></div></div>
+        <div class="feat-row"><div class="feat-code mono">SEC-02</div><div><p class="feat-name">Runs fully offline</p><p class="feat-desc">Suited to an air-gapped network. No dependency on any external cloud service for day-to-day operation.</p></div></div>
+        <div class="feat-row"><div class="feat-code mono">SEC-03</div><div><p class="feat-name">Complete audit log</p><p class="feat-desc">Every permission change, login, and alert-threshold change is recorded permanently and documented.</p></div></div>
       </div>
     </section>
 
     <section id="how">
       <div class="section-head">
-        <p class="eyebrow">כך זה עובד</p>
-        <h2>ממחזור סריקה עד התרעה בתיבת המייל</h2>
+        <p class="eyebrow">How it works</p>
+        <h2>From polling cycle to inbox alert</h2>
       </div>
       <div class="flow">
-        <div class="flow-step"><div class="flow-code mono">שלב 01</div><h3>סריקה מתמדת</h3><p>כל מכשיר נבדק במחזור קבוע — בין 30 שניות לכמה דקות — דרך SNMP, ללא agent מקומי.</p></div>
-        <div class="flow-step"><div class="flow-code mono">שלב 02</div><h3>זיהוי חריגה</h3><p>עומס, שגיאות פורט או ניתוק מושווים לסף שהוגדר — ברמת מכשיר, פורט בודד, או גלובלית.</p></div>
-        <div class="flow-step"><div class="flow-code mono">שלב 03</div><h3>התרעה ופעולה</h3><p>מייל עם קישור ישיר לפורט הבעייתי יוצא לצוות — לפני שהתקלה מורגשת בעמדה הקלינית.</p></div>
+        <div class="flow-step"><div class="flow-code mono">STAGE 01</div><h3>Continuous polling</h3><p>Every device is checked on a set cycle — anywhere from 30 seconds to a few minutes — over SNMP, no local agent needed.</p></div>
+        <div class="flow-step"><div class="flow-code mono">STAGE 02</div><h3>Anomaly detection</h3><p>Load, port errors, or disconnects are compared against configured thresholds — per device, per single port, or network-wide.</p></div>
+        <div class="flow-step"><div class="flow-code mono">STAGE 03</div><h3>Alert &amp; action</h3><p>An email with a direct link to the problem port goes out to the team — before the fault is felt at the clinical workstation.</p></div>
       </div>
     </section>
 
     <section id="dashboard">
       <div class="section-head">
-        <p class="eyebrow">תצוגה מהמערכת (הדמיה)</p>
-        <h2>אותו לוח בקרה שהצוות רואה כל בוקר</h2>
-        <p>הדוגמה שלהלן בנויה משמות ונתונים בדיוניים — לא מתוך רשת אמיתית.</p>
+        <p class="eyebrow">A view from the system (illustrative)</p>
+        <h2>The same dashboard the team sees every morning</h2>
+        <p>The example below uses fictional names and figures — not a real network — purely to illustrate the kind of view this is.</p>
       </div>
       <div class="demo-panel">
         <div class="panel-bar mono"><span>OPERATOR VIEW — LIVE</span><span>●●●</span></div>
         <div class="demo-grid">
           <div class="demo-cell">
-            <div class="demo-label mono">פורטים בעייתיים · 24H</div>
+            <div class="demo-label mono">PROBLEM PORTS · 24H</div>
             <div class="row crit"><span class="dot crit"></span><div><div class="name">SW-ER-01 · Gi1/0/12</div></div><div class="meta mono">92% · 3 alerts</div></div>
             <div class="row warn"><span class="dot warn"></span><div><div class="name">SW-ICU-02 · Gi2/0/4</div></div><div class="meta mono">81% · 1 alert</div></div>
             <div class="row"><span class="dot ok"></span><div><div class="name">SW-LAB-03 · Gi1/0/30</div></div><div class="meta mono">44%</div></div>
             <div class="row warn"><span class="dot warn"></span><div><div class="name">SW-RAD-01 · Gi1/0/8</div></div><div class="meta mono">76% · errors</div></div>
           </div>
           <div class="demo-cell">
-            <div class="demo-label mono">התראות אחרונות</div>
-            <div class="alert-item mono"><span class="t">08:12</span><span class="m"><b>עומס גבוה</b> — SW-ER-01, Gi1/0/12</span></div>
-            <div class="alert-item mono"><span class="t">07:54</span><span class="m">מכשיר לא מגיב — SW-RAD-01</span></div>
-            <div class="alert-item mono"><span class="t">06:40</span><span class="m">שגיאות פורט — SW-ICU-02, Gi2/0/4</span></div>
-            <div class="alert-item mono"><span class="t">02:15</span><span class="m">התאוששות — SW-RAD-01 חזר לאוויר</span></div>
+            <div class="demo-label mono">RECENT ALERTS</div>
+            <div class="alert-item mono"><span class="t">08:12</span><span class="m"><b>High load</b> — SW-ER-01, Gi1/0/12</span></div>
+            <div class="alert-item mono"><span class="t">07:54</span><span class="m">Device unreachable — SW-RAD-01</span></div>
+            <div class="alert-item mono"><span class="t">06:40</span><span class="m">Port errors — SW-ICU-02, Gi2/0/4</span></div>
+            <div class="alert-item mono"><span class="t">02:15</span><span class="m">Recovered — SW-RAD-01 back online</span></div>
           </div>
         </div>
-        <div class="demo-note mono">* להמחשה בלבד — אין קשר לרשת, שמות מכשירים או נתונים אמיתיים.</div>
+        <div class="demo-note mono">* Illustrative only — no relation to any real network, device names, or data.</div>
       </div>
     </section>
 
     <section id="capability">
       <div class="section-head">
-        <p class="eyebrow">מוכנות לרשת שאסור לה להיות תלויה בגורם חיצוני</p>
-        <h2>בנויה לעמוד בדרישה, לא רק להראות טוב</h2>
+        <p class="eyebrow">Ready for a network that can't depend on anything external</p>
+        <h2>Built to meet the requirement, not just to look good</h2>
       </div>
       <div class="stats">
-        <div class="stat"><span class="stat-num">0</span><span class="stat-label">תלות בשירותי ענן חיצוניים לפעולה שוטפת</span></div>
-        <div class="stat"><span class="stat-num">24/7</span><span class="stat-label">סריקה רציפה, ללא צורך בהתערבות ידנית</span></div>
-        <div class="stat"><span class="stat-num">3+</span><span class="stat-label">יצרנים נתמכים — Aruba · HPE Comware · Check Point</span></div>
+        <div class="stat"><span class="stat-num">0</span><span class="stat-label">External cloud dependencies for day-to-day operation</span></div>
+        <div class="stat"><span class="stat-num">24/7</span><span class="stat-label">Continuous polling, no manual intervention needed</span></div>
+        <div class="stat"><span class="stat-num">3+</span><span class="stat-label">Vendors supported — Aruba · HPE Comware · Check Point</span></div>
       </div>
     </section>
 
     <section id="download">
       <div class="section-head">
-        <p class="eyebrow">הורדה והתקנה</p>
-        <h2>מתקין עצמאי ל-Windows Server</h2>
-        <p>קובץ EXE אחד — Node.js, שני שירותי Windows, ותעודת TLS נוצרים אוטומטית באשף ההתקנה.</p>
+        <p class="eyebrow">Download &amp; install</p>
+        <h2>Standalone installer for Windows Server</h2>
+        <p>A single EXE — Node.js, two Windows services, and a TLS certificate are all created automatically by the setup wizard.</p>
       </div>
       <div class="panel">
         <div class="panel-bar mono"><span>LATEST RELEASE</span><span>●●●</span></div>
@@ -309,32 +296,32 @@
             <span class="dl-tag mono">VERSION <b>1.0.0</b></span>
             <div class="dl-os">Windows Server 2019 · 2022 · 2025 &nbsp;·&nbsp; x64</div>
           </div>
-          <a class="btn btn-primary" href="https://github.com/REPLACE-ORG/REPLACE-REPO/releases/latest/download/TKCommsSentinel-Setup-latest.exe">הורדת המתקין (EXE)</a>
+          <a class="btn btn-primary" href="https://github.com/REPLACE-ORG/REPLACE-REPO/releases/latest/download/TKCommsSentinel-Setup-latest.exe">Download the installer (EXE)</a>
         </div>
-        <div class="dl-foot mono">SHA256: 455c816e3f1123aba818810a694c5301902ea0e17d5b13e781bb225f526bec60 &nbsp;·&nbsp; <a href="https://github.com/REPLACE-ORG/REPLACE-REPO/releases">כל הגרסאות וההיסטוריה</a></div>
+        <div class="dl-foot mono">SHA256: 455c816e3f1123aba818810a694c5301902ea0e17d5b13e781bb225f526bec60 &nbsp;·&nbsp; <a href="https://github.com/REPLACE-ORG/REPLACE-REPO/releases">All versions &amp; release history</a></div>
       </div>
     </section>
 
     <footer id="contact">
       <div class="section-head" style="margin-bottom:22px;">
-        <p class="eyebrow">היסטוריית גרסאות</p>
-        <h2 style="font-size:22px;">התפתחות המערכת</h2>
+        <p class="eyebrow">Version history</p>
+        <h2 style="font-size:22px;">How the system has evolved</h2>
       </div>
       <div style="overflow-x:auto;">
         <table class="rev-table">
-          <thead><tr><th>גרסה</th><th>תיאור</th></tr></thead>
+          <thead><tr><th>Version</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td class="rev mono">1.0</td><td class="desc">ניטור SNMP בסיסי, לוח בקרה ראשוני והתרעות מייל.</td></tr>
-            <tr><td class="rev mono">1.1</td><td class="desc">זיהוי טופולוגיית LLDP והבחנה אוטומטית בין uplink לפורט קצה.</td></tr>
-            <tr><td class="rev mono">1.2</td><td class="desc">איתור התקנים לפי IP/MAC עד לפורט הפיזי, והיסטוריית תעבורה של 48 שעות לכל ממשק.</td></tr>
+            <tr><td class="rev mono">1.0</td><td class="desc">Basic SNMP monitoring, an initial dashboard, and email alerts.</td></tr>
+            <tr><td class="rev mono">1.1</td><td class="desc">LLDP topology detection, automatically distinguishing an uplink from an end-device port.</td></tr>
+            <tr><td class="rev mono">1.2</td><td class="desc">Device lookup by IP/MAC down to the physical port, and 48-hour traffic history for every interface.</td></tr>
           </tbody>
         </table>
       </div>
       <div class="footer-cta">
-        <p>מתעניינים בפריסה של TK COMMS SENTINEL ברשת נוספת? צוות ה-IT ישמח לתאם הדגמה חיה.</p>
-        <a class="btn btn-primary" href="#contact">בקשת הדגמה</a>
+        <p>Interested in deploying TK COMMS SENTINEL on another network? Our IT team is happy to arrange a live demo.</p>
+        <a class="btn btn-primary" href="#contact">Request a demo</a>
       </div>
-      <div class="footer-mark mono">TK-CS · <a href="index.en.html" style="color:inherit;">English version</a></div>
+      <div class="footer-mark mono">TK-CS · <a href="index.html" style="color:inherit;">גרסה בעברית</a></div>
     </footer>
   </div>
 </div>

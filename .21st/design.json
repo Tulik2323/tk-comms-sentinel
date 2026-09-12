@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "project": {
+    "name": "tkcs-installer",
+    "productType": "marketing-site",
+    "stack": ["static-html"]
+  },
+  "sources": {
+    "tokens": ["frontend/src/brand.css"],
+    "components": [],
+    "assets": ["frontend/public/brand-logo.png"],
+    "instructions": []
+  },
+  "design": {
+    "colorMode": "both",
+    "colors": {
+      "light": {
+        "ground": "#f2f5f3", "surface": "#ffffff", "edge": "#dbe3de",
+        "ink": "#10201a", "accent": "#0f7ea6", "accent2": "#3f9e6d"
+      },
+      "dark": {
+        "ground": "#060f1c", "surface": "#0b1b2e", "edge": "#1d3a57",
+        "ink": "#f2f7fc", "accent": "#4fc3f7", "accent2": "#a5e063"
+      }
+    },
+    "typography": {
+      "display": "Newsreader (serif, italic accent)",
+      "body": "Public Sans",
+      "data": "IBM Plex Mono"
+    },
+    "spacing": {},
+    "radius": { "panels": "12-14px", "buttons": "9px" },
+    "shadows": { "panel": "0 20px 44px -30px var(--shadow)" },
+    "motion": {},
+    "density": "comfortable"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": ["panel", "row+dot+spark (status list)", "stat-grid", "feat-row"],
+    "patterns": ["dashboard-proof-in-hero", "corner-eyebrow", "logical-properties for RTL/LTR parity"]
+  },
+  "constraints": {
+    "must": [
+      "Reuse real brand-logo.png (circuit-ring shield) as the only logo mark",
+      "Dark mode accent must match the real app tokens (--tk-blue #4fc3f7 / --tk-green #a5e063 from frontend/src/brand.css) for product continuity",
+      "Every page ships in both Hebrew (RTL, index.html) and English (LTR, index.en.html) from the same CSS via logical properties",
+      "Broader commercial audience, not hospital-only -- hospital network stays as the flagship proof point, not the sole framing"
+    ],
+    "avoid": [
+      "Generic centered dark hero with badge+bold-white-headline+dual-button (explicitly rejected reference pattern)",
+      "Hand-drawn blueprint/engineering-sheet motif (previous direction, explicitly moved away from)",
+      "Inter / Space Grotesk as display faces"
+    ]
+  },
+  "decisions": [
+    {
+      "date": "2026-09-12",
+      "decision": "Chose 'Command Deck' direction over 'Signal Path' (dark network-ops studio) and 'Ops Log' (dense mono console) after a 3-direction explore pass grounded in 21st.dev references.",
+      "rationale": "Balances broadened commercial audience with continued need to reassure risk-averse enterprise/hospital buyers; proves capability immediately via a real dashboard panel in the hero rather than requiring scroll."
+    }
+  ],
+  "evidence": [
+    "21st search: 'B2B infrastructure network monitoring SaaS landing page hero dark dashboard'",
+    "21st search: 'enterprise trust security compliance landing page clean minimal light'",
+    "21st search: 'dark tech solutions hero section network' -> HAOS Tech Solutions preview (asymmetric grid, corner labels) informed the rejected Signal Path direction"
+  ],
+  "generatedAt": "2026-09-12T10:55:00.000Z"
+}
