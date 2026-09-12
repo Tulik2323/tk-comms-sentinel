@@ -2,6 +2,6 @@
   "version": "1.0.0",
   "date": "2026-09-12",
   "notes": "First release: standalone Windows Server install (no IIS), backend and poller as Windows services, self-signed TLS, versioned updates with automatic rollback, local + Active Directory authentication.",
-  "downloadUrl": "https://github.com/REPLACE-ORG/REPLACE-REPO/releases/latest/download/TKCommsSentinel-Setup-latest.exe",
+  "downloadUrl": "https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe",
   "sha256": "455c816e3f1123aba818810a694c5301902ea0e17d5b13e781bb225f526bec60"
 }
