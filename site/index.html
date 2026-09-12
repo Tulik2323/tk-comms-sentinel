@@ -1,0 +1,739 @@
+<title>TK Comms Sentinel</title>
+<style>
+  :root{
+    --paper: #eef2ef;
+    --paper-raised: #ffffff;
+    --paper-sunken: #e4e9e5;
+    --ink: #121a1d;
+    --ink-muted: #55625f;
+    --ink-faint: #8b9a95;
+    --line: #c7d1cb;
+    --line-strong: #a8b6af;
+    --accent: #0e6e57;
+    --accent-strong: #0a5443;
+    --accent-soft: rgba(14,110,87,0.09);
+    --accent-soft-strong: rgba(14,110,87,0.16);
+    --ok: #2e9e6b;
+    --warn: #b9821c;
+    --crit: #c1402c;
+    --grid-line: rgba(14,110,87,0.07);
+    --shadow-color: rgba(18,26,29,0.10);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper: #0c1412;
+      --paper-raised: #121c19;
+      --paper-sunken: #0a100e;
+      --ink: #e7efec;
+      --ink-muted: #98a8a2;
+      --ink-faint: #5e6d68;
+      --line: #26382f;
+      --line-strong: #34493e;
+      --accent: #35d6a6;
+      --accent-strong: #6ee8c4;
+      --accent-soft: rgba(53,214,166,0.13);
+      --accent-soft-strong: rgba(53,214,166,0.22);
+      --ok: #4ade94;
+      --warn: #e3a83b;
+      --crit: #f0644c;
+      --grid-line: rgba(53,214,166,0.08);
+      --shadow-color: rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper: #0c1412;
+    --paper-raised: #121c19;
+    --paper-sunken: #0a100e;
+    --ink: #e7efec;
+    --ink-muted: #98a8a2;
+    --ink-faint: #5e6d68;
+    --line: #26382f;
+    --line-strong: #34493e;
+    --accent: #35d6a6;
+    --accent-strong: #6ee8c4;
+    --accent-soft: rgba(53,214,166,0.13);
+    --accent-soft-strong: rgba(53,214,166,0.22);
+    --ok: #4ade94;
+    --warn: #e3a83b;
+    --crit: #f0644c;
+    --grid-line: rgba(53,214,166,0.08);
+    --shadow-color: rgba(0,0,0,0.35);
+  }
+
+  *{ box-sizing: border-box; }
+  html{ scroll-behavior: smooth; }
+
+  .page{
+    direction: rtl;
+    font-family: system-ui, "Segoe UI", "Arial Hebrew", "Noto Sans Hebrew", Arial, sans-serif;
+    background:
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0/40px 40px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0/40px 40px,
+      var(--paper);
+    color: var(--ink);
+    line-height: 1.55;
+    min-height: 100%;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .mono{
+    font-family: Consolas, "SF Mono", "Cascadia Mono", "Courier New", monospace;
+    font-variant-numeric: tabular-nums;
+    unicode-bidi: isolate;
+  }
+  .ltr{ direction: ltr; unicode-bidi: isolate; }
+
+  .sheet{
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 clamp(18px, 4vw, 56px);
+  }
+
+  /* ---------- sheet border with corner ticks ---------- */
+  .frame{
+    position: relative;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .tick{
+    position: absolute;
+    width: 14px; height: 14px;
+    border: 1px solid var(--accent);
+    opacity: 0.55;
+  }
+  .tick.tl{ top: -1px; right: -1px; border-left: none; border-bottom: none; }
+  .tick.tr{ top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .tick.bl{ bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  .tick.br{ bottom: -1px; left: -1px; border-right: none; border-top: none; }
+
+  /* ---------- header ---------- */
+  header.top{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px clamp(18px, 4vw, 56px);
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .brand{ display: flex; align-items: center; gap: 10px; }
+  .brand svg{ flex: none; }
+  .brand-name{
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.06em;
+  }
+  .stamp{
+    border: 1px solid var(--line-strong);
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--ink-muted);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .stamp b{ color: var(--ink); }
+
+  /* ---------- hero ---------- */
+  .hero{
+    padding: clamp(40px, 6vw, 80px) 0 clamp(48px, 7vw, 96px);
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: clamp(28px, 5vw, 60px);
+    align-items: center;
+  }
+  @media (max-width: 900px){ .hero{ grid-template-columns: 1fr; } }
+
+  .eyebrow{
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    font-weight: 700;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .eyebrow::before{
+    content: "";
+    width: 22px; height: 1px;
+    background: var(--accent);
+    display: inline-block;
+  }
+
+  h1{
+    font-size: clamp(32px, 4.6vw, 54px);
+    line-height: 1.14;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+  h1 .accent{ color: var(--accent); }
+
+  .lede{
+    font-size: 17px;
+    color: var(--ink-muted);
+    max-width: 46ch;
+    margin: 0 0 30px;
+  }
+
+  .cta-row{ display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 22px;
+    font-size: 14px;
+    font-weight: 700;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    transition: transform 0.15s ease, background 0.15s ease, border-color .15s ease;
+  }
+  .btn:focus-visible{ outline: 2px solid var(--accent); outline-offset: 3px; }
+  .btn-primary{ background: var(--accent); color: var(--paper-raised); }
+  .btn-primary:hover{ background: var(--accent-strong); transform: translateY(-1px); }
+  .btn-ghost{ border-color: var(--line-strong); color: var(--ink); background: transparent; }
+  .btn-ghost:hover{ border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- hero schematic ---------- */
+  .schematic-wrap{
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    padding: 18px 18px 14px;
+    box-shadow: 0 18px 40px -24px var(--shadow-color);
+  }
+  .schematic-cap{
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 10.5px; color: var(--ink-faint); letter-spacing: 0.06em;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .schematic-cap b{ color: var(--ink-muted); }
+  .pulse-dot{
+    r: 3.2;
+    fill: var(--accent);
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .signal-path{
+      stroke-dasharray: 6 7;
+      animation: dash 3.6s linear infinite;
+    }
+    .pulse-dot{ animation: pulse 2.4s ease-in-out infinite; }
+  }
+  @keyframes dash{ to{ stroke-dashoffset: -130; } }
+  @keyframes pulse{ 0%,100%{ opacity: 0.35; r: 2.6; } 50%{ opacity: 1; r: 4; } }
+
+  /* ---------- section shell ---------- */
+  section{ padding: clamp(46px, 6vw, 84px) 0; }
+  .section-head{ max-width: 62ch; margin-bottom: clamp(28px, 4vw, 44px); }
+  h2{
+    font-size: clamp(24px, 3vw, 32px);
+    font-weight: 800;
+    margin: 0 0 12px;
+    text-wrap: balance;
+  }
+  .section-head p{ color: var(--ink-muted); font-size: 15.5px; max-width: 58ch; }
+
+  /* ---------- problem section ---------- */
+  .problem{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(28px, 5vw, 64px);
+    align-items: start;
+  }
+  @media (max-width: 860px){ .problem{ grid-template-columns: 1fr; } }
+  .problem p{ font-size: 15.5px; color: var(--ink-muted); margin: 0 0 14px; }
+  .problem strong{ color: var(--ink); }
+  .stake-list{ list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 10px; }
+  .stake-list li{
+    display: flex; gap: 10px; align-items: flex-start;
+    font-size: 14px; color: var(--ink-muted);
+    padding: 10px 12px;
+    background: var(--accent-soft);
+    border-inline-start: 2px solid var(--accent);
+  }
+  .stake-list b{ color: var(--ink); font-weight: 700; }
+
+  /* ---------- equipment schedule table ---------- */
+  .schedule-group{ margin-bottom: 30px; }
+  .schedule-group:last-child{ margin-bottom: 0; }
+  .schedule-cat{
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.05em;
+    color: var(--ink-faint);
+    margin-bottom: 10px;
+  }
+  .schedule-cat::after{ content:""; flex:1; height:1px; background: var(--line); }
+  .schedule-row{
+    display: grid;
+    grid-template-columns: 92px 220px 1fr;
+    gap: 18px;
+    padding: 16px 4px;
+    border-top: 1px solid var(--line);
+    align-items: baseline;
+  }
+  .schedule-group:first-of-type .schedule-row:first-of-type{ border-top: 1px solid var(--line-strong); }
+  @media (max-width: 760px){
+    .schedule-row{ grid-template-columns: 1fr; gap: 4px; padding: 16px 4px 20px; }
+  }
+  .schedule-code{ font-size: 12.5px; color: var(--accent); font-weight: 700; }
+  .schedule-name{ font-size: 15.5px; font-weight: 700; }
+  .schedule-desc{ font-size: 14.5px; color: var(--ink-muted); }
+
+  /* ---------- how it works ---------- */
+  .flow{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 1px solid var(--line);
+  }
+  @media (max-width: 760px){ .flow{ grid-template-columns: 1fr; } }
+  .flow-step{
+    padding: 26px 24px;
+    border-inline-start: 1px solid var(--line);
+    position: relative;
+  }
+  .flow-step:first-child{ border-inline-start: none; }
+  @media (max-width: 760px){
+    .flow-step{ border-inline-start: none; border-top: 1px solid var(--line); }
+    .flow-step:first-child{ border-top: none; }
+  }
+  .flow-code{ font-size: 11px; color: var(--ink-faint); margin-bottom: 10px; letter-spacing: 0.05em; }
+  .flow-step h3{ font-size: 17px; margin: 0 0 8px; font-weight: 800; }
+  .flow-step p{ font-size: 14px; color: var(--ink-muted); margin: 0; }
+  .flow-icon{ margin-bottom: 14px; }
+
+  /* ---------- dashboard illustration ---------- */
+  .demo-panel{
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    padding: 0;
+    box-shadow: 0 18px 40px -26px var(--shadow-color);
+  }
+  .demo-bar{
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 11px; color: var(--ink-faint); letter-spacing: 0.04em;
+  }
+  .demo-dots{ display:flex; gap:6px; }
+  .demo-dots span{ width:7px; height:7px; border-radius:50%; background: var(--line-strong); }
+  .demo-grid{
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 1px;
+    background: var(--line);
+  }
+  @media (max-width: 820px){ .demo-grid{ grid-template-columns: 1fr; } }
+  .demo-cell{ background: var(--paper-raised); padding: 18px; }
+  .demo-label{ font-size: 11px; color: var(--ink-faint); letter-spacing: 0.05em; margin-bottom: 12px; }
+  .port-row{
+    display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 10px;
+    padding: 8px 0; border-top: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .port-row:first-of-type{ border-top: none; }
+  .dot{ width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot.ok{ background: var(--ok); }
+  .dot.warn{ background: var(--warn); }
+  .dot.crit{ background: var(--crit); }
+  .port-name{ font-weight: 600; }
+  .port-meta{ color: var(--ink-faint); font-size: 12px; }
+  .spark{ display: block; }
+  .alert-item{
+    display: grid; gap: 3px; padding: 10px 0; border-top: 1px solid var(--line);
+    font-size: 12.5px;
+  }
+  .alert-item:first-of-type{ border-top: none; }
+  .alert-item .t{ color: var(--ink-faint); font-size: 11px; }
+  .alert-item .m{ color: var(--ink); }
+  .alert-item .m b{ color: var(--crit); }
+  .demo-note{
+    font-size: 12px; color: var(--ink-faint); padding: 10px 16px; border-top: 1px dashed var(--line);
+  }
+
+  /* ---------- stat strip ---------- */
+  .stats{
+    display: grid; grid-template-columns: repeat(3,1fr); gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  @media (max-width: 700px){ .stats{ grid-template-columns: 1fr; } }
+  .stat{ background: var(--paper-raised); padding: 26px 22px; }
+  .stat-num{ font-size: clamp(26px,3vw,34px); font-weight: 800; color: var(--accent); display:block; margin-bottom: 6px; }
+  .stat-label{ font-size: 13.5px; color: var(--ink-muted); }
+
+  /* ---------- footer / revision block ---------- */
+  footer{
+    padding: 40px 0 60px;
+  }
+  .rev-table{ width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .rev-table th{
+    text-align: right; font-size: 11px; letter-spacing: 0.05em; color: var(--ink-faint);
+    font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--line-strong);
+  }
+  .rev-table td{ padding: 10px; border-bottom: 1px solid var(--line); color: var(--ink-muted); vertical-align: top; }
+  .rev-table td.rev{ color: var(--accent); font-weight: 700; }
+  .rev-table td.desc{ color: var(--ink); }
+
+  .footer-cta{
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 24px;
+    margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line);
+  }
+  .footer-cta p{ font-size: 13.5px; color: var(--ink-muted); max-width: 42ch; margin: 0; }
+  .footer-mark{ font-size: 11px; color: var(--ink-faint); letter-spacing: 0.04em; }
+</style>
+
+<div class="page" dir="rtl" lang="he">
+
+  <header class="top">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M15 2 L27 7 V15 C27 21.5 22 26 15 28 C8 26 3 21.5 3 15 V7 Z" stroke="var(--ink)" stroke-width="1.4"/>
+        <circle cx="15" cy="14" r="2.6" fill="var(--accent)"/>
+        <line x1="15" y1="14" x2="15" y2="21" stroke="var(--accent)" stroke-width="1.2"/>
+        <line x1="15" y1="21" x2="10.5" y2="23.6" stroke="var(--accent)" stroke-width="1.2"/>
+        <line x1="15" y1="21" x2="19.5" y2="23.6" stroke="var(--accent)" stroke-width="1.2"/>
+        <circle cx="10.5" cy="23.6" r="1.2" fill="var(--accent)"/>
+        <circle cx="19.5" cy="23.6" r="1.2" fill="var(--accent)"/>
+      </svg>
+      <span class="brand-name mono ltr">TK COMMS SENTINEL</span>
+    </div>
+    <div class="stamp mono ltr">DOC TK-CS &nbsp;·&nbsp; <b>REV 2026.08</b> &nbsp;·&nbsp; NETWORK OPS</div>
+  </header>
+
+  <div class="sheet">
+
+    <section class="hero frame">
+      <div class="tick tl"></div><div class="tick tr"></div><div class="tick bl"></div><div class="tick br"></div>
+      <div>
+        <p class="eyebrow">מערכת ניטור תשתית תקשורת לבתי חולים</p>
+        <h1>לפני שהמסך במיון<br>מתנתק — <span class="accent">אנחנו כבר יודעים.</span></h1>
+        <p class="lede">
+          TK COMMS SENTINEL עוקבת בזמן אמת אחרי כל סוויץ', פורט וכבל ברשת בית החולים,
+          ומתריעה על תקלה לפני שהיא הופכת להפסקת שירות במחלקה.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#contact">בקשת הדגמה</a>
+          <a class="btn btn-ghost" href="#download">הורדה ישירה</a>
+        </div>
+      </div>
+
+      <div class="schematic-wrap">
+        <div class="schematic-cap">
+          <span>SHEET 01 — <b>AS-BUILT · אגף לדוגמה</b></span>
+          <span>SCALE N.T.S.</span>
+        </div>
+        <svg viewBox="0 0 460 320" width="100%" height="auto" role="img" aria-label="תרשים סכמטי של אגף בית חולים עם סוויצ'ים מנוטרים בכל חדר">
+          <!-- floor outline -->
+          <rect x="14" y="14" width="432" height="292" fill="none" stroke="var(--line-strong)" stroke-width="1.2"/>
+          <!-- room dividers -->
+          <line x1="14" y1="110" x2="230" y2="110" stroke="var(--line)" stroke-width="1"/>
+          <line x1="230" y1="14" x2="230" y2="306" stroke="var(--line)" stroke-width="1"/>
+          <line x1="230" y1="160" x2="446" y2="160" stroke="var(--line)" stroke-width="1"/>
+          <line x1="330" y1="160" x2="330" y2="306" stroke="var(--line)" stroke-width="1"/>
+          <line x1="14" y1="210" x2="230" y2="210" stroke="var(--line)" stroke-width="1"/>
+
+          <!-- room labels -->
+          <text x="26" y="34" class="mono" font-size="10" fill="var(--ink-faint)">מיון</text>
+          <text x="26" y="130" class="mono" font-size="10" fill="var(--ink-faint)">טיפול נמרץ</text>
+          <text x="26" y="230" class="mono" font-size="10" fill="var(--ink-faint)">רדיולוגיה</text>
+          <text x="244" y="34" class="mono" font-size="10" fill="var(--ink-faint)">מעבדה</text>
+          <text x="244" y="180" class="mono" font-size="10" fill="var(--ink-faint)">מרכזיית תקשורת</text>
+          <text x="344" y="180" class="mono" font-size="10" fill="var(--ink-faint)">אשפוז</text>
+
+          <!-- switch nodes -->
+          <g class="mono" font-size="9" fill="var(--ink-muted)">
+            <rect x="60" y="55" width="16" height="10" fill="none" stroke="var(--ink)" stroke-width="1"/>
+            <rect x="60" y="150" width="16" height="10" fill="none" stroke="var(--ink)" stroke-width="1"/>
+            <rect x="60" y="250" width="16" height="10" fill="none" stroke="var(--ink)" stroke-width="1"/>
+            <rect x="280" y="55" width="16" height="10" fill="none" stroke="var(--ink)" stroke-width="1"/>
+            <rect x="380" y="200" width="16" height="10" fill="none" stroke="var(--ink)" stroke-width="1"/>
+            <!-- core -->
+            <rect x="260" y="185" width="22" height="14" fill="var(--paper-raised)" stroke="var(--accent)" stroke-width="1.4"/>
+          </g>
+          <text x="245" y="215" class="mono" font-size="8" fill="var(--accent)">CORE</text>
+
+          <!-- links to core -->
+          <g stroke="var(--line-strong)" stroke-width="1" fill="none">
+            <path d="M68,65 L68,140 L260,192" />
+            <path d="M68,160 L260,192" />
+            <path d="M68,260 L68,290 L271,290 L271,199" />
+            <path d="M288,65 L288,185" />
+            <path d="M388,205 L282,195" />
+          </g>
+
+          <!-- animated signal path (uplink alert path) -->
+          <path class="signal-path" d="M68,65 L68,140 L260,192" stroke="var(--accent)" stroke-width="1.6" fill="none"/>
+          <circle class="pulse-dot" cx="68" cy="65"/>
+
+          <!-- status dots on each switch -->
+          <circle cx="85" cy="60" r="2.6" fill="var(--ok)"/>
+          <circle cx="85" cy="155" r="2.6" fill="var(--warn)"/>
+          <circle cx="85" cy="255" r="2.6" fill="var(--ok)"/>
+          <circle cx="305" cy="60" r="2.6" fill="var(--ok)"/>
+          <circle cx="405" cy="205" r="2.6" fill="var(--crit)"/>
+        </svg>
+        <div class="demo-note" style="border-top:none;padding-inline-start:0;">* תרשים להמחשה בלבד — שמות, מבנה ונתונים אינם מייצגים אתר אמיתי.</div>
+      </div>
+    </section>
+
+    <section class="problem">
+      <div>
+        <p class="eyebrow">למה זה קריטי</p>
+        <h2>רשת בית חולים היא לא IT רגיל</h2>
+        <p>
+          באגף בודד יושבים עשרות סוויצ'ים, מאות פורטים, ומכשור שאסור לו ליפול לרגע —
+          תחנות <strong>EMR</strong>, עמדות הדמיה (<strong>PACS</strong>), טלפוניית קריאת אחות ומכשור רפואי
+          מחובר-רשת. תקלה בפורט בודד לא תמיד "מפילה" משהו בבירור — לעיתים היא רק מאיטה,
+          מגמגמת, או מנתקת מכשיר אחד בזמן שהרשת סביבו נראית תקינה.
+        </p>
+        <p>
+          כלי ניטור IT כלליים בנויים לרשת משרדית אחידה, לא לפריסה פיזית של עשרות מחלקות
+          עם ציוד ריבוי-יצרנים שנוסף עם השנים. <strong>TK COMMS SENTINEL</strong> נבנתה בשטח,
+          מול רשת בית חולים אמיתית — כדי לענות בדיוק על הפער הזה.
+        </p>
+      </div>
+      <ul class="stake-list">
+        <li><b>עומס פורט חורג</b><span>&nbsp;— מזוהה ומדווח לפני שהאיטיות מורגשת בעמדה הקלינית.</span></li>
+        <li><b>מתג שנופל</b><span>&nbsp;— התראה מיידית, עם הבחנה בין תקלת מכשיר לנפילת נתיב רחבה.</span></li>
+        <li><b>ציוד לא מזוהה</b><span>&nbsp;— איתור לפי IP או MAC, עד לסוויץ' והפורט הפיזי המדויק.</span></li>
+      </ul>
+    </section>
+
+    <section id="features">
+      <div class="section-head">
+        <p class="eyebrow">גיליון ציוד המערכת</p>
+        <h2>מה שהמערכת עושה בפועל</h2>
+        <p>שלוש קבוצות יכולת — ראייה, אבחון, ועמידות — כל אחת נותנת מענה לשלב אחר בחיים של תקלת רשת.</p>
+      </div>
+
+      <div class="schedule-group">
+        <div class="schedule-cat mono">VIS — ראייה</div>
+        <div class="schedule-row">
+          <div class="schedule-code mono ltr">VIS-01</div>
+          <div class="schedule-name">ניטור SNMP רב-יצרני</div>
+          <div class="schedule-desc">Aruba, HPE Comware, Check Point ומתגי L2/L3 נוספים — נסרקים במקביל, בלי צורך בהתקנת agent על אף מכשיר.</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-code mono ltr">VIS-02</div>
+          <div class="schedule-name">לוח בקרה בזמן אמת</div>
+          <div class="schedule-desc">עומס רוחב פס, זמינות מכשירים, תקלות פעילות והפורטים הבעייתיים ביותר ב-24 השעות האחרונות — במבט אחד.</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-code mono ltr">VIS-03</div>
+          <div class="schedule-name">טופולוגיית LLDP אוטומטית</div>
+          <div class="schedule-desc">זיהוי קישורי uplink בין מתגים באופן אוטומטי, כדי שהמערכת (ואתם) לא תבלבלו עמדת קצה עם ציוד תשתית.</div>
+        </div>
+      </div>
+
+      <div class="schedule-group">
+        <div class="schedule-cat mono">DIA — אבחון</div>
+        <div class="schedule-row">
+          <div class="schedule-code mono ltr">DIA-01</div>
+          <div class="schedule-name">היסטוריית תעבורה לכל פורט</div>
+          <div class="schedule-desc">גרף 48 שעות אחורה לכל ממשק בנפרד — תעבורה ושגיאות — לחקירת תקלה אחרי שהיא כבר קרתה.</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-code mono ltr">DIA-02</div>
+          <div class="schedule-name">איתור לפי IP או MAC</div>
+          <div class="schedule-desc">הזינו כתובת — המערכת מאתרת באיזה סוויץ' ובאיזה פורט פיזי מחובר הציוד בפועל, גם כשהחיפוש עובר דרך ניתוב L3.</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-code mono ltr">DIA-03</div>
+          <div class="schedule-name">התראות מייל ממוקדות</div>
+          <div class="schedule-desc">קישור ישיר למכשיר ולפורט הספציפי בהתראה — לא "יש בעיה איפשהו ברשת", אלא איפה בדיוק.</div>
+        </div>
+      </div>
+
+      <div class="schedule-group">
+        <div class="schedule-cat mono">SEC — עמידות ואבטחה</div>
+        <div class="schedule-row">
+          <div class="schedule-code mono ltr">SEC-01</div>
+          <div class="schedule-name">התחברות ארגונית מאובטחת</div>
+          <div class="schedule-desc">Active Directory דרך LDAPS, אימות דו-שלבי (2FA), וחשבון חירום מקומי נפרד לשעת משבר.</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-code mono ltr">SEC-02</div>
+          <div class="schedule-name">פועלת במלואה ללא אינטרנט</div>
+          <div class="schedule-desc">מתאימה לרשת מבודדת (air-gapped) של בית חולים — אין תלות בשירות ענן חיצוני כלשהו לצורך פעולה שוטפת.</div>
+        </div>
+        <div class="schedule-row">
+          <div class="schedule-code mono ltr">SEC-03</div>
+          <div class="schedule-name">יומן ביקורת מלא</div>
+          <div class="schedule-desc">כל שינוי הרשאה, כניסה למערכת ושינוי סף התראה נרשם באופן קבוע ומתועד.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="section-head">
+        <p class="eyebrow">כך זה עובד</p>
+        <h2>ממחזור סריקה עד התרעה בתיבת המייל</h2>
+      </div>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-code mono ltr">STAGE 01</div>
+          <svg class="flow-icon" width="34" height="34" viewBox="0 0 34 34" fill="none"><circle cx="17" cy="17" r="12" stroke="var(--ink)" stroke-width="1.3"/><path d="M17 10 V17 L22 20" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <h3>סריקה מתמדת</h3>
+          <p>כל מכשיר נבדק במחזור קבוע — בין 30 שניות לכמה דקות, לפי הגדרה — דרך SNMP, ללא agent מקומי.</p>
+        </div>
+        <div class="flow-step">
+          <div class="flow-code mono ltr">STAGE 02</div>
+          <svg class="flow-icon" width="34" height="34" viewBox="0 0 34 34" fill="none"><path d="M6 24 L13 12 L19 19 L28 7" stroke="var(--ink)" stroke-width="1.3" fill="none"/><circle cx="28" cy="7" r="2.4" fill="var(--warn)"/></svg>
+          <h3>זיהוי חריגה</h3>
+          <p>עומס, שגיאות פורט או ניתוק מושווים לסף שהוגדר — ברמת מכשיר ספציפי, פורט בודד, או גלובלית לכל הרשת.</p>
+        </div>
+        <div class="flow-step">
+          <div class="flow-code mono ltr">STAGE 03</div>
+          <svg class="flow-icon" width="34" height="34" viewBox="0 0 34 34" fill="none"><rect x="5" y="9" width="24" height="16" rx="1" stroke="var(--ink)" stroke-width="1.3"/><path d="M6 10 L17 19 L28 10" stroke="var(--accent)" stroke-width="1.4" fill="none"/></svg>
+          <h3>התרעה ופעולה</h3>
+          <p>מייל עם קישור ישיר לפורט הבעייתי יוצא לצוות — לפני שהתקלה מורגשת בעמדה הקלינית.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="dashboard">
+      <div class="section-head">
+        <p class="eyebrow">תצוגה מהמערכת (הדמיה)</p>
+        <h2>אותו לוח בקרה שהצוות רואה כל בוקר</h2>
+        <p>הדוגמה שלהלן בנויה משמות ונתונים בדיוניים — לא מתוך רשת אמיתית — כדי להמחיש את אופי התצוגה בלבד.</p>
+      </div>
+      <div class="demo-panel">
+        <div class="demo-bar mono">
+          <span>OPERATOR VIEW — LIVE</span>
+          <span class="demo-dots"><span></span><span></span><span></span></span>
+        </div>
+        <div class="demo-grid">
+          <div class="demo-cell">
+            <div class="demo-label mono">פורטים בעייתיים · 24H</div>
+            <div class="port-row">
+              <span class="dot crit"></span>
+              <span class="port-name">SW-ER-01 · Gi1/0/12</span>
+              <span class="port-meta mono ltr">92% · 3 alerts</span>
+            </div>
+            <div class="port-row">
+              <span class="dot warn"></span>
+              <span class="port-name">SW-ICU-02 · Gi2/0/4</span>
+              <span class="port-meta mono ltr">81% · 1 alert</span>
+            </div>
+            <div class="port-row">
+              <span class="dot ok"></span>
+              <span class="port-name">SW-LAB-03 · Gi1/0/30</span>
+              <span class="port-meta mono ltr">44%</span>
+            </div>
+            <div class="port-row">
+              <span class="dot warn"></span>
+              <span class="port-name">SW-RAD-01 · Gi1/0/8</span>
+              <span class="port-meta mono ltr">76% · errors</span>
+            </div>
+          </div>
+          <div class="demo-cell">
+            <div class="demo-label mono">התראות אחרונות</div>
+            <div class="alert-item">
+              <span class="t mono ltr">08:12</span>
+              <span class="m"><b>עומס גבוה</b> — SW-ER-01, פורט Gi1/0/12</span>
+            </div>
+            <div class="alert-item">
+              <span class="t mono ltr">07:54</span>
+              <span class="m">מכשיר לא מגיב — SW-RAD-01</span>
+            </div>
+            <div class="alert-item">
+              <span class="t mono ltr">06:40</span>
+              <span class="m">שגיאות פורט — SW-ICU-02, Gi2/0/4</span>
+            </div>
+            <div class="alert-item">
+              <span class="t mono ltr">02:15</span>
+              <span class="m">התאוששות — SW-RAD-01 חזר לאוויר</span>
+            </div>
+          </div>
+        </div>
+        <div class="demo-note mono">* להמחשה בלבד — אין קשר לרשת, שמות מכשירים או נתונים אמיתיים.</div>
+      </div>
+    </section>
+
+    <section id="capability">
+      <div class="section-head">
+        <p class="eyebrow">מוכנות לסביבת בית חולים</p>
+        <h2>בנויה לרשת שאסור לה להיות תלויה בגורם חיצוני</h2>
+      </div>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-num mono">0</span>
+          <span class="stat-label">תלות בשירותי ענן חיצוניים לפעולה שוטפת</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num mono">24/7</span>
+          <span class="stat-label">סריקה רציפה, ללא צורך בהתערבות ידנית</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num mono">3+</span>
+          <span class="stat-label">יצרנים נתמכים כיום — Aruba · HPE Comware · Check Point</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="download">
+      <div class="section-head">
+        <p class="eyebrow">הורדה והתקנה</p>
+        <h2>מתקין עצמאי ל-Windows Server</h2>
+        <p>קובץ EXE אחד — Node.js, שני שירותי Windows, ותעודת TLS נוצרים אוטומטית באשף ההתקנה. עובד במלואה גם ברשת ללא אינטרנט.</p>
+      </div>
+      <div class="demo-panel">
+        <div class="demo-bar mono">
+          <span>LATEST RELEASE</span>
+          <span class="demo-dots"><span></span><span></span><span></span></span>
+        </div>
+        <div style="padding:22px 18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
+          <div>
+            <div class="stamp mono ltr" style="display:inline-block; margin-bottom:10px;">VERSION <b>1.0.0</b></div>
+            <div style="font-size:13.5px; color:var(--ink-muted);">Windows Server 2019 · 2022 · 2025 &nbsp;·&nbsp; x64</div>
+          </div>
+          <a class="btn btn-primary" id="download-btn"
+             href="https://github.com/REPLACE-ORG/REPLACE-REPO/releases/latest/download/TKCommsSentinel-Setup-latest.exe">
+            הורדת המתקין (EXE)
+          </a>
+        </div>
+        <div class="demo-note mono">
+          SHA256: <span class="ltr" id="download-sha256">455c816e3f1123aba818810a694c5301902ea0e17d5b13e781bb225f526bec60</span>
+          &nbsp;·&nbsp;
+          <a href="https://github.com/REPLACE-ORG/REPLACE-REPO/releases" style="color:var(--accent);">כל הגרסאות וההיסטוריה בפועל</a>
+        </div>
+      </div>
+      <!-- TODO before publishing: replace REPLACE-ORG/REPLACE-REPO with the
+           real GitHub org/repo once created (see [[tkcs-installer-project]]
+           memory -- storage decision: GitHub Pages for this site + feed,
+           GitHub Releases for the EXE, free subdomain). latest.json in this
+           same folder carries the same version/sha256/downloadUrl for the
+           in-app "check for updates" feature to read. -->
+    </section>
+
+    <footer id="contact">
+      <div class="section-head" style="margin-bottom:22px;">
+        <p class="eyebrow">היסטוריית גרסאות</p>
+        <h2 style="font-size:20px;">התפתחות המערכת</h2>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="rev-table">
+          <thead>
+            <tr><th>גרסה</th><th>תיאור</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="rev mono ltr">1.0</td><td class="desc">ניטור SNMP בסיסי, לוח בקרה ראשוני והתרעות מייל.</td></tr>
+            <tr><td class="rev mono ltr">1.1</td><td class="desc">זיהוי טופולוגיית LLDP והבחנה אוטומטית בין uplink לפורט קצה.</td></tr>
+            <tr><td class="rev mono ltr">1.2</td><td class="desc">איתור התקנים לפי IP/MAC עד לפורט הפיזי, והיסטוריית תעבורה של 48 שעות לכל ממשק.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="footer-cta">
+        <p>מתעניינים בפריסה של TK COMMS SENTINEL באגף נוסף, או ברשת של מוסד אחר? צוות ה-IT ישמח לתאם הדגמה חיה.</p>
+        <a class="btn btn-primary" href="#contact">בקשת הדגמה</a>
+      </div>
+      <div class="footer-mark mono ltr" style="margin-top:26px;">TK-CS · DOCUMENT FOR INTERNAL REVIEW</div>
+    </footer>
+
+  </div>
+</div>
