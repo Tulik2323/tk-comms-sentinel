@@ -27,27 +27,69 @@
   installer/data) -- a small update package for update.ps1 to apply to an
   existing install, without re-shipping the Node runtime or NSSM.
 
+  The frontend is REBUILT as part of packaging, so a package can never ship a
+  stale UI. -SkipFrontendBuild reuses whatever is already in frontend\dist and
+  warns if that is older than frontend\src.
+
   Prerequisite: vendor\node\node.exe and vendor\nssm\nssm.exe must exist for
   a full package (run the vendor download step first; not needed with
-  -VersionOnly). ASCII-only for PS 5.1.
+  -VersionOnly), and frontend\node_modules unless -SkipFrontendBuild.
+  ASCII-only for PS 5.1.
 #>
 [CmdletBinding()]
 param(
   [string] $Root   = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
   [string] $OutDir = '',
   [switch] $VersionOnly,
-  [string] $VersionOverride = ''
+  [string] $VersionOverride = '',
+  [switch] $SkipFrontendBuild
 )
 
 $ErrorActionPreference = 'Stop'
 if (-not $OutDir) { $OutDir = Join-Path $Root 'package' }
 
+$feSrc  = Join-Path $Root 'frontend'
 $feDist = Join-Path $Root 'frontend\dist'
 
 function Assert-Path([string]$Path, [string]$Hint) {
   if (-not (Test-Path -LiteralPath $Path)) { throw "Missing: $Path`n  -> $Hint" }
 }
-Assert-Path (Join-Path $feDist 'index.html') 'Build the frontend: npm run build in frontend\.'
+
+# Prefer the vendored portable npm so a build machine needs nothing on PATH.
+# Used for the frontend build below and the backend dependency install later.
+$npmCmd = if (Test-Path (Join-Path $Root 'vendor\node\npm.cmd')) { Join-Path $Root 'vendor\node\npm.cmd' } else { 'npm' }
+
+# --- frontend build ---
+# This step used to be a bare existence check on frontend\dist, which meant
+# the packager happily shipped whatever build happened to be lying there. It
+# did: the 1.0.1 upgrade-test package went out carrying the frontend built
+# for 1.0.0, because nothing had re-run "npm run build" in between, and the
+# UI's own build stamp in the corner gave it away only by accident. A
+# packaging step that can quietly ship the wrong UI is worse than one that
+# takes an extra half minute, so cutting a package now builds the frontend.
+if ($SkipFrontendBuild) {
+  Assert-Path (Join-Path $feDist 'index.html') 'Build the frontend: npm run build in frontend\.'
+  # Skipping is legitimate (an unchanged UI, a rebuild of the same release),
+  # but say so out loud when dist is demonstrably behind the sources.
+  $distStamp = (Get-Item (Join-Path $feDist 'index.html')).LastWriteTime
+  $newestSrc = Get-ChildItem (Join-Path $feSrc 'src') -Recurse -File -ErrorAction SilentlyContinue |
+               Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if ($newestSrc -and $newestSrc.LastWriteTime -gt $distStamp) {
+    Write-Warning "frontend\dist ($distStamp) is OLDER than frontend\src ($($newestSrc.Name), $($newestSrc.LastWriteTime))."
+    Write-Warning "This package will ship a STALE UI. Drop -SkipFrontendBuild to rebuild it."
+  }
+} else {
+  Assert-Path (Join-Path $feSrc 'node_modules') 'Run npm install in frontend\ (or pass -SkipFrontendBuild).'
+  Write-Host "Building frontend..."
+  Push-Location $feSrc
+  try {
+    & $npmCmd run build
+    if ($LASTEXITCODE -ne 0) { throw "frontend build failed ($LASTEXITCODE)" }
+  } finally {
+    Pop-Location
+  }
+  Assert-Path (Join-Path $feDist 'index.html') 'The frontend build produced no index.html.'
+}
 
 # Read version -- this names the versions\<version>\ folder. -VersionOverride
 # lets a caller cut a package under a different version number without
@@ -83,9 +125,9 @@ Copy-Tree (Join-Path $Root 'backend') (Join-Path $versionDir 'backend') (@('/XD'
 Copy-Tree $feDist (Join-Path $versionDir 'frontend\dist')
 
 # --- install production dependencies with the PORTABLE node's npm (offline-ready output) ---
-# VersionOnly still needs A node to run npm install; use the vendored one if
-# present, else require the caller to have Node on PATH (falls back to "node").
-$npmForInstall = if (Test-Path (Join-Path $Root 'vendor\node\npm.cmd')) { Join-Path $Root 'vendor\node\npm.cmd' } else { 'npm' }
+# VersionOnly still needs A node to run npm install; $npmCmd (resolved above)
+# is the vendored one if present, else whatever "npm" is on PATH.
+$npmForInstall = $npmCmd
 Write-Host "Installing backend production dependencies..."
 Push-Location (Join-Path $versionDir 'backend')
 try {
