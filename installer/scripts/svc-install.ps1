@@ -98,7 +98,10 @@ function Set-NssmService {
 
   # TKCS_DATA_DIR tells server.js / poller-service.js where to find data\.env,
   # independent of which versions\x.y.z\ the "current" junction points at.
-  Invoke-Nssm set $Name AppEnvironmentExtra "TKCS_DATA_DIR=$DataDir"
+  # TKCS_INSTALL_ROOT lets the running app find its own installer\scripts\
+  # (e.g. to invoke update.ps1 for a "check for updates" feature) without
+  # having to derive it from __dirname through the current\ junction.
+  Invoke-Nssm set $Name AppEnvironmentExtra "TKCS_DATA_DIR=$DataDir" "TKCS_INSTALL_ROOT=$InstallRoot"
 
   # Graceful stop: send Ctrl-C and give the process 15s to close the DB.
   Invoke-Nssm set $Name AppStopMethodConsole 15000

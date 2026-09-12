@@ -10,6 +10,14 @@
   <InstallRoot>\current\backend, and never need reconfiguring: swapping this
   junction is what makes an update (or a rollback) take effect.
 
+  Also (re)writes <InstallRoot>\VERSION as a plain text file containing just
+  the active version string. This is the one thing every consumer -- an
+  Admin-UI "check for updates" feature comparing against a feed, a support
+  script, a future updater -- reads to learn the currently-running version,
+  instead of reaching into versions\<x>\backend\package.json through the
+  junction (which requires knowing this layout and a JSON parse). Always
+  rewritten, even on the no-op path, so it can never drift from reality.
+
   With no -Version, activates the highest version folder present under
   versions\ (by a simple version-string sort) -- the common case right after
   extracting a first-install package that ships exactly one version.
@@ -65,19 +73,27 @@ if ($existing) {
   # Get-Item on a junction reports its target in .Target (an array in newer
   # PowerShell versions; take the first element either way).
   $currentTarget = @($existing.Target)[0]
-  if ($currentTarget -and ($currentTarget.TrimEnd('\') -eq $targetDir.TrimEnd('\'))) {
+  $alreadyCorrect = $currentTarget -and ($currentTarget.TrimEnd('\') -eq $targetDir.TrimEnd('\'))
+  if ($alreadyCorrect) {
     Write-Host "[activate] 'current' already points at $Version -- nothing to do."
-    return
+  } else {
+    Write-Host "[activate] Repointing 'current' from '$currentTarget' to '$targetDir'."
+    # Remove-Item on a junction can prompt for confirmation (and fails outright
+    # in a non-interactive session) because it treats the reparse point like a
+    # populated folder. [IO.Directory]::Delete($path, $false) removes only the
+    # junction/reparse point itself and never touches the target's content.
+    [System.IO.Directory]::Delete($currentPath, $false)
   }
-  Write-Host "[activate] Repointing 'current' from '$currentTarget' to '$targetDir'."
-  # Remove-Item on a junction can prompt for confirmation (and fails outright
-  # in a non-interactive session) because it treats the reparse point like a
-  # populated folder. [IO.Directory]::Delete($path, $false) removes only the
-  # junction/reparse point itself and never touches the target's content.
-  [System.IO.Directory]::Delete($currentPath, $false)
 } else {
+  $alreadyCorrect = $false
   Write-Host "[activate] Creating 'current' -> '$targetDir'."
 }
 
-New-Item -ItemType Junction -Path $currentPath -Target $targetDir | Out-Null
+if (-not $alreadyCorrect) {
+  New-Item -ItemType Junction -Path $currentPath -Target $targetDir | Out-Null
+}
+
+# Plain-text, no trailing newline concerns for readers -- just the version
+# string. ASCII is sufficient (version numbers are ASCII by construction).
+[System.IO.File]::WriteAllText((Join-Path $InstallRoot 'VERSION'), $Version, (New-Object System.Text.ASCIIEncoding))
 Write-Host "[activate] Active version: $Version"
