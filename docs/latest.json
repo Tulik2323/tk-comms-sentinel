@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "date": "2026-09-12",
-  "notes": "First release: standalone Windows Server install (no IIS), backend and poller as Windows services, self-signed TLS, versioned updates with automatic rollback, local + Active Directory authentication.",
+  "version": "1.1.0",
+  "date": "2026-09-13",
+  "notes": "License management: offline ED25519 licensing, machine fingerprint, grace period. Version display fix. Sync: updates route now bundled in installer.",
   "downloadUrl": "https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe",
-  "sha256": "39987370acc5476c4150b66cd72320933bc69812b6bd026277da2a5031f6a20e"
+  "sha256": "19e98d051a99fc6ba2eb3c29f8741227a8544524fc032af46b2d474f061f2c1a"
 }
