@@ -2,11 +2,17 @@ import { defineConfig } from 'vite';
 import react      from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-// מזהה build שמשתנה בכל בנייה — מוצג בפינה כדי לאמת שרענון תפס את העדכון.
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+// גרסת האפליקציה מ-backend/package.json (מקור האמת) + build timestamp
+const backendPkg = JSON.parse(readFileSync(resolve(__dirname, '../backend/package.json'), 'utf8'));
+const APP_VERSION = backendPkg.version;
 const BUILD_ID = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jerusalem' }).slice(0, 16);
 
 export default defineConfig({
   define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
     __BUILD_ID__: JSON.stringify(BUILD_ID),
   },
   plugins: [react(), tailwindcss()],

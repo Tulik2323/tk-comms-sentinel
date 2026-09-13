@@ -2,7 +2,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import i18n from '../lib/i18n';
 import BrandMark from './BrandMark';
 import api from '../lib/api';
@@ -20,6 +20,7 @@ const Icons = {
   tools:       '🧰',
   reports:     '📄',
   admin:       '⚙️',
+  license:     '🔑',
   logout:      '🚪',
   dark:        '🌙',
   light:       '☀️',
@@ -44,6 +45,12 @@ export default function Layout({ children }) {
   const navigate   = useNavigate();
   const [theme, setTheme]   = useState(localStorage.getItem('nm_theme') || 'dark');
   const [lang,  setLang]    = useState(localStorage.getItem('nm_lang')  || 'he');
+
+  // מצב רישוי — נטען פעם אחת בעלייה
+  const [licenseStatus, setLicenseStatus] = useState(null);
+  useEffect(() => {
+    api.get('/license/status').then(r => setLicenseStatus(r.data)).catch(() => {});
+  }, []);
 
   // חיפוש גלובלי MAC/IP
   const [searchQ,       setSearchQ]       = useState('');
@@ -225,6 +232,9 @@ export default function Layout({ children }) {
           {user?.role === 'admin' && (
             <NavItem to="/admin"   icon={Icons.admin}     label={t('admin')}     />
           )}
+          {user?.role === 'admin' && (
+            <NavItem to="/license" icon={Icons.license}   label="רישוי"          />
+          )}
         </nav>
 
         {/* Bottom: user info + controls */}
@@ -283,11 +293,35 @@ export default function Layout({ children }) {
         display:   'flex',
         flexDirection: 'column',
       }}>
+        {/* License banner — grace period or expired */}
+        {licenseStatus?.status === 'grace' && (
+          <div style={{
+            padding: '10px 20px', textAlign: 'center', fontSize: 13, fontWeight: 600,
+            background: 'rgba(245,158,11,0.15)', borderBottom: '1px solid rgba(245,158,11,0.4)',
+            color: '#f59e0b',
+          }}>
+            ⏳ הרישוי פג ב-{licenseStatus.expiry} — נותרו {licenseStatus.graceDaysLeft} ימי גרייס.{' '}
+            <a onClick={() => navigate('/license')} style={{ cursor:'pointer', textDecoration:'underline', color:'inherit' }}>
+              הגדר רישוי
+            </a>
+          </div>
+        )}
+        {licenseStatus?.status === 'expired' && (
+          <div style={{
+            padding: '10px 20px', textAlign: 'center', fontSize: 13, fontWeight: 600,
+            background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid rgba(239,68,68,0.4)',
+            color: '#ef4444',
+          }}>
+            🚫 תוקף הרישוי פג. המערכת אינה מאושרת לשימוש המשך.{' '}
+            <a onClick={() => navigate('/license')} style={{ cursor:'pointer', textDecoration:'underline', color:'inherit' }}>
+              הגדר רישוי
+            </a>
+          </div>
+        )}
         {children}
       </main>
 
-      {/* מזהה גרסת build — פינה תחתונה ימנית. משתנה בכל deploy, כך שרואים
-          מיד אם רענון תפס את העדכון. */}
+      {/* גרסה + build timestamp — פינה תחתונה ימנית */}
       <div style={{
         position: 'fixed', bottom: 4, right: 8, zIndex: 9999,
         fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.02em', fontWeight: 700,
@@ -295,7 +329,11 @@ export default function Layout({ children }) {
         border: '1px solid var(--border)', borderRadius: 4,
         padding: '3px 8px', pointerEvents: 'none', direction: 'ltr',
       }}>
-        v{typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev'}
+        v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'}
+        {' '}
+        <span style={{ opacity: 0.55, fontSize: 10 }}>
+          {typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : ''}
+        </span>
       </div>
     </div>
   );

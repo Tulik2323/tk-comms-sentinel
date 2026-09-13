@@ -17,6 +17,7 @@ import ToolsPage       from './pages/ToolsPage';
 import ReportsPage       from './pages/ReportsPage';
 import PortChangesPage  from './pages/PortChangesPage';
 import TrendsPage       from './pages/TrendsPage';
+import LicensePage     from './pages/LicensePage';
 
 function AppRoutes() {
   return (
@@ -116,6 +117,14 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <TrendsPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/license" element={
+        <ProtectedRoute adminOnly>
+          <Layout>
+            <LicensePage />
           </Layout>
         </ProtectedRoute>
       } />

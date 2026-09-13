@@ -13,7 +13,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// טפל בפקיעת token גלובלית
+// טפל בפקיעת token גלובלית + חסימת רישוי
 api.interceptors.response.use(
   (res) => res,
   (err) => {
@@ -22,6 +22,11 @@ api.interceptors.response.use(
       localStorage.removeItem('nm_user');
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
+      }
+    }
+    if (err.response?.status === 402) {
+      if (!window.location.pathname.includes('/license') && !window.location.pathname.includes('/login')) {
+        window.location.href = '/license';
       }
     }
     return Promise.reject(err);

@@ -35,6 +35,7 @@ const searchRouter       = require('./routes/search');
 const portChangesRouter  = require('./routes/portChanges');
 const trendsRouter       = require('./routes/trends');
 const updatesRouter      = require('./routes/updates');
+const licenseRouter      = require('./routes/license');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -73,6 +74,7 @@ app.use('/api/search',        searchRouter);
 app.use('/api/port-changes',  portChangesRouter);
 app.use('/api/trends',        trendsRouter);
 app.use('/api/updates',      updatesRouter);
+app.use('/api/license',      licenseRouter);
 
 // Health check
 // version נקרא מ-package.json, לא קשיח — אחרת אי אפשר להבחין בין גרסאות

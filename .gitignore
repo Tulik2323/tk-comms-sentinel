@@ -21,6 +21,8 @@ certs/
 *.key
 *.crt
 *.p12
+# ED25519 private key — NEVER commit
+tools/keygen/private.pem
 
 # === Logs ===
 logs/
