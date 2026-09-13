@@ -64,26 +64,13 @@
     z-index:2; pointer-events:none; perspective:700px; }
   @media (max-width:900px){ .badge3d{ width:92px; height:92px; top:-16px; inset-inline-end:-6px; } }
   .badge3d-inner{ width:100%; height:100%; position:relative; transform-style:preserve-3d;
-    animation:badge-spin 9s linear infinite; }
-  /* Windows Server and RDP sessions report prefers-reduced-motion:reduce
-     merely because system animations are switched off for performance, so a
-     hard stop here freezes the badge for most of this page's actual audience.
-     Degrade to a slow, small-amplitude pivot rather than to nothing: still
-     visibly three-dimensional, but no continuous rotation. */
-  @media (prefers-reduced-motion: reduce){
-    .badge3d-inner{ animation:badge-sway 11s ease-in-out infinite; }
-  }
+    transform:rotateY(-20deg) rotateX(6deg); }
   .badge3d-face{ position:absolute; inset:0; border-radius:20%; overflow:hidden;
     backface-visibility:hidden; box-shadow:0 14px 30px -14px var(--shadow); }
   .badge3d-front{ transform:translateZ(10px); }
   .badge3d-front img{ width:100%; height:100%; object-fit:cover; display:block; }
   .badge3d-back{ transform:translateZ(-10px) rotateY(180deg);
     background:linear-gradient(135deg, var(--accent), var(--accent-2)); }
-  @keyframes badge-spin{ from{ transform:rotateY(0deg); } to{ transform:rotateY(360deg); } }
-  @keyframes badge-sway{
-    0%,100%{ transform:rotateY(-26deg) rotateX(6deg); }
-    50%    { transform:rotateY(26deg)  rotateX(6deg); }
-  }
   .panel{ background:var(--surface); border:1px solid var(--edge); border-radius:14px;
     box-shadow:0 20px 44px -30px var(--shadow); overflow:hidden; }
   .panel-bar{ display:flex; justify-content:space-between; align-items:center; padding:11px 16px;
