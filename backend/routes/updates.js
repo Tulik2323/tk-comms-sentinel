@@ -142,9 +142,23 @@ router.post('/install', requireAdmin, async (req, res) => {
       message: 'חסרה כתובת הורדה בפיד העדכונים.' });
   }
 
+  // Validate downloadUrl — HTTPS only, prevents SSRF to internal HTTP resources
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(downloadUrl);
+    if (parsedUrl.protocol !== 'https:') throw new Error('not https');
+  } catch {
+    return res.json({ started: false, reason: 'invalid_url',
+      message: 'כתובת ההורדה אינה תקינה (נדרש HTTPS).' });
+  }
+
+  // Sanitize version — semver only, prevents path traversal and PowerShell injection
+  const safeVersion = /^\d+\.\d+\.\d+([.\-][a-zA-Z0-9]+)*$/.test(version || '')
+    ? version : 'new';
+
   const workDir    = path.join(process.env.TKCS_DATA_DIR || os.tmpdir(), 'tkcs-updates');
-  const zipPath    = path.join(workDir, `update-${(version || 'new')}.zip`);
-  const extractDir = path.join(workDir, `extract-${(version || Date.now())}`);
+  const zipPath    = path.join(workDir, `update-${safeVersion}.zip`);
+  const extractDir = path.join(workDir, `extract-${safeVersion}`);
 
   try {
     fs.mkdirSync(workDir, { recursive: true });
@@ -172,17 +186,17 @@ router.post('/install', requireAdmin, async (req, res) => {
     await new Promise((resolve, reject) => {
       const p = spawn('powershell.exe',
         ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
-         `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${extractDir}' -Force`],
+         `Expand-Archive -LiteralPath "${zipPath}" -DestinationPath "${extractDir}" -Force`],
         { windowsHide: true });
       p.on('exit',  c => c === 0 ? resolve() : reject(new Error(`חילוץ נכשל (קוד ${c})`)));
       p.on('error', reject);
     });
 
     // 4. תשובה ללקוח *לפני* הפעלת המעדכן — כי update.ps1 עוצר את השירות הזה
-    logAudit('warn', 'admin', `הופעל עדכון מערכת לגרסה ${version}`,
+    logAudit('warn', 'admin', `הופעל עדכון מערכת לגרסה ${safeVersion}`,
       { username: req.user?.username, ip: req.ip });
     res.json({ started: true,
-      message: `העדכון לגרסה ${version} החל. המערכת תופעל מחדש בקרוב.` });
+      message: `העדכון לגרסה ${safeVersion} החל. המערכת תופעל מחדש בקרוב.` });
 
     // 5. אחרי שהתשובה נשלחה — הפעל את update.ps1 מנותק (ישרוד את עצירת השירות)
     res.on('finish', () => {
