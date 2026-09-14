@@ -211,7 +211,7 @@ export default function AdminPage() {
             </div>
             <SettingField label="כתובת פיד עדכונים (latest.json)" name="update_feed_url"
               value={settings.update_feed_url} onChange={handleSettingChange}
-              placeholder="https://<user>.github.io/tkcs-site/latest.json" />
+              placeholder="https://tulik2323.github.io/tk-comms-sentinel/latest.json" />
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
               שמור את הכתובת לפני בדיקה — הבדיקה משתמשת בערך <b>השמור</b>.
             </div>

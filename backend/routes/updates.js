@@ -78,7 +78,8 @@ function updaterScriptPath() {
 // ---- בדיקת עדכונים (קריאה בלבד) ----
 router.get('/check', requireAdmin, async (req, res) => {
   const current = resolveCurrentVersion();
-  const url = (getSetting('update_feed_url') || '').trim();
+  const DEFAULT_FEED = 'https://tulik2323.github.io/tk-comms-sentinel/latest.json';
+  const url = (getSetting('update_feed_url') || DEFAULT_FEED).trim();
 
   if (!url) {
     return res.json({ ok: false, reason: 'no_url', current,
