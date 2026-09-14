@@ -57,6 +57,25 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// License guard — block all API calls (except auth / license / health) when
+// the license is expired or the 7-day trial has ended.
+// Unauthenticated requests (no Authorization header) pass through so that the
+// auth middleware can return 401 as usual.
+const licenseLib = require('./lib/license');
+const LICENSE_BLOCK = new Set(['expired', 'trial-expired', 'invalid']);
+const LICENSE_SKIP  = new Set(['/auth', '/license', '/health']);
+
+app.use('/api', (req, res, next) => {
+  const seg = '/' + req.path.split('/')[1];
+  if (LICENSE_SKIP.has(seg)) return next();
+  if (!req.headers.authorization) return next();
+  const { status } = licenseLib.getLicenseStatus();
+  if (LICENSE_BLOCK.has(status)) {
+    return res.status(402).json({ error: 'license_required', status });
+  }
+  next();
+});
+
 // --- API Routes ---
 app.use('/api/auth',     authRouter);
 app.use('/api/devices',  devicesRouter);

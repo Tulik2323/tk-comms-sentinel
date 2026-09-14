@@ -12,7 +12,7 @@
 ; that first. ASCII-only, matching every other script in this project.
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.0"
+  #define MyAppVersion "1.2.0"
 #endif
 #define MyAppName "TK Comms Sentinel"
 #define MyAppPublisher "TK Comms Sentinel"

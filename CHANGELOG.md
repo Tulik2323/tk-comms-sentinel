@@ -2,6 +2,16 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.2.0] — 2026-09-14
+
+### Added
+- **7-day trial period** — fresh installations get a 7-day grace period without a license
+  - Days 0–6: blue info banner shows remaining trial days
+  - Day 7+: hard block — all API calls return 402, only the License page is accessible
+  - Admins see a direct "Activate License" link; other users see "Contact your administrator"
+- **License enforcement middleware** — backend now returns HTTP 402 for expired, trial-expired,
+  and invalid license states on all authenticated API routes (auth, license, and health excluded)
+
 ## [1.1.0] — 2026-09-13
 
 ### Added

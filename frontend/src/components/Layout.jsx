@@ -293,7 +293,34 @@ export default function Layout({ children }) {
         display:   'flex',
         flexDirection: 'column',
       }}>
-        {/* License banner — grace period or expired */}
+        {/* License banners */}
+        {licenseStatus?.status === 'trial' && (
+          <div style={{
+            padding: '10px 20px', textAlign: 'center', fontSize: 13, fontWeight: 600,
+            background: 'rgba(59,130,246,0.12)', borderBottom: '1px solid rgba(59,130,246,0.35)',
+            color: '#60a5fa',
+          }}>
+            🕐 גרסת ניסיון — נותרו {licenseStatus.trialDaysLeft} ימים מתוך 7.{' '}
+            {user?.role === 'admin' && (
+              <a onClick={() => navigate('/license')} style={{ cursor:'pointer', textDecoration:'underline', color:'inherit' }}>
+                הגדר רישוי
+              </a>
+            )}
+          </div>
+        )}
+        {licenseStatus?.status === 'trial-expired' && (
+          <div style={{
+            padding: '10px 20px', textAlign: 'center', fontSize: 13, fontWeight: 600,
+            background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid rgba(239,68,68,0.4)',
+            color: '#ef4444',
+          }}>
+            🚫 תקופת הניסיון הסתיימה.{' '}
+            {user?.role === 'admin'
+              ? <a onClick={() => navigate('/license')} style={{ cursor:'pointer', textDecoration:'underline', color:'inherit' }}>הזן רישוי להמשך שימוש</a>
+              : 'פנה למנהל המערכת להפעלת רישוי.'
+            }
+          </div>
+        )}
         {licenseStatus?.status === 'grace' && (
           <div style={{
             padding: '10px 20px', textAlign: 'center', fontSize: 13, fontWeight: 600,

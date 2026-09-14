@@ -7,24 +7,39 @@ const os            = require('os');
 const path          = require('path');
 const { execSync }  = require('child_process');
 
+const TRIAL_DAYS = 7;
+
 const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEA2HMtxL2FyjLwJ6nXwKVf3BAqlBM8zDi8L1PdneDcXvY=
 -----END PUBLIC KEY-----`;
 
-// License file lives in the shared data directory so updates never touch it.
-function getLicensePath() {
-  if (process.env.TKCS_DATA_DIR) {
-    return path.join(process.env.TKCS_DATA_DIR, 'license.key');
-  }
-  // Standalone flat layout without env: data\ is sibling to current\
+// Shared data directory: TKCS_DATA_DIR env → data\ sibling → ProgramData fallback.
+function getDataDir() {
+  if (process.env.TKCS_DATA_DIR) return process.env.TKCS_DATA_DIR;
   const dataSibling = path.resolve(__dirname, '..', '..', 'data');
   try {
-    if (fs.statSync(dataSibling).isDirectory()) {
-      return path.join(dataSibling, 'license.key');
-    }
+    if (fs.statSync(dataSibling).isDirectory()) return dataSibling;
   } catch {}
-  // IIS PROD / dev fallback — same location as settings.key
-  return path.join('C:\\ProgramData\\tknetmonitor', 'license.key');
+  return 'C:\\ProgramData\\tknetmonitor';
+}
+
+function getLicensePath()   { return path.join(getDataDir(), 'license.key'); }
+function getTrialStartPath() { return path.join(getDataDir(), 'trial-start.dat'); }
+
+// Returns the trial-start date, creating the file on first call (= first run after install).
+function getOrCreateTrialStart() {
+  const p = getTrialStartPath();
+  try {
+    const d = new Date(fs.readFileSync(p, 'utf8').trim());
+    if (!isNaN(d)) return d;
+  } catch {}
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const dir = path.dirname(p);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(p, today, 'utf8');
+  } catch {}
+  return new Date(today);
 }
 
 // Stable hardware fingerprint: Windows MachineGuid (set once at OS install)
@@ -76,7 +91,7 @@ function verifyLicenseKey(licenseKey) {
 }
 
 // Returns license status object — used by the REST endpoint and middleware.
-// status values: 'unlicensed' | 'invalid' | 'valid' | 'grace' | 'expired'
+// status values: 'trial' | 'trial-expired' | 'invalid' | 'valid' | 'grace' | 'expired'
 function getLicenseStatus() {
   const fingerprint = getMachineFingerprint();
   const licensePath = getLicensePath();
@@ -85,7 +100,13 @@ function getLicenseStatus() {
   try {
     licenseKey = fs.readFileSync(licensePath, 'utf8').trim();
   } catch {
-    return { status: 'unlicensed', fingerprint };
+    // No license file — evaluate trial period.
+    const trialStart = getOrCreateTrialStart();
+    const elapsed    = Math.floor((Date.now() - trialStart.getTime()) / (24 * 3600 * 1000));
+    if (elapsed < TRIAL_DAYS) {
+      return { status: 'trial', fingerprint, trialDaysLeft: TRIAL_DAYS - elapsed };
+    }
+    return { status: 'trial-expired', fingerprint };
   }
 
   const payload = verifyLicenseKey(licenseKey);
