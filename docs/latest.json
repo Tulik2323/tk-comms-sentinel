@@ -1,7 +1,7 @@
 {
-  "version": "1.1.0",
-  "date": "2026-09-13",
-  "notes": "License management: offline ED25519 licensing, machine fingerprint, grace period. Version display fix. Sync: updates route now bundled in installer.",
+  "version": "1.2.0",
+  "date": "2026-09-14",
+  "notes": "7-day trial period on fresh installs. License enforcement middleware: all API calls blocked after trial expires (HTTP 402). Trial banner in UI shows days remaining.",
   "downloadUrl": "https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe",
-  "sha256": "19e98d051a99fc6ba2eb3c29f8741227a8544524fc032af46b2d474f061f2c1a"
+  "sha256": "44e04e4b53c9c5d866eeab11bfebba23e0652b7ae7a062e858ea22f3cf339372"
 }
