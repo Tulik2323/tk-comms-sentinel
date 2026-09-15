@@ -2,6 +2,17 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.2] — 2026-09-15
+
+### Fixed
+- **RTL/LTR layout switch** — removed hardcoded `direction: rtl` from CSS body; the
+  `dir` attribute on `<html>` now controls layout direction. Switching to English moves
+  the sidebar to the left and the whole app to LTR.
+- **Sidebar border** — changed `border-left` to `border-inline-end` so the border always
+  appears between the sidebar and the main content, regardless of layout direction.
+- **Version chip position** — chip now uses `inset-inline-end` so it sits in the main
+  content area (never over the sidebar) in both RTL and LTR modes.
+
 ## [1.3.1] — 2026-09-15
 
 ### Fixed

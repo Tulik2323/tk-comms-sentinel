@@ -352,7 +352,7 @@ export default function Layout({ children }) {
 
       {/* גרסה + build timestamp — פינה תחתונה ימנית */}
       <div style={{
-        position: 'fixed', bottom: 4, right: 8, zIndex: 9999,
+        position: 'fixed', bottom: 4, insetInlineEnd: 8, zIndex: 9999,
         fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.02em', fontWeight: 700,
         color: '#ffffff', background: 'rgba(20,30,40,0.92)',
         border: '1px solid var(--border)', borderRadius: 4,
