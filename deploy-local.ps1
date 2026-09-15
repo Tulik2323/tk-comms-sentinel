@@ -128,8 +128,8 @@ Write-Host "  docs/latest.json updated" -ForegroundColor Green
 foreach ($htmlFile in @("$SRC\docs\index.html", "$SRC\docs\index.en.html")) {
     if (Test-Path $htmlFile) {
         $html = Get-Content $htmlFile -Raw -Encoding UTF8
-        # version chip: v1.x.x
-        $html = $html -replace 'v\d+\.\d+\.\d+(?=<)', "v$ver"
+        # replace ONLY the version chip in the download section (not history table)
+        $html = $html -replace '(?<=VERSION <b>)\d+\.\d+\.\d+(?=</b>)', $ver
         # SHA256
         $html = $html -replace '[0-9a-f]{64}', $sha256
         $html | Set-Content $htmlFile -Encoding UTF8
