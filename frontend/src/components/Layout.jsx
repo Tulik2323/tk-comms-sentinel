@@ -285,6 +285,17 @@ export default function Layout({ children }) {
           >
             {Icons.logout} {t('logout')}
           </button>
+
+          <div style={{
+            marginTop: 8, textAlign: 'center',
+            fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)',
+            opacity: 0.6, direction: 'ltr',
+          }}>
+            v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'}
+            {typeof __BUILD_ID__ !== 'undefined' && (
+              <span style={{ opacity: 0.7 }}> · {__BUILD_ID__}</span>
+            )}
+          </div>
         </div>
       </aside>
 
@@ -350,20 +361,6 @@ export default function Layout({ children }) {
         {children}
       </main>
 
-      {/* גרסה + build timestamp — פינה תחתונה ימנית */}
-      <div style={{
-        position: 'fixed', bottom: 4, insetInlineEnd: 8, zIndex: 9999,
-        fontSize: 11, fontFamily: 'monospace', letterSpacing: '0.02em', fontWeight: 700,
-        color: '#ffffff', background: 'rgba(20,30,40,0.92)',
-        border: '1px solid var(--border)', borderRadius: 4,
-        padding: '3px 8px', pointerEvents: 'none', direction: 'ltr',
-      }}>
-        v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'}
-        {' '}
-        <span style={{ opacity: 0.55, fontSize: 10 }}>
-          {typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : ''}
-        </span>
-      </div>
     </div>
   );
 }
