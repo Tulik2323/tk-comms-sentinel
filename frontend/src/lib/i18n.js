@@ -73,6 +73,15 @@ const he = {
     devices_down:  'לא זמינים',
     top_bandwidth: 'עומס תעבורה גבוה',
     recent_alerts: 'התראות אחרונות',
+
+    // nav — פריטים שלא היו מתורגמים
+    port_changes:  'שינויי פורטים',
+    trends:        'ניתוח מגמות',
+    audit:         'Audit',
+    diagnostics:   'אבחון',
+    reports:       'דוחות',
+    license:       'רישוי',
+    watchdog:      'Watchdog',
   }
 };
 
@@ -132,6 +141,14 @@ const en = {
     devices_down:  'Down',
     top_bandwidth: 'High Bandwidth Usage',
     recent_alerts: 'Recent Alerts',
+
+    port_changes:  'Port Changes',
+    trends:        'Trends',
+    audit:         'Audit',
+    diagnostics:   'Diagnostics',
+    reports:       'Reports',
+    license:       'License',
+    watchdog:      'Watchdog',
   }
 };
 

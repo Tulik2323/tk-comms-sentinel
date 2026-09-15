@@ -21,6 +21,7 @@ const Icons = {
   reports:     '📄',
   admin:       '⚙️',
   license:     '🔑',
+  watchdog:    '🔌',
   logout:      '🚪',
   dark:        '🌙',
   light:       '☀️',
@@ -215,25 +216,26 @@ export default function Layout({ children }) {
 
         {/* Nav Links */}
         <nav style={{ flex: 1 }}>
-          <NavItem to="/"          icon={Icons.dashboard} label={t('dashboard')} />
-          <NavItem to="/devices"   icon={Icons.devices}   label={t('devices')}   />
-          <NavItem to="/topology"  icon={Icons.topology}  label={t('topology')}  />
-          <NavItem to="/map"       icon={Icons.map}       label={t('map')}       />
-          <NavItem to="/alerts"       icon={Icons.alerts}      label={t('alerts')}     />
-          <NavItem to="/port-changes" icon={Icons.portChanges} label="שינויי פורטים" />
-          <NavItem to="/trends"       icon={Icons.trends}      label="ניתוח מגמות" />
-          <NavItem to="/audit"        icon={Icons.audit}       label="Audit"           />
+          <NavItem to="/"             icon={Icons.dashboard}   label={t('dashboard')}    />
+          <NavItem to="/devices"      icon={Icons.devices}     label={t('devices')}      />
+          <NavItem to="/topology"     icon={Icons.topology}    label={t('topology')}     />
+          <NavItem to="/map"          icon={Icons.map}         label={t('map')}          />
+          <NavItem to="/alerts"       icon={Icons.alerts}      label={t('alerts')}       />
+          <NavItem to="/port-changes" icon={Icons.portChanges} label={t('port_changes')} />
+          <NavItem to="/watchdog"     icon={Icons.watchdog}    label={t('watchdog')}     />
+          <NavItem to="/trends"       icon={Icons.trends}      label={t('trends')}       />
+          <NavItem to="/audit"        icon={Icons.audit}       label={t('audit')}        />
           {user?.role === 'admin' && (
-            <NavItem to="/tools"   icon={Icons.tools}     label="אבחון"          />
+            <NavItem to="/tools"   icon={Icons.tools}     label={t('diagnostics')} />
           )}
           {user?.role === 'admin' && (
-            <NavItem to="/reports" icon={Icons.reports}   label="דוחות"          />
+            <NavItem to="/reports" icon={Icons.reports}   label={t('reports')}     />
           )}
           {user?.role === 'admin' && (
-            <NavItem to="/admin"   icon={Icons.admin}     label={t('admin')}     />
+            <NavItem to="/admin"   icon={Icons.admin}     label={t('admin')}       />
           )}
           {user?.role === 'admin' && (
-            <NavItem to="/license" icon={Icons.license}   label="רישוי"          />
+            <NavItem to="/license" icon={Icons.license}   label={t('license')}     />
           )}
         </nav>
 

@@ -18,6 +18,7 @@ import ReportsPage       from './pages/ReportsPage';
 import PortChangesPage  from './pages/PortChangesPage';
 import TrendsPage       from './pages/TrendsPage';
 import LicensePage     from './pages/LicensePage';
+import WatchdogPage    from './pages/WatchdogPage';
 
 function AppRoutes() {
   return (
@@ -109,6 +110,14 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <PortChangesPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/watchdog" element={
+        <ProtectedRoute>
+          <Layout>
+            <WatchdogPage />
           </Layout>
         </ProtectedRoute>
       } />

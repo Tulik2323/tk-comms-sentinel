@@ -2,6 +2,30 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.0] — 2026-09-15
+
+### Added
+- **Port Watchdog page** — moved from a modal inside the Devices page to a standalone main-menu item (`/watchdog`)
+  - Left panel: search + checkbox device list (select any number of switches) + Start/Stop button
+  - Main area: only changed ports appear, in chronological detection order (newest first)
+  - Each row: timestamp / device name / port name / direction (🔴 ירד / 🟢 עלה)
+  - Browser desktop notification + Web Audio API beep on each change (down = low double tone, up = high single tone)
+  - Session-only — no persistence, no storage; clears when you navigate away
+  - Available to all authenticated users (not admin-only)
+
+### Fixed
+- **Language switch (Hebrew ↔ English)** — most nav items were hardcoded Hebrew strings not going through `t()`.
+  All sidebar nav items now use the translation system, so switching language updates the entire menu.
+  Added missing translation keys to both `he` and `en` sections in `i18n.js`:
+  `port_changes`, `trends`, `audit`, `diagnostics`, `reports`, `license`, `watchdog`
+
+### Deployment notes (PROD — run in second conversation)
+1. `git pull` in `C:\dev\tkcs-installer`
+2. `npm run build` in `frontend\`
+3. Restart IIS app pool: `Stop-WebAppPool TKCommsSentinel; Start-WebAppPool TKCommsSentinel`
+4. Verify poller is running: `sc query TKCSPoller` — if STOPPED, run `sc start TKCSPoller`
+   (metrics data may be missing if poller stopped during v1.2.0 upgrade)
+
 ## [1.2.0] — 2026-09-14
 
 ### Added
