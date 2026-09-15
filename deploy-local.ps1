@@ -1,56 +1,149 @@
 $ErrorActionPreference = 'Continue'
-$PROD = 'C:\inetpub\wwwroot\tkcommssentinel'
-$SRC  = $PSScriptRoot
+$PROD  = 'C:\inetpub\wwwroot\tkcommssentinel'
+$SRC   = $PSScriptRoot
+$ISCC  = "C:\Users\tulik\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
+$GH    = "C:\Program Files\GitHub CLI\gh.exe"
 
-Write-Host "`n=== TK Comms Sentinel - Local Deploy ===" -ForegroundColor Cyan
+Write-Host "`n=== TK Comms Sentinel - Full Deploy ===" -ForegroundColor Cyan
 
 # 1. git pull
-Write-Host "`n[1/5] git pull..." -ForegroundColor Yellow
+Write-Host "`n[1/7] git pull..." -ForegroundColor Yellow
 Set-Location $SRC
 & git pull
 if ($LASTEXITCODE -ne 0) { Write-Host "git pull failed" -ForegroundColor Red; exit 1 }
 
-# 2. npm install (fast if nothing changed)
-Write-Host "`n[2/5] npm install (frontend)..." -ForegroundColor Yellow
+$ver = (Get-Content "$SRC\VERSION" -Raw).Trim()
+Write-Host "  Version: $ver" -ForegroundColor Cyan
+
+# 2. npm install frontend
+Write-Host "`n[2/7] npm install (frontend)..." -ForegroundColor Yellow
 Set-Location "$SRC\frontend"
-& npm install --prefer-offline 2>&1 | Select-String -NotMatch '^npm warn' | ForEach-Object { Write-Host $_ }
+& npm install --prefer-offline 2>&1 | Where-Object { $_ -notmatch '^npm (warn|notice)' } | Select-Object -First 3 | ForEach-Object { Write-Host "  $_" }
 
 # 3. build frontend
-Write-Host "`n[3/5] npm run build..." -ForegroundColor Yellow
-Set-Location "$SRC\frontend"
+Write-Host "`n[3/7] npm run build..." -ForegroundColor Yellow
 & npm run build
 if ($LASTEXITCODE -ne 0) { Write-Host "npm build failed" -ForegroundColor Red; exit 1 }
 Set-Location $SRC
 
-# 4. copy files to prod
-Write-Host "`n[4/5] copying to $PROD..." -ForegroundColor Yellow
-
-# frontend dist only
+# 4. copy to IIS prod
+Write-Host "`n[4/7] deploy to IIS ($PROD)..." -ForegroundColor Yellow
 & robocopy "$SRC\frontend\dist" "$PROD\frontend\dist" /MIR /NFL /NDL /NJS /NC /NS /NP
 Write-Host "  frontend\dist OK" -ForegroundColor Green
-
-# backend - skip data dirs and sensitive files
 & robocopy "$SRC\backend" "$PROD\backend" /MIR /XD node_modules db certs logs iisnode-logs /XF .env /NFL /NDL /NJS /NC /NS /NP
 Write-Host "  backend OK" -ForegroundColor Green
-
-# VERSION
 Copy-Item "$SRC\VERSION" "$PROD\VERSION" -Force
-$ver = Get-Content "$SRC\VERSION" -Raw
-$ver = $ver.Trim()
-Write-Host "  VERSION -> $ver" -ForegroundColor Green
+Write-Host "  VERSION -> $ver OK" -ForegroundColor Green
 
-# 5. backend npm install in prod (fast if nothing changed)
-Write-Host "`n  npm install --production in PROD backend..." -ForegroundColor DarkGray
 Set-Location "$PROD\backend"
-& npm install --omit=dev --prefer-offline 2>&1 | Where-Object { $_ -notmatch '^npm warn' } | Select-Object -First 5 | ForEach-Object { Write-Host $_ }
+& npm install --omit=dev --prefer-offline 2>&1 | Where-Object { $_ -notmatch '^npm (warn|notice)' } | Select-Object -First 3 | ForEach-Object { Write-Host "  $_" }
 Set-Location $SRC
 
-# 6. restart app pool
-Write-Host "`n[5/5] restarting app pool tkcommssentinel..." -ForegroundColor Yellow
 Import-Module WebAdministration -ErrorAction SilentlyContinue
 Stop-WebAppPool 'tkcommssentinel'
 Start-Sleep -Seconds 2
 Start-WebAppPool 'tkcommssentinel'
 Write-Host "  App Pool restarted OK" -ForegroundColor Green
 
-Write-Host "`n=== Deploy complete: v$ver ===" -ForegroundColor Cyan
+# 5. prepare package\versions\{ver} for Inno Setup
+Write-Host "`n[5/7] preparing package\versions\$ver..." -ForegroundColor Yellow
+$pkgVer     = "$SRC\package\versions\$ver"
+$pkgVerPrev = (Get-ChildItem "$SRC\package\versions" -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+
+if (-not (Test-Path $pkgVer)) {
+    if ($pkgVerPrev -and $pkgVerPrev -ne $pkgVer) {
+        Write-Host "  cloning $([System.IO.Path]::GetFileName($pkgVerPrev)) -> $ver (inherits node_modules)..."
+        & robocopy $pkgVerPrev $pkgVer /MIR /NFL /NDL /NJS /NC /NS /NP | Out-Null
+    } else {
+        New-Item -ItemType Directory -Path $pkgVer | Out-Null
+    }
+}
+
+# overwrite backend JS (skip node_modules and db data)
+& robocopy "$SRC\backend" "$pkgVer\backend" /MIR `
+    /XD node_modules db `
+    /XF .env "*.db" "*.db-shm" "*.db-wal" "*.db.bak*" "*.key" "*.pem" "*.pfx" `
+    /NFL /NDL /NJS /NC /NS /NP | Out-Null
+
+# if backend packages changed, reinstall in package
+$pkgJson    = "$pkgVer\backend\package.json"
+$pkgJsonSrc = "$SRC\backend\package.json"
+$pkgNM      = "$pkgVer\backend\node_modules"
+if (-not (Test-Path $pkgNM) -or ((Get-FileHash $pkgJson).Hash -ne (Get-FileHash $pkgJsonSrc).Hash)) {
+    Write-Host "  npm install --omit=dev in package backend..."
+    $savedLoc = Get-Location
+    Set-Location "$pkgVer\backend"
+    & "$SRC\package\node\node.exe" "$SRC\package\node\node_modules\npm\bin\npm-cli.js" install --omit=dev --prefer-offline 2>&1 | Where-Object { $_ -notmatch '^npm (warn|notice)' } | Select-Object -First 3 | ForEach-Object { Write-Host "  $_" }
+    Set-Location $savedLoc
+}
+
+# overwrite frontend dist
+if (-not (Test-Path "$pkgVer\frontend")) { New-Item -ItemType Directory -Path "$pkgVer\frontend" | Out-Null }
+& robocopy "$SRC\frontend\dist" "$pkgVer\frontend\dist" /MIR /NFL /NDL /NJS /NC /NS /NP | Out-Null
+
+Write-Host "  package\versions\$ver OK" -ForegroundColor Green
+
+# build EXE installer
+$outDir = "$SRC\dist-pkg"
+if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
+& $ISCC "/DMyAppVersion=$ver" "$SRC\installer\TKCommsSentinel.iss"
+if ($LASTEXITCODE -ne 0) { Write-Host "Inno Setup build failed" -ForegroundColor Red; exit 1 }
+
+$exePath = "$outDir\TKCommsSentinel-Setup-$ver.exe"
+Write-Host "  EXE: $exePath" -ForegroundColor Green
+
+# 6. SHA256 + GitHub Release
+Write-Host "`n[6/7] publishing GitHub Release v$ver..." -ForegroundColor Yellow
+$sha256 = (Get-FileHash $exePath -Algorithm SHA256).Hash.ToLower()
+Write-Host "  SHA256: $sha256"
+
+# Delete existing release if exists (re-release same version)
+& $GH release delete "v$ver" --yes 2>$null
+
+$notes = (Get-Content "$SRC\CHANGELOG.md" -Raw) -replace '(?s)^.*?## \[' , '## [' -replace '(?s)(## \[' + [regex]::Escape($ver) + '\].*?)(## \[.*)$', '$1'
+$notesFile = "$env:TEMP\release-notes-$ver.md"
+$notes | Set-Content $notesFile -Encoding UTF8
+
+& $GH release create "v$ver" $exePath `
+    --title "TK Comms Sentinel v$ver" `
+    --notes-file $notesFile `
+    --latest
+if ($LASTEXITCODE -ne 0) { Write-Host "GitHub release failed" -ForegroundColor Red; exit 1 }
+Write-Host "  GitHub Release v$ver published OK" -ForegroundColor Green
+
+# 7. update docs/latest.json + website + push
+Write-Host "`n[7/7] updating website (docs/latest.json)..." -ForegroundColor Yellow
+$today = (Get-Date -Format "yyyy-MM-dd")
+$latestJson = @{
+    version     = $ver
+    date        = $today
+    notes       = "See CHANGELOG for details"
+    downloadUrl = "https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe"
+    sha256      = $sha256
+} | ConvertTo-Json -Depth 2
+$latestJson | Set-Content "$SRC\docs\latest.json" -Encoding UTF8
+Write-Host "  docs/latest.json updated" -ForegroundColor Green
+
+# Update version chip in HTML pages
+foreach ($htmlFile in @("$SRC\docs\index.html", "$SRC\docs\index.en.html")) {
+    if (Test-Path $htmlFile) {
+        $html = Get-Content $htmlFile -Raw -Encoding UTF8
+        # version chip: v1.x.x
+        $html = $html -replace 'v\d+\.\d+\.\d+(?=<)', "v$ver"
+        # SHA256
+        $html = $html -replace '[0-9a-f]{64}', $sha256
+        $html | Set-Content $htmlFile -Encoding UTF8
+        Write-Host "  $([System.IO.Path]::GetFileName($htmlFile)) updated" -ForegroundColor Green
+    }
+}
+
+& git add "docs/latest.json" "docs/index.html" "docs/index.en.html"
+& git commit -m "docs: bump website to v$ver [skip ci]"
+& git push origin main
+Write-Host "  docs pushed to GitHub Pages OK" -ForegroundColor Green
+
+Write-Host "`n=== Full Deploy complete: v$ver ===" -ForegroundColor Cyan
+Write-Host "  IIS:     updated + app pool restarted" -ForegroundColor White
+Write-Host "  EXE:     $exePath" -ForegroundColor White
+Write-Host "  Release: https://github.com/Tulik2323/tk-comms-sentinel/releases/tag/v$ver" -ForegroundColor White
+Write-Host "  Website: https://tulik2323.github.io/tk-comms-sentinel/" -ForegroundColor White
