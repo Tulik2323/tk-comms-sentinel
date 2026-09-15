@@ -82,6 +82,22 @@ const he = {
     reports:       'דוחות',
     license:       'רישוי',
     watchdog:      'Watchdog',
+
+    // layout — מחרוזות ממשק
+    net_monitoring:       'ניטור רשת ארגוני',
+    search_placeholder:   'IP / MAC / שם...',
+    no_results:           'לא נמצאו תוצאות',
+    light_mode:           'מצב בהיר',
+    dark_mode:            'מצב כהה',
+    role_admin:           'אדמין',
+    role_viewer:          'צופה',
+    trial_banner:         'גרסת ניסיון — נותרו {{days}} ימים מתוך 7.',
+    activate_license:     'הגדר רישוי',
+    trial_expired_banner: 'תקופת הניסיון הסתיימה.',
+    enter_license:        'הזן רישוי להמשך שימוש',
+    contact_admin:        'פנה למנהל המערכת להפעלת רישוי.',
+    grace_banner:         'הרישוי פג ב-{{expiry}} — נותרו {{days}} ימי גרייס.',
+    expired_banner:       'תוקף הרישוי פג. המערכת אינה מאושרת לשימוש.',
   }
 };
 
@@ -149,6 +165,22 @@ const en = {
     reports:       'Reports',
     license:       'License',
     watchdog:      'Watchdog',
+
+    // layout strings
+    net_monitoring:       'Enterprise Network Monitoring',
+    search_placeholder:   'IP / MAC / Name...',
+    no_results:           'No results found',
+    light_mode:           'Light mode',
+    dark_mode:            'Dark mode',
+    role_admin:           'Admin',
+    role_viewer:          'Viewer',
+    trial_banner:         '{{days}} days left in 7-day trial.',
+    activate_license:     'Activate License',
+    trial_expired_banner: 'Trial period has ended.',
+    enter_license:        'Enter a license key to continue',
+    contact_admin:        'Contact your system administrator to activate a license.',
+    grace_banner:         'License expired on {{expiry}} — {{days}} grace days remaining.',
+    expired_banner:       'License has expired. The system is not authorized for use.',
   }
 };
 

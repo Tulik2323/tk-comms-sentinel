@@ -179,11 +179,13 @@ body {
 /* ===== Sidebar ===== */
 .nm-sidebar {
   width: 220px;
-  min-height: 100vh;
+  height: 100vh;
+  flex-shrink: 0;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 .nm-sidebar-item {
   display: flex;

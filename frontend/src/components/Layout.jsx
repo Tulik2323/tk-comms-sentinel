@@ -118,7 +118,7 @@ export default function Layout({ children }) {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-primary)' }}>
       {/* Sidebar */}
       <aside className="nm-sidebar">
         {/* Logo */}
@@ -140,7 +140,7 @@ export default function Layout({ children }) {
               TK COMMS SENTINEL
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-              ניטור רשת ארגוני
+              {t('net_monitoring')}
             </div>
           </div>
         </div>
@@ -151,7 +151,7 @@ export default function Layout({ children }) {
             type="text"
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
-            placeholder="🔍 IP / MAC / שם..."
+            placeholder={`🔍 ${t('search_placeholder')}`}
             style={{
               width: '100%', boxSizing: 'border-box',
               padding: '7px 10px', borderRadius: 6, fontSize: 12,
@@ -209,7 +209,7 @@ export default function Layout({ children }) {
               borderRadius: 8, padding: '10px 12px', fontSize: 12,
               color: 'var(--text-muted)',
             }}>
-              לא נמצאו תוצאות
+              {t('no_results')}
             </div>
           )}
         </div>
@@ -250,7 +250,7 @@ export default function Layout({ children }) {
               onClick={toggleTheme}
               className="nm-btn nm-btn-ghost"
               style={{ flex: 1, justifyContent: 'center', padding: '6px 8px', fontSize: 16 }}
-              title={theme === 'dark' ? 'מצב בהיר' : 'מצב כהה'}
+              title={theme === 'dark' ? t('light_mode') : t('dark_mode')}
             >
               {theme === 'dark' ? Icons.light : Icons.dark}
             </button>
@@ -274,7 +274,7 @@ export default function Layout({ children }) {
               👤 {user?.username}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {user?.role === 'admin' ? '🔑 אדמין' : '👁 צופה'}
+              {user?.role === 'admin' ? `🔑 ${t('role_admin')}` : `👁 ${t('role_viewer')}`}
             </div>
           </div>
 
@@ -302,10 +302,10 @@ export default function Layout({ children }) {
             background: 'rgba(59,130,246,0.12)', borderBottom: '1px solid rgba(59,130,246,0.35)',
             color: '#60a5fa',
           }}>
-            🕐 גרסת ניסיון — נותרו {licenseStatus.trialDaysLeft} ימים מתוך 7.{' '}
+            🕐 {t('trial_banner', { days: licenseStatus.trialDaysLeft })}{' '}
             {user?.role === 'admin' && (
               <a onClick={() => navigate('/license')} style={{ cursor:'pointer', textDecoration:'underline', color:'inherit' }}>
-                הגדר רישוי
+                {t('activate_license')}
               </a>
             )}
           </div>
@@ -316,10 +316,10 @@ export default function Layout({ children }) {
             background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid rgba(239,68,68,0.4)',
             color: '#ef4444',
           }}>
-            🚫 תקופת הניסיון הסתיימה.{' '}
+            🚫 {t('trial_expired_banner')}{' '}
             {user?.role === 'admin'
-              ? <a onClick={() => navigate('/license')} style={{ cursor:'pointer', textDecoration:'underline', color:'inherit' }}>הזן רישוי להמשך שימוש</a>
-              : 'פנה למנהל המערכת להפעלת רישוי.'
+              ? <a onClick={() => navigate('/license')} style={{ cursor:'pointer', textDecoration:'underline', color:'inherit' }}>{t('enter_license')}</a>
+              : t('contact_admin')
             }
           </div>
         )}
@@ -329,9 +329,9 @@ export default function Layout({ children }) {
             background: 'rgba(245,158,11,0.15)', borderBottom: '1px solid rgba(245,158,11,0.4)',
             color: '#f59e0b',
           }}>
-            ⏳ הרישוי פג ב-{licenseStatus.expiry} — נותרו {licenseStatus.graceDaysLeft} ימי גרייס.{' '}
+            ⏳ {t('grace_banner', { expiry: licenseStatus.expiry, days: licenseStatus.graceDaysLeft })}{' '}
             <a onClick={() => navigate('/license')} style={{ cursor:'pointer', textDecoration:'underline', color:'inherit' }}>
-              הגדר רישוי
+              {t('activate_license')}
             </a>
           </div>
         )}
@@ -341,9 +341,9 @@ export default function Layout({ children }) {
             background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid rgba(239,68,68,0.4)',
             color: '#ef4444',
           }}>
-            🚫 תוקף הרישוי פג. המערכת אינה מאושרת לשימוש המשך.{' '}
+            🚫 {t('expired_banner')}{' '}
             <a onClick={() => navigate('/license')} style={{ cursor:'pointer', textDecoration:'underline', color:'inherit' }}>
-              הגדר רישוי
+              {t('activate_license')}
             </a>
           </div>
         )}

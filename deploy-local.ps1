@@ -15,6 +15,15 @@ if ($LASTEXITCODE -ne 0) { Write-Host "git pull failed" -ForegroundColor Red; ex
 $ver = (Get-Content "$SRC\VERSION" -Raw).Trim()
 Write-Host "  Version: $ver" -ForegroundColor Cyan
 
+# sync version into package.json files (so __APP_VERSION__ in the build is correct)
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+foreach ($pkgFile in @("$SRC\backend\package.json", "$SRC\frontend\package.json")) {
+    $j = [System.IO.File]::ReadAllText($pkgFile)
+    $j = $j -replace '("version"\s*:\s*")[^"]+(")', "`${1}$ver`${2}"
+    [System.IO.File]::WriteAllText($pkgFile, $j, $utf8NoBom)
+}
+Write-Host "  package.json versions synced to $ver" -ForegroundColor Green
+
 # 2. npm install frontend
 Write-Host "`n[2/7] npm install (frontend)..." -ForegroundColor Yellow
 Set-Location "$SRC\frontend"
@@ -141,6 +150,17 @@ foreach ($htmlFile in @("$SRC\docs\index.html", "$SRC\docs\index.en.html")) {
 & git commit -m "docs: bump website to v$ver [skip ci]"
 & git push origin main
 Write-Host "  docs pushed to GitHub Pages OK" -ForegroundColor Green
+
+# restart poller scheduled task
+$pollerTask = Get-ScheduledTask "NetMonitor Poller" -ErrorAction SilentlyContinue
+if ($pollerTask) {
+    Stop-ScheduledTask "NetMonitor Poller" -ErrorAction SilentlyContinue
+    Start-Sleep 2
+    Start-ScheduledTask "NetMonitor Poller"
+    Write-Host "  Poller restarted OK" -ForegroundColor Green
+} else {
+    Write-Host "  WARNING: Scheduled Task 'NetMonitor Poller' not found" -ForegroundColor Yellow
+}
 
 Write-Host "`n=== Full Deploy complete: v$ver ===" -ForegroundColor Cyan
 Write-Host "  IIS:     updated + app pool restarted" -ForegroundColor White

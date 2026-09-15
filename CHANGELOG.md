@@ -2,6 +2,18 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.1] — 2026-09-15
+
+### Fixed
+- **Language switch — full UI coverage** — all hardcoded Hebrew strings in Layout now go through `t()`:
+  subtitle under logo, search placeholder, "no results" message, theme tooltip, role badge (Admin/Viewer),
+  and all 4 license banners (trial, trial-expired, grace, expired)
+- **Poller not running** — Scheduled Task "NetMonitor Poller" had no Repetition Interval (one-shot trigger).
+  Fixed trigger to repeat every 1 minute; poller restarted. Traffic/bandwidth charts and alerts will
+  resume populating within minutes of deploying this version.
+- **deploy-local.ps1** — script now restarts the poller scheduled task after each IIS deploy, so
+  the poller is always live after an upgrade.
+
 ## [1.3.0] — 2026-09-15
 
 ### Added
