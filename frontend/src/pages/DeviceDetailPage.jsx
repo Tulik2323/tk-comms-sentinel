@@ -381,6 +381,7 @@ export default function DeviceDetailPage() {
                   ['if_index', '#'],
                   ['if_name',  t('col_port_name')],
                   [null,       t('col_description')],
+                  ['pvid',     'VLAN'],
                   ['if_speed', t('col_speed')],
                   [null,       'Admin'],
                   [null,       'Oper'],
@@ -407,7 +408,7 @@ export default function DeviceDetailPage() {
             <tbody>
               {filteredPorts.length === 0 ? (
                 <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20 }}>
+                  <td colSpan={10} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20 }}>
                     {t('no_ports')}
                   </td>
                 </tr>
@@ -434,6 +435,9 @@ export default function DeviceDetailPage() {
                     )}
                   </td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{p.if_descr || p.if_name || '—'}</td>
+                  <td style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-secondary)' }}>
+                    {p.pvid ?? '—'}
+                  </td>
                   <td style={{ fontSize: 12, fontFamily: 'monospace' }}>
                     {p.if_speed ? formatBps(p.if_speed) : '—'}
                   </td>
@@ -579,6 +583,7 @@ export default function DeviceDetailPage() {
               {[
                 { label: 'Oper Status', value: selectedPort.oper_status, color: selectedPort.oper_status === 'up' ? '#22c55e' : '#ef4444' },
                 { label: 'Admin Status', value: selectedPort.admin_status, color: selectedPort.admin_status === 'up' ? '#22c55e' : '#94a3b8' },
+                { label: 'VLAN', value: selectedPort.pvid ?? '—', color: 'var(--text-primary)' },
                 { label: `${t('col_traffic')} ↓`, value: formatBps(selectedPort.in_bps),  color: '#22c55e' },
                 { label: `${t('col_traffic')} ↑`, value: formatBps(selectedPort.out_bps), color: '#3b82f6' },
                 { label: t('col_errors_in'),  value: selectedPort.in_errors  > 0 ? selectedPort.in_errors.toLocaleString()  : '—', color: selectedPort.in_errors  > 0 ? '#ef4444' : 'var(--text-muted)' },

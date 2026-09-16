@@ -529,19 +529,29 @@ async function getHardwareStatusComware(device) {
   const session = createSession(device);
   try {
     // ---- FANs ----
+    // הבטיחה הבאה נמצאה בפועל: על HPE 5130 JH326A ה-OID הזה מחזיר ~200
+    // שורות (עד אינדקס 955) — הרבה יותר ממה שסביר לטבלת FAN פיזית (עד
+    // כמה יחידות). זו כנראה טבלה per-interface (storm-control/loopback-
+    // detection וכו') שנרשמה בטעות כ-hh3cFanStatus, וגרמה להצגת "כשלי
+    // FAN" שקריים לכל שורה שמחזירה 1. אם הטבלה חורגת ממספר סביר של
+    // FANים פיזיים — מתעלמים ממנה כליל במקום להציג התראות שווא.
+    const MAX_PLAUSIBLE_FANS = 16;
     const fanRows = await snmpWalk(session, OID.comwareFan).catch(() => []);
-    const failFans = [];
-    let okCount = 0;
-    for (const r of fanRows) {
-      const v = toNum(r.value);
-      const idx = parseInt(r.oid.split('.').pop());
-      if (v === 2) { okCount++; }
-      else if (v === 1) { failFans.push({ idx, status: 'fail' }); }
+    let fans = [];
+    if (fanRows.length > 0 && fanRows.length <= MAX_PLAUSIBLE_FANS) {
+      const failFans = [];
+      let okCount = 0;
+      for (const r of fanRows) {
+        const v = toNum(r.value);
+        const idx = parseInt(r.oid.split('.').pop());
+        if (v === 2) { okCount++; }
+        else if (v === 1) { failFans.push({ idx, status: 'fail' }); }
+      }
+      fans = [
+        ...(okCount > 0 ? [{ idx: 0, status: 'ok', count: okCount }] : []),
+        ...failFans,
+      ];
     }
-    const fans = [
-      ...(okCount > 0 ? [{ idx: 0, status: 'ok', count: okCount }] : []),
-      ...failFans,
-    ];
 
     // ---- PSU ----
     const psuEidCandidates = Array.from({ length: 61 }, (_, i) => 200 + i);

@@ -175,7 +175,24 @@ router.get('/:id/port-endpoints/:ifIndex', requireAuth, (req, res) => {
     ORDER BY last_seen DESC
     LIMIT 30
   `).all(devId, ifIndex);
-  res.json(attachHostnames(rows));
+
+  // רשומות bridge-table (פורט קצה) נושאות רק MAC, בלי IP משלהן — ה-IP
+  // מגיע מרשומת ARP נפרדת (בדרך כלל מה-gateway/L3), שמזוהה לפי אותו MAC
+  // בלי קשר למכשיר/פורט. בלעדי הפיבוט הזה רוב תחנות הקצה מוצגות בלי IP
+  // וממילא גם בלי hostname (שתלוי ב-IP).
+  const macsWithoutIp = [...new Set(rows.filter(r => !r.ip_address).map(r => r.mac_address))];
+  let ipByMac = {};
+  if (macsWithoutIp.length > 0) {
+    const placeholders = macsWithoutIp.map(() => '?').join(',');
+    const arpRows = db.prepare(`
+      SELECT mac_address, ip_address FROM mac_entries
+      WHERE mac_address IN (${placeholders}) AND ip_address IS NOT NULL
+    `).all(...macsWithoutIp);
+    ipByMac = Object.fromEntries(arpRows.map(r => [r.mac_address, r.ip_address]));
+  }
+  const enriched = rows.map(r => ({ ...r, ip_address: r.ip_address || ipByMac[r.mac_address] || null }));
+
+  res.json(attachHostnames(enriched));
 });
 
 // ===== סף התראה לפורט ספציפי =====

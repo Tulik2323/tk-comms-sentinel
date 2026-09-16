@@ -2,6 +2,37 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.6] — 2026-09-16
+
+### Fixed
+- **Deploy pipeline silently dropped every code change under `backend/db/`** — root cause
+  of both "Audit page still in Hebrew" and "main search finds nothing" reported today.
+  `deploy-local.ps1` excluded the entire `backend\db\` directory from the IIS/package
+  robocopy (`/XD ... db ...`) to protect the live `netmonitor.db` file, but that also
+  silently blocked `database.js` and `audit.js` code changes from ever reaching
+  production — so the v1.3.4 audit-log migration (`msg_key`/`msg_params` columns) and the
+  v1.3.5 `hostname_cache` table were never actually created on the live server. Every
+  `logAudit()` call was failing silently (audit rows stopped being written at all since
+  the v1.3.4 deploy), and every hostname lookup was throwing `no such table: hostname_cache`
+  inside `/api/search` and `/api/devices/endpoint-search`, which the frontend's search box
+  swallows silently — explaining the empty dropdown. Fixed to exclude only the actual data
+  files (`netmonitor.db*`) instead of the whole directory, so `backend/db/*.js` and
+  `schema.sql` deploy normally from now on.
+- **Endpoint IP/hostname blank in "Connected endpoints"** — `/api/devices/:id/port-endpoints/:ifIndex`
+  returned the raw bridge-table row, which carries a MAC but never an IP of its own (IP
+  comes from a separate ARP-learned row for the same MAC, usually on a different, L3
+  device). Now cross-references other `mac_entries` rows for the same MAC to fill in the
+  IP before hostname lookup, matching the logic already used by endpoint search.
+- **False "FAN failed" hardware alarms on HPE 5130 (JH326A)** — the OID used for
+  `hh3cFanStatus` returns ~200 rows on this switch (indices up to 955), not the handful a
+  physical fan table would have; it is almost certainly a per-interface status table
+  misidentified as fan status, and ports that happened to read a status of `1` showed up
+  as failed fans. Now discards the reading entirely when the table returns more rows than
+  are physically plausible for a fan bank, instead of showing spurious hardware failures.
+- Added a **VLAN column** (from the already-collected `pvid`) to the ports table and port
+  detail panel on the device page — the data was being collected by the poller but never
+  shown.
+
 ## [1.3.5] — 2026-09-16
 
 ### Added

@@ -39,7 +39,15 @@ Set-Location $SRC
 Write-Host "`n[4/7] deploy to IIS ($PROD)..." -ForegroundColor Yellow
 & robocopy "$SRC\frontend\dist" "$PROD\frontend\dist" /MIR /NFL /NDL /NJS /NC /NS /NP
 Write-Host "  frontend\dist OK" -ForegroundColor Green
-& robocopy "$SRC\backend" "$PROD\backend" /MIR /XD node_modules db certs logs iisnode-logs /XF .env /NFL /NDL /NJS /NC /NS /NP
+# NOTE: backend\db\ holds both CODE (database.js, audit.js, schema.sql) and the
+# LIVE DATA FILE (netmonitor.db + WAL/SHM + backups). Excluding the whole "db"
+# directory here used to silently block every code change under backend\db\ from
+# ever reaching production (found 2026-09-16: hostname_cache/audit migrations
+# never deployed because of this). Only the data files are excluded now -- the
+# directory itself is no longer skipped.
+& robocopy "$SRC\backend" "$PROD\backend" /MIR /XD node_modules certs logs iisnode-logs `
+    /XF .env "netmonitor.db*" `
+    /NFL /NDL /NJS /NC /NS /NP
 Write-Host "  backend OK" -ForegroundColor Green
 Copy-Item "$SRC\VERSION" "$PROD\VERSION" -Force
 Write-Host "  VERSION -> $ver OK" -ForegroundColor Green
@@ -68,10 +76,11 @@ if (-not (Test-Path $pkgVer)) {
     }
 }
 
-# overwrite backend JS (skip node_modules and db data)
+# overwrite backend JS (skip node_modules; keep backend\db\ code but never
+# ship any stray data file that might exist there in a dev checkout)
 & robocopy "$SRC\backend" "$pkgVer\backend" /MIR `
-    /XD node_modules db `
-    /XF .env "*.db" "*.db-shm" "*.db-wal" "*.db.bak*" "*.key" "*.pem" "*.pfx" `
+    /XD node_modules `
+    /XF .env "netmonitor.db*" "*.db" "*.db-shm" "*.db-wal" "*.db.bak*" "*.key" "*.pem" "*.pfx" `
     /NFL /NDL /NJS /NC /NS /NP | Out-Null
 
 # if backend packages changed, reinstall in package
