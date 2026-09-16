@@ -309,12 +309,12 @@
         <div class="panel-bar mono"><span>LATEST RELEASE</span><span>●●●</span></div>
         <div class="dl-row">
           <div>
-            <span class="dl-tag mono">VERSION <b>1.3.5</b></span>
+            <span class="dl-tag mono">VERSION <b>1.3.6</b></span>
             <div class="dl-os">Windows Server 2019 · 2022 · 2025 &nbsp;·&nbsp; x64</div>
           </div>
           <a class="btn btn-primary" href="https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe">Download Installer</a>
         </div>
-        <div class="dl-foot mono">SHA256: <span style="letter-spacing:.04em">1fc6b1c41e9aa6742222952c1df5b3ac5e6a37f85405ae834a97cb7582017392</span></div>
+        <div class="dl-foot mono">SHA256: <span style="letter-spacing:.04em">62bfe644abcaf8a1efa794898757bbcb12b7a454e95898f83a8d3da870cd4ae8</span></div>
       </div>
     </section>
 
@@ -330,6 +330,7 @@
             <tr><td class="rev mono">1.0</td><td class="desc">Basic SNMP monitoring, an initial dashboard, and email alerts.</td></tr>
             <tr><td class="rev mono">1.1</td><td class="desc">LLDP topology detection, automatically distinguishing an uplink from an end-device port.</td></tr>
             <tr><td class="rev mono">1.2</td><td class="desc">Device lookup by IP/MAC down to the physical port, and 48-hour traffic history for every interface.</td></tr>
+            <tr><td class="rev mono">1.3.6</td><td class="desc">Fixed a deploy pipeline gap that had silently blocked every backend/db code change from reaching the live server since v1.3.4 — this is why the audit log and main search stopped working. Also fixed endpoint IP/hostname not showing on some ports, false "fan failed" hardware alarms on HPE 5130 switches, and added a VLAN column to the ports table.</td></tr>
             <tr><td class="rev mono">1.3.5</td><td class="desc">Added hostname resolution (reverse DNS) for endpoints — every IP shown for a connected device now also shows its computer name, when available via DNS, in the port endpoints table and both search views.</td></tr>
             <tr><td class="rev mono">1.3.4</td><td class="desc">Fixed the Audit page still showing Hebrew in English mode — log messages are now rebuilt in the active language instead of showing raw Hebrew text stored in the database. Fixed the website's "latest" download link, which was pointing at a file that was never actually uploaded.</td></tr>
             <tr><td class="rev mono">1.3.3</td><td class="desc">Full English translation coverage — every page (Dashboard, Devices, Alerts, Trends, Audit, Topology, Map, Tools, Reports, Admin, License, Login) is now fully translated, not just the sidebar. Alert messages are now rebuilt in the active language instead of showing Hebrew text stored in the database.</td></tr>
@@ -349,6 +350,7 @@
 </div>
 </body>
 </html>
+
 
 
 
