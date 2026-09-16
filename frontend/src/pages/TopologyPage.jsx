@@ -2,11 +2,13 @@
 // קווים אדומים/כתומים/ירוקים לפי bandwidth, צמתים מהבהבים כש-DOWN
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Network, DataSet } from 'vis-network/standalone';
 import { useTopology } from '../hooks/useTopology';
 import { formatBps } from '../lib/api';
 
 export default function TopologyPage() {
+  const { t }        = useTranslation();
   const containerRef = useRef(null);
   const networkRef   = useRef(null);
   const navigate     = useNavigate();
@@ -91,7 +93,7 @@ export default function TopologyPage() {
   return (
     <div style={{ padding: 24, height: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>🕸️ טופולוגיית רשת</h1>
+        <h1 style={{ margin: 0, fontSize: 22 }}>🕸️ {t('topology_title')}</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* Legend */}
           <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
@@ -109,11 +111,11 @@ export default function TopologyPage() {
           <button
             onClick={() => setShowStubs(v => !v)}
             className={`nm-btn ${showStubs ? 'nm-btn-primary' : 'nm-btn-ghost'}`}
-            title="הצג/הסתר עמדות קצה שאינן במערכת"
+            title={t('toggle_stubs_title')}
           >
-            {showStubs ? '🖥 הסתר קצוות' : '🖥 הצג קצוות'}
+            🖥 {showStubs ? t('hide_edges') : t('show_edges')}
           </button>
-          <button onClick={refetch} className="nm-btn nm-btn-ghost">↺ רענן</button>
+          <button onClick={refetch} className="nm-btn nm-btn-ghost">↺ {t('refresh')}</button>
         </div>
       </div>
 
@@ -134,7 +136,7 @@ export default function TopologyPage() {
               color: 'var(--text-muted)', fontSize: 14, background: 'var(--bg-card)',
               zIndex: 10,
             }}>
-              טוען טופולוגיה...
+              {t('loading_topology')}
             </div>
           )}
           {graph.nodes.length === 0 && !loading && (
@@ -145,9 +147,9 @@ export default function TopologyPage() {
             }}>
               <div>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>🕸️</div>
-                <div>אין נתוני טופולוגיה עדיין</div>
+                <div>{t('no_topology_data')}</div>
                 <div style={{ fontSize: 12, marginTop: 8 }}>
-                  המערכת בונה את הגרף מנתוני LLDP — בדוק שוב אחרי כמה דקות polling
+                  {t('topology_hint')}
                 </div>
               </div>
             </div>
@@ -175,18 +177,18 @@ export default function TopologyPage() {
             </div>
             <div style={{ margin: '12px 0', borderTop: '1px solid var(--border)' }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <StatRow label="סטטוס" value={
+              <StatRow label={t('status')} value={
                 <span style={{ color: selected.status === 'up' ? '#22c55e' : '#ef4444' }}>
-                  {selected.status === 'up' ? '✅ פעיל' : '❌ Down'}
+                  {selected.status === 'up' ? `✅ ${t('filter_up')}` : `❌ ${t('filter_down')}`}
                 </span>
               } />
-              <StatRow label="עומס" value={`${selected.util || 0}%`} />
-              <StatRow label="תעבורה ↓" value={formatBps(selected.in_bps)} />
-              <StatRow label="תעבורה ↑" value={formatBps(selected.out_bps)} />
+              <StatRow label={t('load_label')} value={`${selected.util || 0}%`} />
+              <StatRow label={`${t('col_traffic')} ↓`} value={formatBps(selected.in_bps)} />
+              <StatRow label={`${t('col_traffic')} ↑`} value={formatBps(selected.out_bps)} />
               {selected.cpu_pct > 0 && <StatRow label="CPU" value={`${Math.round(selected.cpu_pct)}%`} />}
               {selected.isConcentrator && (
-                <StatRow label="תפקיד" value={
-                  <span style={{ color: '#facc15' }}>⭐ ריכוז ({selected.connCount} חיבורים)</span>
+                <StatRow label={t('role_label')} value={
+                  <span style={{ color: '#facc15' }}>⭐ {t('hub_role', { n: selected.connCount })}</span>
                 } />
               )}
             </div>
@@ -195,14 +197,14 @@ export default function TopologyPage() {
               className="nm-btn nm-btn-primary"
               style={{ width: '100%', justifyContent: 'center', marginTop: 16 }}
             >
-              פרטים מלאים
+              {t('full_details')}
             </button>
           </div>
         )}
       </div>
 
       <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
-        לחיצה כפולה על מכשיר → דף פרטים · גרף מתרענן כל 60 שניות · {graph.nodes.length} מכשירים · {graph.edges.length} קישורים
+        {t('topology_footer', { nodes: graph.nodes.length, edges: graph.edges.length })}
       </div>
     </div>
   );

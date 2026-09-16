@@ -1,28 +1,44 @@
 // ReportsPage — הרצה וניהול תזמון דוחות
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 
-const REPORT_TYPES = [
-  { type: 'uptime',        label: 'זמינות מכשירים (Uptime %)',  params: [{ name: 'period_days', label: 'ימים אחרונים', default: 7,  min: 1, max: 90 }] },
-  { type: 'top_ports',     label: 'פורטים עם תעבורה גבוהה',    params: [{ name: 'limit',       label: 'מספר פורטים',  default: 20, min: 5, max: 100 }] },
-  { type: 'alert_history', label: 'היסטוריית התראות',           params: [{ name: 'period_days', label: 'ימים אחרונים', default: 7,  min: 1, max: 90 }] },
-  { type: 'port_errors',   label: 'שגיאות פורטים',              params: [{ name: 'min_errors',  label: 'מינימום שגיאות', default: 0, min: 0, max: 9999 }] },
+const REPORT_DEFS = [
+  { type: 'uptime',        params: [{ name: 'period_days', default: 7,  min: 1, max: 90 }] },
+  { type: 'top_ports',     params: [{ name: 'limit',       default: 20, min: 5, max: 100 }] },
+  { type: 'alert_history', params: [{ name: 'period_days', default: 7,  min: 1, max: 90 }] },
+  { type: 'port_errors',   params: [{ name: 'min_errors',  default: 0,  min: 0, max: 9999 }] },
 ];
 
-const CRON_PRESETS = [
-  { label: 'כל יום בשעה 08:00',    value: '0 8 * * *' },
-  { label: 'כל שני בשעה 08:00',    value: '0 8 * * 1' },
-  { label: 'ראשון לחודש 08:00',    value: '0 8 1 * *' },
-  { label: 'כל שעה',               value: '0 * * * *' },
-  { label: 'מותאם אישית',          value: '' },
+const CRON_VALUES = [
+  { key: 'cron_daily',   value: '0 8 * * *' },
+  { key: 'cron_weekly',  value: '0 8 * * 1' },
+  { key: 'cron_monthly', value: '0 8 1 * *' },
+  { key: 'cron_hourly',  value: '0 * * * *' },
+  { key: 'cron_custom',  value: '' },
 ];
+
+function useReportTypes() {
+  const { t } = useTranslation();
+  return REPORT_DEFS.map(r => ({
+    ...r,
+    label:  t(`rpt_${r.type}`),
+    params: r.params.map(p => ({ ...p, label: t(`prm_${p.name}`) })),
+  }));
+}
+
+function useCronPresets() {
+  const { t } = useTranslation();
+  return CRON_VALUES.map(c => ({ label: t(c.key), value: c.value }));
+}
 
 function ReportTable({ report }) {
+  const { t } = useTranslation();
   if (!report) return null;
   return (
     <div>
       <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>
-        {report.title} · {report.rows.length} שורות
+        {report.title} · {report.rows.length} {t('rows_label')}
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table className="nm-table" style={{ minWidth: 600 }}>
@@ -31,7 +47,7 @@ function ReportTable({ report }) {
           </thead>
           <tbody>
             {report.rows.length === 0 ? (
-              <tr><td colSpan={report.headers.length} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>אין נתונים</td></tr>
+              <tr><td colSpan={report.headers.length} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{t('no_data')}</td></tr>
             ) : report.rows.map((row, i) => (
               <tr key={i}>{row.map((cell, j) => <td key={j} style={{ fontSize: 12 }}>{cell ?? '—'}</td>)}</tr>
             ))}
@@ -43,24 +59,26 @@ function ReportTable({ report }) {
 }
 
 function RunReport() {
-  const [type,   setType]   = useState(REPORT_TYPES[0].type);
+  const { t }               = useTranslation();
+  const REPORT_TYPES        = useReportTypes();
+  const [type,   setType]   = useState(REPORT_DEFS[0].type);
   const [params, setParams] = useState({});
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error,   setError]  = useState('');
 
-  const typeDef = REPORT_TYPES.find(t => t.type === type);
+  const typeDef = REPORT_TYPES.find(x => x.type === type);
 
-  function initParams(t) {
-    const def = REPORT_TYPES.find(x => x.type === t);
+  function initParams(nextType) {
+    const def = REPORT_TYPES.find(x => x.type === nextType);
     const p = {};
     for (const pd of def.params) p[pd.name] = pd.default;
     return p;
   }
 
-  function handleTypeChange(t) {
-    setType(t);
-    setParams(initParams(t));
+  function handleTypeChange(nextType) {
+    setType(nextType);
+    setParams(initParams(nextType));
     setReport(null);
     setError('');
   }
@@ -72,7 +90,7 @@ function RunReport() {
       const res = await api.get(`/reports/run?${qs}`);
       setReport(res.data);
     } catch (e) {
-      setError(e.response?.data?.error || 'שגיאה');
+      setError(e.response?.data?.error || t('error'));
     } finally { setLoading(false); }
   }
 
@@ -99,14 +117,14 @@ function RunReport() {
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'end', marginBottom: 16 }}>
         <div>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>סוג דוח</label>
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>{t('report_type')}</label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {REPORT_TYPES.map(t => (
-              <button key={t.type}
-                className={`nm-btn ${type === t.type ? 'nm-btn-primary' : 'nm-btn-ghost'}`}
+            {REPORT_TYPES.map(rt => (
+              <button key={rt.type}
+                className={`nm-btn ${type === rt.type ? 'nm-btn-primary' : 'nm-btn-ghost'}`}
                 style={{ fontSize: 12, padding: '6px 12px' }}
-                onClick={() => handleTypeChange(t.type)}>
-                {t.label}
+                onClick={() => handleTypeChange(rt.type)}>
+                {rt.label}
               </button>
             ))}
           </div>
@@ -129,11 +147,11 @@ function RunReport() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
         <button className="nm-btn nm-btn-primary" disabled={loading} onClick={run}
           style={{ padding: '8px 20px' }}>
-          {loading ? 'מחשב…' : '▶ הרץ דוח'}
+          {loading ? t('computing') : `▶ ${t('run_report_btn')}`}
         </button>
         {report && (
           <button className="nm-btn nm-btn-ghost" onClick={downloadCsv} style={{ padding: '8px 16px', fontSize: 12 }}>
-            ⬇ הורד CSV
+            ⬇ {t('download_csv')}
           </button>
         )}
       </div>
@@ -151,6 +169,9 @@ function RunReport() {
 }
 
 function ScheduleManager() {
+  const { t }                     = useTranslation();
+  const REPORT_TYPES              = useReportTypes();
+  const CRON_PRESETS              = useCronPresets();
   const [schedules, setSchedules] = useState([]);
   const [showForm,  setShowForm]  = useState(false);
   const [saving,    setSaving]    = useState(false);
@@ -173,7 +194,7 @@ function ScheduleManager() {
       setShowForm(false);
       loadSchedules();
     } catch (e) {
-      alert(e.response?.data?.error || 'שגיאה בשמירה');
+      alert(e.response?.data?.error || t('save_error'));
     } finally { setSaving(false); }
   }
 
@@ -185,7 +206,7 @@ function ScheduleManager() {
   }
 
   async function del(id) {
-    if (!confirm('למחוק את התזמון?')) return;
+    if (!confirm(t('delete_schedule_confirm'))) return;
     try { await api.delete(`/reports/schedules/${id}`); loadSchedules(); } catch (_) {}
   }
 
@@ -194,17 +215,17 @@ function ScheduleManager() {
     if (val) setForm(f => ({ ...f, cron_expr: val }));
   }
 
-  const typeLabel = (t) => REPORT_TYPES.find(x => x.type === t)?.label || t;
+  const typeLabel = (rt) => REPORT_TYPES.find(x => x.type === rt)?.label || rt;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
         <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          דוחות יישלחו אוטומטית לפי תזמון
+          {t('schedules_hint')}
         </span>
         <button className="nm-btn nm-btn-primary" style={{ padding: '6px 14px', fontSize: 12 }}
           onClick={() => setShowForm(v => !v)}>
-          {showForm ? '✕ ביטול' : '+ תזמון חדש'}
+          {showForm ? `✕ ${t('cancel')}` : `+ ${t('new_schedule')}`}
         </button>
       </div>
 
@@ -212,19 +233,19 @@ function ScheduleManager() {
         <div className="nm-card" style={{ marginBottom: 20, background: 'var(--bg-secondary)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>שם התזמון</label>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('schedule_name')}</label>
               <input className="nm-input" value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="דוח שבועי זמינות" />
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t('schedule_name_ph')} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>סוג דוח</label>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('report_type')}</label>
               <select className="nm-input" value={form.report_type}
                 onChange={e => setForm(f => ({ ...f, report_type: e.target.value }))}>
-                {REPORT_TYPES.map(t => <option key={t.type} value={t.type}>{t.label}</option>)}
+                {REPORT_TYPES.map(rt => <option key={rt.type} value={rt.type}>{rt.label}</option>)}
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>תדירות</label>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('frequency')}</label>
               <select className="nm-input" value={cronPreset} onChange={e => handlePreset(e.target.value)}>
                 {CRON_PRESETS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
@@ -232,7 +253,7 @@ function ScheduleManager() {
             {(!cronPreset || cronPreset === '') && (
               <div>
                 <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                  ביטוי Cron מותאם
+                  {t('custom_cron')}
                 </label>
                 <input className="nm-input" style={{ fontFamily: 'monospace' }}
                   value={form.cron_expr}
@@ -241,7 +262,7 @@ function ScheduleManager() {
               </div>
             )}
             <div>
-              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>שלח לאימייל</label>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('send_to_email')}</label>
               <input className="nm-input" type="email" value={form.email_to}
                 onChange={e => setForm(f => ({ ...f, email_to: e.target.value }))}
                 placeholder="it@hospital.org" />
@@ -249,19 +270,19 @@ function ScheduleManager() {
           </div>
           <button className="nm-btn nm-btn-primary" disabled={saving || !form.name || !form.email_to}
             onClick={save} style={{ padding: '8px 20px' }}>
-            {saving ? 'שומר…' : '💾 שמור תזמון'}
+            {saving ? t('saving') : `💾 ${t('save_schedule')}`}
           </button>
         </div>
       )}
 
       {schedules.length === 0 ? (
         <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-          אין תזמונים מוגדרים
+          {t('no_schedules')}
         </div>
       ) : (
         <table className="nm-table">
           <thead>
-            <tr><th>שם</th><th>סוג</th><th>תדירות</th><th>אימייל</th><th>הרצה אחרונה</th><th>פעיל</th><th></th></tr>
+            <tr><th>{t('col_name')}</th><th>{t('col_type')}</th><th>{t('frequency')}</th><th>{t('col_email')}</th><th>{t('col_last_run')}</th><th>{t('col_enabled')}</th><th></th></tr>
           </thead>
           <tbody>
             {schedules.map(s => (
@@ -271,12 +292,12 @@ function ScheduleManager() {
                 <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{s.cron_expr}</td>
                 <td style={{ fontSize: 12 }}>{s.email_to || '—'}</td>
                 <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {s.last_run ? new Date(s.last_run * 1000).toLocaleString('he-IL') : 'טרם רץ'}
+                  {s.last_run ? new Date(s.last_run * 1000).toLocaleString() : t('never_ran')}
                 </td>
                 <td>
                   <button className={`nm-btn ${s.enabled ? 'nm-btn-primary' : 'nm-btn-ghost'}`}
                     style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => toggle(s)}>
-                    {s.enabled ? 'פעיל' : 'מושבת'}
+                    {s.enabled ? t('active_label') : t('disabled_label')}
                   </button>
                 </td>
                 <td>
@@ -293,15 +314,16 @@ function ScheduleManager() {
 }
 
 export default function ReportsPage() {
+  const { t }         = useTranslation();
   const [tab, setTab] = useState('run');
 
   return (
     <div style={{ padding: 24, maxWidth: 1300, margin: '0 auto' }}>
-      <h1 style={{ margin: '0 0 20px', fontSize: 22 }}>📄 דוחות</h1>
+      <h1 style={{ margin: '0 0 20px', fontSize: 22 }}>📄 {t('reports_title')}</h1>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
-        {[['run', 'הרצת דוח'], ['schedule', 'דוחות מתוזמנים']].map(([id, label]) => (
+        {[['run', t('run_report_tab')], ['schedule', t('scheduled_reports_tab')]].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)}
             className="nm-btn nm-btn-ghost"
             style={{

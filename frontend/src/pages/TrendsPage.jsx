@@ -1,6 +1,7 @@
 // TrendsPage — ניתוח מגמות: פורטים בעייתיים, התראות, CPU + AI (אופציונלי)
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../lib/api';
 
@@ -30,7 +31,7 @@ function Badge({ text, color }) {
 
 function fmtTime(ts) {
   if (!ts) return '—';
-  return new Date(ts * 1000).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(ts * 1000).toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function fmtErrors(n) {
@@ -40,6 +41,7 @@ function fmtErrors(n) {
 }
 
 export default function TrendsPage() {
+  const { t }                   = useTranslation();
   const [days, setDays]         = useState(7);
   const [data, setData]         = useState(null);
   const [loading, setLoading]   = useState(true);
@@ -74,9 +76,9 @@ export default function TrendsPage() {
     } catch (err) {
       const msg = err.response?.data?.message || err.response?.data?.error || err.message;
       if (err.response?.data?.error === 'AI_NOT_CONFIGURED') {
-        setAiError('ניתוח AI מושבת — הגדר CLAUDE_API_KEY ב-.env ואתחל את ה-App Pool.');
+        setAiError(t('ai_disabled'));
       } else {
-        setAiError(`שגיאה: ${msg}`);
+        setAiError(`${t('error')}: ${msg}`);
       }
     } finally {
       setAiLoad(false);
@@ -89,17 +91,17 @@ export default function TrendsPage() {
     <div style={{ padding: 24, maxWidth: 1300, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 20 }}>📈 ניתוח מגמות</h1>
+        <h1 style={{ margin: 0, fontSize: 20 }}>📈 {t('trends')}</h1>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {DAYS_OPTIONS.map(d => (
             <button key={d} onClick={() => setDays(d)}
               className={`nm-btn ${days === d ? 'nm-btn-primary' : 'nm-btn-ghost'}`}
               style={{ padding: '5px 12px', fontSize: 12 }}>
-              {d} ימים
+              {d} {t('days_suffix')}
             </button>
           ))}
           <button onClick={load} className="nm-btn nm-btn-ghost"
-            style={{ padding: '5px 10px', fontSize: 12 }} title="רענן">
+            style={{ padding: '5px 10px', fontSize: 12 }} title={t('refresh')}>
             🔄
           </button>
         </div>
@@ -107,13 +109,13 @@ export default function TrendsPage() {
 
       {loading && (
         <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 60, fontSize: 14 }}>
-          טוען נתונים...
+          {t('loading_data')}
         </div>
       )}
 
       {!loading && !data && (
         <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 60 }}>
-          שגיאה בטעינת נתונים
+          {t('error_loading_data')}
         </div>
       )}
 
@@ -122,10 +124,10 @@ export default function TrendsPage() {
         {/* Summary Bar */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
           {[
-            { label: 'מכשירים UP',    value: summary.devices_up   ?? '—', color: '#22c55e' },
-            { label: 'מכשירים DOWN',  value: summary.devices_down ?? '—', color: '#ef4444' },
-            { label: 'התראות',        value: summary.total_alerts ?? 0,   color: '#f97316' },
-            { label: 'שינויי פורטים', value: summary.total_port_changes ?? 0, color: '#3b82f6' },
+            { label: t('devices_up_label'),   value: summary.devices_up   ?? '—', color: '#22c55e' },
+            { label: t('devices_down_label'), value: summary.devices_down ?? '—', color: '#ef4444' },
+            { label: t('alerts'),             value: summary.total_alerts ?? 0,   color: '#f97316' },
+            { label: t('port_changes'),       value: summary.total_port_changes ?? 0, color: '#3b82f6' },
           ].map(s => (
             <div key={s.label} style={{
               padding: '10px 18px', borderRadius: 10,
@@ -142,13 +144,13 @@ export default function TrendsPage() {
             textAlign: 'center', minWidth: 110,
           }}>
             <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{days}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>ימי ניתוח</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t('analysis_days')}</div>
           </div>
         </div>
 
         {/* Daily Changes Graph */}
         {data.dailyChanges?.length > 0 && (
-          <SectionCard title="📅 שינויי פורטים לפי יום">
+          <SectionCard title={`📅 ${t('port_changes_by_day')}`}>
             <ResponsiveContainer width="100%" height={140}>
               <BarChart data={data.dailyChanges} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -156,10 +158,10 @@ export default function TrendsPage() {
                 <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', fontSize: 12 }}
-                  formatter={(v, name) => [v, name === 'total_changes' ? 'שינויים' : 'מכשירים']}
+                  formatter={(v, name) => [v, name === 'total_changes' ? t('changes_word') : t('devices_word')]}
                   labelStyle={{ color: 'var(--text-muted)' }}
                 />
-                <Bar dataKey="total_changes" name="שינויים" fill="var(--accent)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="total_changes" name={t('changes_word')} fill="var(--accent)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </SectionCard>
@@ -167,19 +169,19 @@ export default function TrendsPage() {
 
         {/* Flapping Ports */}
         <SectionCard
-          title={`⚡ פורטים עם שינויים תכופים (Flapping) — ${data.flappingPorts?.length || 0} נמצאו`}
+          title={`⚡ ${t('flapping_title', { count: data.flappingPorts?.length || 0 })}`}
           isEmpty={!data.flappingPorts?.length}
-          emptyMsg={`לא נמצאו פורטים עם שינויים חוזרים ב-${days} ימים האחרונים ✅`}
+          emptyMsg={t('flapping_empty', { days })}
         >
           <div style={{ overflowX: 'auto' }}>
             <table className="nm-table">
               <thead>
                 <tr>
-                  <th>מכשיר</th>
-                  <th>פורט</th>
-                  <th>שינויים</th>
+                  <th>{t('col_device')}</th>
+                  <th>{t('col_port')}</th>
+                  <th>{t('col_changes')}</th>
                   <th>Admin</th>
-                  <th>שינוי אחרון</th>
+                  <th>{t('col_last_change')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -194,7 +196,7 @@ export default function TrendsPage() {
                     </td>
                     <td style={{ fontSize: 12 }}>{p.if_name || `if_index ${p.if_index}`}</td>
                     <td>
-                      <Badge text={`${p.change_count} שינויים`}
+                      <Badge text={`${p.change_count} ${t('changes_word')}`}
                         color={p.change_count >= 10 ? '#ef4444' : p.change_count >= 5 ? '#f97316' : '#eab308'} />
                     </td>
                     <td style={{ fontSize: 12 }}>{p.admin_changes > 0 ? `${p.admin_changes} Admin` : '—'}</td>
@@ -202,7 +204,7 @@ export default function TrendsPage() {
                     <td>
                       <Link to={`/devices/${p.device_id}?port=${p.if_index}`}
                         className="nm-btn nm-btn-ghost" style={{ padding: '3px 8px', fontSize: 11 }}>
-                        פרטים
+                        {t('details_btn')}
                       </Link>
                     </td>
                   </tr>
@@ -214,19 +216,19 @@ export default function TrendsPage() {
 
         {/* Error Ports */}
         <SectionCard
-          title={`🔴 פורטים עם שגיאות גבוהות — ${data.errorPorts?.length || 0} נמצאו`}
+          title={`🔴 ${t('error_ports_title', { count: data.errorPorts?.length || 0 })}`}
           isEmpty={!data.errorPorts?.length}
-          emptyMsg="לא נמצאו פורטים עם שגיאות ✅"
+          emptyMsg={t('error_ports_empty')}
         >
           <div style={{ overflowX: 'auto' }}>
             <table className="nm-table">
               <thead>
                 <tr>
-                  <th>מכשיר</th>
-                  <th>פורט</th>
-                  <th>שגיאות ↓</th>
-                  <th>שגיאות ↑</th>
-                  <th>סה"כ שגיאות</th>
+                  <th>{t('col_device')}</th>
+                  <th>{t('col_port')}</th>
+                  <th>{t('col_errors_in')}</th>
+                  <th>{t('col_errors_out')}</th>
+                  <th>{t('col_total_errors')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -253,7 +255,7 @@ export default function TrendsPage() {
                     <td>
                       <Link to={`/devices/${p.device_id}?port=${p.if_index}`}
                         className="nm-btn nm-btn-ghost" style={{ padding: '3px 8px', fontSize: 11 }}>
-                        פרטים
+                        {t('details_btn')}
                       </Link>
                     </td>
                   </tr>
@@ -265,18 +267,18 @@ export default function TrendsPage() {
 
         {/* Alert Devices */}
         <SectionCard
-          title={`🔔 מכשירים עם הכי הרבה התראות — ${data.alertDevices?.length || 0} נמצאו`}
+          title={`🔔 ${t('alert_devices_title', { count: data.alertDevices?.length || 0 })}`}
           isEmpty={!data.alertDevices?.length}
-          emptyMsg={`לא נרשמו התראות ב-${days} ימים האחרונים ✅`}
+          emptyMsg={t('alert_devices_empty', { days })}
         >
           <div style={{ overflowX: 'auto' }}>
             <table className="nm-table">
               <thead>
                 <tr>
-                  <th>מכשיר</th>
-                  <th>התראות</th>
-                  <th>מטריקות</th>
-                  <th>התראה אחרונה</th>
+                  <th>{t('col_device')}</th>
+                  <th>{t('col_alerts')}</th>
+                  <th>{t('col_metrics')}</th>
+                  <th>{t('col_last_alert')}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -290,7 +292,7 @@ export default function TrendsPage() {
                       <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{d.device_ip}</div>
                     </td>
                     <td>
-                      <Badge text={`${d.alert_count} התראות`}
+                      <Badge text={`${d.alert_count} ${t('col_alerts')}`}
                         color={d.alert_count >= 20 ? '#ef4444' : d.alert_count >= 10 ? '#f97316' : '#eab308'} />
                     </td>
                     <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>
@@ -300,7 +302,7 @@ export default function TrendsPage() {
                     <td>
                       <Link to={`/devices/${d.device_id}`}
                         className="nm-btn nm-btn-ghost" style={{ padding: '3px 8px', fontSize: 11 }}>
-                        מכשיר
+                        {t('col_device')}
                       </Link>
                     </td>
                   </tr>
@@ -312,15 +314,15 @@ export default function TrendsPage() {
 
         {/* High CPU */}
         {data.highCpuDevices?.length > 0 && (
-          <SectionCard title={`⚡ מכשירים עם CPU גבוה (ממוצע > 50%) — ${data.highCpuDevices.length} נמצאו`}>
+          <SectionCard title={`⚡ ${t('high_cpu_title', { count: data.highCpuDevices.length })}`}>
             <div style={{ overflowX: 'auto' }}>
               <table className="nm-table">
                 <thead>
                   <tr>
-                    <th>מכשיר</th>
-                    <th>CPU ממוצע</th>
-                    <th>CPU מקסימום</th>
-                    <th>דגימות</th>
+                    <th>{t('col_device')}</th>
+                    <th>{t('col_avg_cpu')}</th>
+                    <th>{t('col_max_cpu')}</th>
+                    <th>{t('col_samples')}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -344,7 +346,7 @@ export default function TrendsPage() {
                       <td>
                         <Link to={`/devices/${d.device_id}`}
                           className="nm-btn nm-btn-ghost" style={{ padding: '3px 8px', fontSize: 11 }}>
-                          גרפים
+                          {t('charts_btn')}
                         </Link>
                       </td>
                     </tr>
@@ -359,9 +361,9 @@ export default function TrendsPage() {
         <div className="nm-card">
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
             <div>
-              <h3 style={{ margin: 0, fontSize: 14 }}>🤖 ניתוח AI — המלצות לתיקון</h3>
+              <h3 style={{ margin: 0, fontSize: 14 }}>🤖 {t('ai_title')}</h3>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                מחייב גישה לאינטרנט + CLAUDE_API_KEY ב-.env | עובד גם ללא AI (ניתוח ידני למעלה)
+                {t('ai_note')}
               </div>
             </div>
             <button
@@ -370,7 +372,7 @@ export default function TrendsPage() {
               className="nm-btn nm-btn-primary"
               style={{ padding: '7px 16px', fontSize: 13, flexShrink: 0 }}
             >
-              {aiLoading ? '⏳ מנתח...' : '🤖 נתח עם AI'}
+              {aiLoading ? `⏳ ${t('ai_analyzing')}` : `🤖 ${t('ai_analyze_btn')}`}
             </button>
           </div>
 
@@ -386,7 +388,7 @@ export default function TrendsPage() {
 
           {aiLoading && (
             <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>
-              שולח נתונים ל-Claude ומקבל המלצות...
+              {t('ai_sending')}
             </div>
           )}
 
@@ -395,7 +397,7 @@ export default function TrendsPage() {
               padding: '14px 16px', borderRadius: 8,
               background: 'var(--bg-secondary)', border: '1px solid var(--border)',
               fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap',
-              direction: 'rtl', textAlign: 'right',
+              textAlign: 'start',
             }}>
               {aiText}
             </div>
@@ -403,7 +405,7 @@ export default function TrendsPage() {
 
           {!aiText && !aiLoading && !aiError && (
             <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 0' }}>
-              לחץ "נתח עם AI" לקבלת המלצות מותאמות על בסיס הנתונים שלמעלה.
+              {t('ai_hint')}
             </div>
           )}
         </div>

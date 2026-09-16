@@ -91,7 +91,7 @@ export default function LoginPage() {
         return;
       }
     } catch (err) {
-      reportError(err, 'שגיאת שרת');
+      reportError(err, t('server_error'));
     } finally {
       setLoading(false);
     }
@@ -119,7 +119,7 @@ export default function LoginPage() {
       login(res.data.token, { username, role: res.data.role });
       navigate('/', { replace: true });
     } catch (err) {
-      reportError(err, 'קוד שגוי');
+      reportError(err, t('wrong_code'));
       setCode('');
     } finally {
       setLoading(false);
@@ -139,7 +139,7 @@ export default function LoginPage() {
       login(res.data.token, { username, role: res.data.role });
       navigate('/');
     } catch (err) {
-      reportError(err, 'קוד שגוי');
+      reportError(err, t('wrong_code'));
       setCode('');
     } finally {
       setLoading(false);
@@ -147,15 +147,15 @@ export default function LoginPage() {
   }
 
   const cardTitle = {
-    login: 'התחברות',
-    totp:  'אימות דו-שלבי',
-    setup: 'הגדרת אימות דו-שלבי',
+    login: t('login'),
+    totp:  t('totp_title'),
+    setup: t('setup_title'),
   }[step];
 
   const cardHint = {
-    login: 'התחבר עם חשבון הדומיין שלך או עם חשבון מקומי.',
-    totp:  'הזן את הקוד בן שש הספרות מאפליקציית האימות.',
-    setup: 'סרוק את הקוד באפליקציית האימות כדי לאבטח את החשבון.',
+    login: t('login_sub'),
+    totp:  t('totp_sub'),
+    setup: t('setup_sub'),
   }[step];
 
   return (
@@ -181,33 +181,32 @@ export default function LoginPage() {
         </div>
 
         <h2 className="tk-headline tk-rise tk-d2">
-          רואים את הרשת <em>לפני</em> שהיא נופלת.
+          {t('tagline')}
         </h2>
 
         <p className="tk-sub tk-rise tk-d3">
-          ניטור SNMP רציף לסוויצ'ים, מיפוי טופולוגיה אוטומטי מקשרי LLDP,
-          והתראות שמגיעות אליך לפני שהמשתמשים מרימים טלפון.
+          {t('tagline_body')}
         </p>
 
         <div className="tk-stats tk-rise tk-d4">
           <div>
-            <p className="tk-stat-label">מצב השירות</p>
+            <p className="tk-stat-label">{t('service_status')}</p>
             <p className="tk-stat-value">
               {health === null ? (
-                'בודק…'
+                t('checking_dots')
               ) : health === false ? (
-                <>לא זמין</>
+                <>{t('unavailable')}</>
               ) : (
-                <><span className="tk-live-dot" />פעיל</>
+                <><span className="tk-live-dot" />{t('active_label')}</>
               )}
             </p>
           </div>
           <div>
-            <p className="tk-stat-label">אימות</p>
-            <p className="tk-stat-value">AD + מקומי</p>
+            <p className="tk-stat-label">{t('auth_label')}</p>
+            <p className="tk-stat-value">{t('auth_value')}</p>
           </div>
           <div>
-            <p className="tk-stat-label">גרסה</p>
+            <p className="tk-stat-label">{t('version_label')}</p>
             <p className="tk-stat-value">{health?.version ? `v${health.version}` : '—'}</p>
           </div>
         </div>
@@ -265,7 +264,7 @@ export default function LoginPage() {
               </div>
 
               <button type="submit" className="tk-submit" disabled={loading}>
-                {loading ? 'מתחבר…' : t('login')}
+                {loading ? t('logging_in') : t('login')}
               </button>
             </form>
           )}
@@ -290,14 +289,14 @@ export default function LoginPage() {
               </div>
 
               <button type="submit" className="tk-submit" disabled={loading || code.length !== 6}>
-                {loading ? 'בודק…' : t('two_factor')}
+                {loading ? t('checking_dots') : t('two_factor')}
               </button>
               <button
                 type="button"
                 className="tk-ghost"
                 onClick={() => { setStep('login'); setCode(''); setMessage(null); }}
               >
-                חזור
+                {t('back_btn')}
               </button>
             </form>
           )}
@@ -305,7 +304,7 @@ export default function LoginPage() {
           {/* ---- שלב 3: הגדרת 2FA ---- */}
           {step === 'setup' && (
             <form onSubmit={handleConfirmSetup}>
-              {qrCode && <img className="tk-qr" src={qrCode} alt="קוד QR להגדרת אימות דו-שלבי" />}
+              {qrCode && <img className="tk-qr" src={qrCode} alt={t('qr_alt')} />}
 
               <div className="tk-field">
                 <label className="tk-label" htmlFor="tk-confirm">{t('enter_confirm_code')}</label>
@@ -323,7 +322,7 @@ export default function LoginPage() {
               </div>
 
               <button type="submit" className="tk-submit" disabled={loading || code.length !== 6}>
-                {loading ? 'מאמת…' : 'אשר והמשך'}
+                {loading ? t('verifying') : t('confirm_continue')}
               </button>
               <button
                 type="button"
@@ -333,7 +332,7 @@ export default function LoginPage() {
                   navigate('/');
                 }}
               >
-                דלג להגדרה מאוחר יותר
+                {t('skip_setup')}
               </button>
             </form>
           )}

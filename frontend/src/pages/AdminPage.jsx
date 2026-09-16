@@ -1,5 +1,6 @@
 // AdminPage — ניהול מערכת: הגדרות, משתמשים, polling
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import Modal from '../components/ui/Modal';
 import api from '../lib/api';
 
@@ -34,6 +35,7 @@ function SettingField({ label, desc, name, value, onChange, type = 'text', place
 }
 
 export default function AdminPage() {
+  const { t }                     = useTranslation();
   const [settings, setSettings]   = useState({});
   const [users,    setUsers]      = useState([]);
   const [tab,      setTab]        = useState('settings');
@@ -78,7 +80,7 @@ export default function AdminPage() {
       const res = await api.post('/admin/test-smtp', { sendTest });
       setSmtpTest(res.data);
     } catch (err) {
-      setSmtpTest({ ok: false, error: err.response?.data?.error || 'שגיאה בבדיקה' });
+      setSmtpTest({ ok: false, error: err.response?.data?.error || t('test_error') });
     } finally {
       setSmtpTesting(false);
     }
@@ -92,7 +94,7 @@ export default function AdminPage() {
       const res = await api.get('/updates/check');
       setUpdateInfo(res.data);
     } catch (err) {
-      setUpdateInfo({ ok: false, message: err.response?.data?.message || 'שגיאה בבדיקת עדכונים' });
+      setUpdateInfo({ ok: false, message: err.response?.data?.message || t('update_check_error') });
     } finally {
       setUpdateChecking(false);
     }
@@ -101,7 +103,7 @@ export default function AdminPage() {
   // הפעלת העדכן. פעולה כבדה — דורשת אישור, והמערכת תופעל מחדש.
   async function installUpdate() {
     if (!updateInfo?.updateAvailable) return;
-    if (!window.confirm(`להתקין את גרסה ${updateInfo.latest}? המערכת תופעל מחדש במהלך העדכון.`)) return;
+    if (!window.confirm(t('update_install_confirm', { ver: updateInfo.latest }))) return;
     setUpdateInstalling(true);
     try {
       // timeout ארוך — כולל הורדה+חילוץ של חבילת העדכון לפני שהמערכת מתאתחלת
@@ -114,8 +116,8 @@ export default function AdminPage() {
     } catch (err) {
       // נפילת חיבור/timeout אחרי שהעדכון החל = המערכת כבר מתאתחלת (צפוי)
       const softer = (err.code === 'ECONNABORTED' || !err.response)
-        ? { started: true, message: 'העדכון הופעל — המערכת מתאתחלת. המתן כדקה ורענן את הדף.' }
-        : { started: false, message: err.response?.data?.message || 'שגיאה בהפעלת העדכון' };
+        ? { started: true, message: t('update_started') }
+        : { started: false, message: err.response?.data?.message || t('update_error') };
       setUpdateInfo(u => ({ ...u, installResult: softer }));
     } finally {
       setUpdateInstalling(false);
@@ -134,7 +136,7 @@ export default function AdminPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
-      alert(err.response?.data?.error || 'שגיאה בשמירה');
+      alert(err.response?.data?.error || t('save_error'));
     } finally {
       setSaving(false);
     }
@@ -148,25 +150,25 @@ export default function AdminPage() {
       setNewUser({ username: '', password: '', role: 'viewer' });
       loadUsers();
     } catch (err) {
-      alert(err.response?.data?.error || 'שגיאה');
+      alert(err.response?.data?.error || t('error'));
     }
   }
 
   async function deleteUser(id) {
-    if (!window.confirm('מחק משתמש?')) return;
+    if (!window.confirm(t('delete_user_confirm'))) return;
     await api.delete(`/admin/users/${id}`);
     loadUsers();
   }
 
   async function resetUserTotp(id) {
     await api.post(`/admin/users/${id}/reset-2fa`);
-    alert('✓ 2FA אופס — המשתמש יתבקש להגדיר מחדש');
+    alert(t('twofa_reset_ok'));
     loadUsers();
   }
 
   return (
     <div style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
-      <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>⚙️ ניהול מערכת</h1>
+      <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>⚙️ {t('admin_title')}</h1>
 
       {/* Stats row */}
       <div style={{
@@ -176,10 +178,10 @@ export default function AdminPage() {
         marginBottom:        24,
       }}>
         {[
-          { label: 'סה"כ מכשירים', value: stats.totalDevices || 0, color: 'var(--accent)' },
-          { label: 'פעילים',       value: stats.upDevices    || 0, color: '#22c55e' },
-          { label: 'לא זמינים',   value: stats.downDevices  || 0, color: '#ef4444' },
-          { label: 'התראות פתוחות', value: stats.openAlerts || 0, color: '#f97316' },
+          { label: t('total_devices'),    value: stats.totalDevices || 0, color: 'var(--accent)' },
+          { label: t('devices_up'),       value: stats.upDevices    || 0, color: '#22c55e' },
+          { label: t('devices_down'),     value: stats.downDevices  || 0, color: '#ef4444' },
+          { label: t('open_alerts_label'), value: stats.openAlerts  || 0, color: '#f97316' },
         ].map(s => (
           <div key={s.label} className="nm-card" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 28, fontWeight: 700, color: s.color }}>{s.value}</div>
@@ -190,12 +192,12 @@ export default function AdminPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
-        {[['settings', '⚙️ הגדרות'], ['users', '👤 משתמשים']].map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} style={{
+        {[['settings', `⚙️ ${t('settings_tab')}`], ['users', `👤 ${t('users_tab')}`]].map(([tabId, label]) => (
+          <button key={tabId} onClick={() => setTab(tabId)} style={{
             background: 'none', border: 'none', padding: '8px 16px', cursor: 'pointer',
-            fontSize: 13, color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
-            borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
-            fontWeight: tab === t ? 700 : 400,
+            fontSize: 13, color: tab === tabId ? 'var(--accent)' : 'var(--text-muted)',
+            borderBottom: tab === tabId ? '2px solid var(--accent)' : '2px solid transparent',
+            fontWeight: tab === tabId ? 700 : 400,
           }}>
             {label}
           </button>
@@ -205,25 +207,25 @@ export default function AdminPage() {
       {/* Settings Tab */}
       {tab === 'settings' && (
         <form onSubmit={saveSettings}>
-          <Section title="🔄 עדכוני מערכת">
+          <Section title={`🔄 ${t('updates_section')}`}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-              כתובת הפיד שהמערכת בודקת מולה עדכונים. השאר ריק בשרתים ללא גישה לאינטרנט.
+              {t('update_feed_hint')}
             </div>
-            <SettingField label="כתובת פיד עדכונים (latest.json)" name="update_feed_url"
+            <SettingField label={t('update_feed_label')} name="update_feed_url"
               value={settings.update_feed_url} onChange={handleSettingChange}
               placeholder="https://tulik2323.github.io/tk-comms-sentinel/latest.json" />
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
-              שמור את הכתובת לפני בדיקה — הבדיקה משתמשת בערך <b>השמור</b>.
+              {t('save_before_check')}
             </div>
 
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <button type="button" className="nm-btn nm-btn-ghost"
                 onClick={checkUpdates} disabled={updateChecking}>
-                {updateChecking ? 'בודק…' : '🔍 בדוק עדכונים'}
+                {updateChecking ? t('checking_dots') : `🔍 ${t('check_updates')}`}
               </button>
               {updateInfo?.current && (
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  גרסה מותקנת: <b style={{ color: 'var(--text-primary)' }}>{updateInfo.current}</b>
+                  {t('installed_version')}: <b style={{ color: 'var(--text-primary)' }}>{updateInfo.current}</b>
                 </span>
               )}
             </div>
@@ -246,8 +248,8 @@ export default function AdminPage() {
                   {!updateInfo.ok
                     ? `ℹ️ ${updateInfo.message}`
                     : updateInfo.updateAvailable
-                      ? `⬆️ עדכון זמין: ${updateInfo.latest}`
-                      : `✅ המערכת מעודכנת (${updateInfo.current})`}
+                      ? `⬆️ ${t('update_available', { ver: updateInfo.latest })}`
+                      : `✅ ${t('system_up_to_date', { ver: updateInfo.current })}`}
                 </div>
                 {updateInfo.ok && updateInfo.updateAvailable && updateInfo.notes && (
                   <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12, whiteSpace: 'pre-wrap' }}>
@@ -258,7 +260,7 @@ export default function AdminPage() {
                   <div style={{ marginTop: 10 }}>
                     <button type="button" className="nm-btn nm-btn-primary"
                       onClick={installUpdate} disabled={updateInstalling}>
-                      {updateInstalling ? 'מפעיל…' : `⬇️ התקן עדכון ${updateInfo.latest}`}
+                      {updateInstalling ? t('installing') : `⬇️ ${t('install_update', { ver: updateInfo.latest })}`}
                     </button>
                   </div>
                 )}
@@ -273,7 +275,7 @@ export default function AdminPage() {
             )}
           </Section>
 
-          <Section title="📧 SMTP — שליחת התראות במייל">
+          <Section title={`📧 ${t('smtp_section')}`}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
               <SettingField label="SMTP Host" name="smtp_host" value={settings.smtp_host}
                 onChange={handleSettingChange} placeholder="mail.company.local" />
@@ -281,28 +283,28 @@ export default function AdminPage() {
                 onChange={handleSettingChange} placeholder="25" />
               <SettingField label="From Address" name="smtp_from" value={settings.smtp_from}
                 onChange={handleSettingChange} placeholder="netmonitor@company.local" />
-              <SettingField label="נמענים (מופרדים בפסיקה)" name="alert_recipients"
+              <SettingField label={t('recipients_label')} name="alert_recipients"
                 value={settings.alert_recipients} onChange={handleSettingChange}
                 placeholder="admin@company.local,it@company.local" />
-              <SettingField label="SMTP Username (אופציונלי)" name="smtp_user"
+              <SettingField label={t('smtp_user_label')} name="smtp_user"
                 value={settings.smtp_user} onChange={handleSettingChange} />
               <SettingField label="SMTP Password" name="smtp_pass" type="password"
                 value={settings.smtp_pass === '***' ? '' : settings.smtp_pass}
-                onChange={handleSettingChange} placeholder="השאר ריק לשמירת הישן" />
+                onChange={handleSettingChange} placeholder={t('keep_existing_ph')} />
             </div>
 
             {/* בדיקה מול השרת. שני מצבים: חיבור בלבד, או שליחה אמיתית. */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
               <button type="button" className="nm-btn nm-btn-ghost"
                 onClick={() => testSmtp(false)} disabled={smtpTesting}>
-                {smtpTesting ? 'בודק…' : '🔌 בדוק חיבור'}
+                {smtpTesting ? t('checking_dots') : `🔌 ${t('test_connection')}`}
               </button>
               <button type="button" className="nm-btn nm-btn-ghost"
                 onClick={() => testSmtp(true)} disabled={smtpTesting}>
-                ✉️ שלח מייל בדיקה
+                ✉️ {t('send_test_email')}
               </button>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                הבדיקה משתמשת בהגדרות <b>השמורות</b> — שמור לפני שאתה בודק שינויים
+                {t('smtp_test_hint')}
               </span>
             </div>
 
@@ -336,60 +338,60 @@ export default function AdminPage() {
               onChange={handleSettingChange} placeholder="CN=netmonitor_svc,OU=Service Accounts,DC=company,DC=local" />
             <SettingField label="Bind Password" name="ldap_bind_password" type="password"
               value={settings.ldap_bind_password === '***' ? '' : settings.ldap_bind_password}
-              onChange={handleSettingChange} placeholder="השאר ריק לשמירת הישן" />
+              onChange={handleSettingChange} placeholder={t('keep_existing_ph')} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-              <SettingField label="קבוצת Admin" name="ad_admin_group" value={settings.ad_admin_group}
+              <SettingField label={t('ad_admin_group')} name="ad_admin_group" value={settings.ad_admin_group}
                 onChange={handleSettingChange} placeholder="NetMonitor_Admins" />
-              <SettingField label="קבוצת Viewer" name="ad_viewer_group" value={settings.ad_viewer_group}
+              <SettingField label={t('ad_viewer_group')} name="ad_viewer_group" value={settings.ad_viewer_group}
                 onChange={handleSettingChange} placeholder="NetMonitor_Viewers" />
             </div>
           </Section>
 
           <Section title="⏱ Polling">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-              <SettingField label="ברירת מחדל polling (שניות)" name="default_poll_interval"
+              <SettingField label={t('default_poll_label')} name="default_poll_interval"
                 value={settings.default_poll_interval} onChange={handleSettingChange}
                 placeholder="300" />
-              <SettingField label="שמירת היסטוריה (ימים)" name="retention_days"
+              <SettingField label={t('retention_label')} name="retention_days"
                 value={settings.retention_days} onChange={handleSettingChange}
                 placeholder="7" />
             </div>
           </Section>
 
-          <Section title="🌙 שעות שקט (Maintenance Window)">
+          <Section title={`🌙 ${t('quiet_hours_section')}`}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-              בשעות אלו מיילי התראה לא יישלחו. האירועים עדיין נרשמים ב-DB.
+              {t('quiet_hours_hint')}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-              <SettingField label="התחלה (HH:MM)" name="alert_quiet_from"
+              <SettingField label={t('quiet_from')} name="alert_quiet_from"
                 value={settings.alert_quiet_from} onChange={handleSettingChange}
                 placeholder="02:00" />
-              <SettingField label="סיום (HH:MM)" name="alert_quiet_to"
+              <SettingField label={t('quiet_to')} name="alert_quiet_to"
                 value={settings.alert_quiet_to} onChange={handleSettingChange}
                 placeholder="08:00" />
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-              השאר ריק כדי לבטל את החלון. תומך בחצות (לדוגמה 22:00–06:00).
+              {t('quiet_hours_note')}
             </div>
           </Section>
 
-          <Section title="🔗 קישורים במיילי התראה">
+          <Section title={`🔗 ${t('links_section')}`}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-              כתובת הבסיס של המערכת — תופיע כקישור ישיר למכשיר בגוף המייל.
+              {t('base_url_hint')}
             </div>
-            <SettingField label="כתובת בסיס (לדוגמה: http://10.221.0.5:8080)" name="app_base_url"
+            <SettingField label={t('base_url_label')} name="app_base_url"
               value={settings.app_base_url} onChange={handleSettingChange}
               placeholder="http://10.221.0.5:8080" />
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              השאר ריק אם אינך רוצה קישורים במיילים.
+              {t('base_url_note')}
             </div>
           </Section>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button type="submit" className="nm-btn nm-btn-primary" disabled={saving}>
-              {saving ? 'שומר...' : '💾 שמור הגדרות'}
+              {saving ? t('saving') : `💾 ${t('save_settings')}`}
             </button>
-            {saved && <span style={{ color: '#22c55e', fontSize: 13 }}>✅ נשמר בהצלחה</span>}
+            {saved && <span style={{ color: '#22c55e', fontSize: 13 }}>✅ {t('saved_ok')}</span>}
           </div>
         </form>
       )}
@@ -399,18 +401,18 @@ export default function AdminPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
             <button onClick={() => setAddUserOpen(true)} className="nm-btn nm-btn-primary">
-              + משתמש חדש
+              + {t('new_user')}
             </button>
           </div>
           <div className="nm-card" style={{ padding: 0 }}>
             <table className="nm-table">
               <thead>
                 <tr>
-                  <th>שם משתמש</th>
-                  <th>הרשאה</th>
+                  <th>{t('col_username')}</th>
+                  <th>{t('col_role')}</th>
                   <th>2FA</th>
-                  <th>כניסה אחרונה</th>
-                  <th>פעולות</th>
+                  <th>{t('col_last_login')}</th>
+                  <th>{t('col_actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -428,13 +430,13 @@ export default function AdminPage() {
                     </td>
                     <td>
                       {u.totp_enabled
-                        ? <span style={{ color: '#22c55e', fontSize: 12 }}>✅ מופעל</span>
+                        ? <span style={{ color: '#22c55e', fontSize: 12 }}>✅ {t('enabled_word')}</span>
                         : <span style={{ color: '#64748b', fontSize: 12 }}>—</span>
                       }
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {u.last_login
-                        ? new Date(u.last_login * 1000).toLocaleString('he-IL')
+                        ? new Date(u.last_login * 1000).toLocaleString()
                         : '—'}
                     </td>
                     <td>
@@ -444,13 +446,13 @@ export default function AdminPage() {
                             className="nm-btn nm-btn-ghost"
                             style={{ padding: '4px 8px', fontSize: 11 }}
                             onClick={() => resetUserTotp(u.id)}
-                          >↺ איפוס 2FA</button>
+                          >↺ {t('reset_2fa')}</button>
                         )}
                         <button
                           className="nm-btn nm-btn-danger"
                           style={{ padding: '4px 8px', fontSize: 11 }}
                           onClick={() => deleteUser(u.id)}
-                        >מחק</button>
+                        >{t('delete_btn')}</button>
                       </div>
                     </td>
                   </tr>
@@ -459,29 +461,29 @@ export default function AdminPage() {
             </table>
           </div>
 
-          <Modal open={addUserOpen} onClose={() => setAddUserOpen(false)} title="משתמש חדש">
+          <Modal open={addUserOpen} onClose={() => setAddUserOpen(false)} title={t('new_user')}>
             <form onSubmit={addUser}>
               <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>שם משתמש</label>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('col_username')}</label>
                 <input className="nm-input" value={newUser.username}
                   onChange={e => setNewUser(u => ({ ...u, username: e.target.value }))} required />
               </div>
               <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>סיסמה</label>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('password')}</label>
                 <input className="nm-input" type="password" value={newUser.password}
                   onChange={e => setNewUser(u => ({ ...u, password: e.target.value }))} required />
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>הרשאה</label>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('col_role')}</label>
                 <select className="nm-input" value={newUser.role}
                   onChange={e => setNewUser(u => ({ ...u, role: e.target.value }))}>
-                  <option value="viewer">Viewer — קריאה בלבד</option>
-                  <option value="admin">Admin — הרשאות מלאות</option>
+                  <option value="viewer">{t('role_viewer_desc')}</option>
+                  <option value="admin">{t('role_admin_desc')}</option>
                 </select>
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button type="button" className="nm-btn nm-btn-ghost" onClick={() => setAddUserOpen(false)}>ביטול</button>
-                <button type="submit" className="nm-btn nm-btn-primary">הוסף</button>
+                <button type="button" className="nm-btn nm-btn-ghost" onClick={() => setAddUserOpen(false)}>{t('cancel')}</button>
+                <button type="submit" className="nm-btn nm-btn-primary">{t('add')}</button>
               </div>
             </form>
           </Modal>

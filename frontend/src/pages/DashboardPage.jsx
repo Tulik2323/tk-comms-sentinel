@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useDevices } from '../hooks/useDevices';
 import StatusDot from '../components/ui/StatusDot';
 import { formatBps } from '../lib/api';
+import { formatAlert } from '../lib/alertFormat';
 import api from '../lib/api';
 
 // ---- סדר ברירת מחדל של ה-widgets ----
@@ -83,17 +84,18 @@ function CpuBar({ pct }) {
 
 // ---- Widget: Top Bandwidth ----
 function TopBandwidthWidget({ devices }) {
+  const { t } = useTranslation();
   const top = [...devices]
     .sort((a, b) => ((b.total_in_bps || 0) + (b.total_out_bps || 0)) - ((a.total_in_bps || 0) + (a.total_out_bps || 0)))
     .slice(0, 5);
   return (
     <div className="nm-card" style={{ height: '100%' }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--text-primary)' }}>📊 Top 5 — תעבורה</h2>
+      <h2 style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--text-primary)' }}>📊 {t('top_bandwidth_title')}</h2>
       <table className="nm-table">
-        <thead><tr><th>שם</th><th>IP</th><th colSpan={2}>תעבורה</th><th>סה"כ</th></tr></thead>
+        <thead><tr><th>{t('col_name')}</th><th>IP</th><th colSpan={2}>{t('col_traffic')}</th><th>{t('col_total')}</th></tr></thead>
         <tbody>
           {top.length === 0 ? (
-            <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>אין נתונים</td></tr>
+            <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{t('no_data')}</td></tr>
           ) : top.map(d => (
             <Link key={d.id} to={`/devices/${d.id}`} style={{ textDecoration: 'none', display: 'contents' }}>
               <tr style={{ cursor: 'pointer' }}>
@@ -120,15 +122,16 @@ function TopBandwidthWidget({ devices }) {
 
 // ---- Widget: Recent Alerts ----
 function RecentAlertsWidget({ alerts }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   return (
     <div className="nm-card" style={{ height: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-        <h2 style={{ margin: 0, fontSize: 14 }}>🔔 התראות אחרונות</h2>
-        <Link to="/alerts" style={{ fontSize: 12, color: 'var(--accent)' }}>הכל ←</Link>
+        <h2 style={{ margin: 0, fontSize: 14 }}>🔔 {t('recent_alerts_title')}</h2>
+        <Link to="/alerts" style={{ fontSize: 12, color: 'var(--accent)' }}>{t('see_all')} ←</Link>
       </div>
       {alerts.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>אין התראות 🎉</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>{t('no_alerts_msg')}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {alerts.slice(0, 6).map(a => (
@@ -146,10 +149,10 @@ function RecentAlertsWidget({ alerts }) {
                 background: a.resolved_at ? '#22c55e' : '#f97316',
               }} />
               <div>
-                <div style={{ color: 'var(--text-primary)', marginBottom: 2 }}>{a.message}</div>
+                <div style={{ color: 'var(--text-primary)', marginBottom: 2 }}>{formatAlert(a, t)}</div>
                 <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                  {new Date(a.sent_at * 1000).toLocaleString('he-IL')}
-                  {a.resolved_at && ' · נפתר'}
+                  {new Date(a.sent_at * 1000).toLocaleString()}
+                  {a.resolved_at && ` · ${t('resolved')}`}
                 </div>
               </div>
             </div>
@@ -162,6 +165,7 @@ function RecentAlertsWidget({ alerts }) {
 
 // ---- Widget: Top Ports ----
 function TopPortsWidget() {
+  const { t } = useTranslation();
   const [ports, setPorts] = useState([]);
 
   useEffect(() => {
@@ -172,22 +176,22 @@ function TopPortsWidget() {
 
   return (
     <div className="nm-card" style={{ height: '100%' }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>🔌 Top 10 — פורטים עמוסים</h2>
+      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>🔌 {t('top_ports_title')}</h2>
       <div style={{ overflowX: 'auto' }}>
         <table className="nm-table">
           <thead>
             <tr>
-              <th>מכשיר</th>
-              <th>פורט</th>
-              <th>תיאור</th>
-              <th>כניסה</th>
-              <th>יציאה</th>
-              <th>שגיאות</th>
+              <th>{t('col_device')}</th>
+              <th>{t('col_port')}</th>
+              <th>{t('col_description')}</th>
+              <th>{t('col_in')}</th>
+              <th>{t('col_out')}</th>
+              <th>{t('col_errors')}</th>
             </tr>
           </thead>
           <tbody>
             {ports.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>אין נתוני פורטים</td></tr>
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{t('no_port_data')}</td></tr>
             ) : ports.map(p => (
               <Link key={p.id} to={`/devices/${p.device_id}`} style={{ textDecoration: 'none', display: 'contents' }}>
                 <tr style={{ cursor: 'pointer' }}>
@@ -215,6 +219,7 @@ function TopPortsWidget() {
 
 // ---- Widget: Problem Ports ----
 function ProblemPortsWidget() {
+  const { t } = useTranslation();
   const [ports, setPorts] = useState([]);
 
   useEffect(() => {
@@ -225,21 +230,21 @@ function ProblemPortsWidget() {
 
   return (
     <div className="nm-card" style={{ height: '100%' }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>🚨 Top 10 — פורטים בעייתיים (24h)</h2>
+      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>🚨 {t('problem_ports_title')}</h2>
       <div style={{ overflowX: 'auto' }}>
         <table className="nm-table">
           <thead>
             <tr>
-              <th>מכשיר</th>
-              <th>פורט</th>
-              <th>התראות (24h)</th>
-              <th>שגיאות</th>
-              <th>תעבורה</th>
+              <th>{t('col_device')}</th>
+              <th>{t('col_port')}</th>
+              <th>{t('col_alerts_24h')}</th>
+              <th>{t('col_errors')}</th>
+              <th>{t('col_traffic')}</th>
             </tr>
           </thead>
           <tbody>
             {ports.length === 0 ? (
-              <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>אין בעיות פורטים ✅</td></tr>
+              <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{t('no_port_issues')}</td></tr>
             ) : ports.map(p => (
               <Link key={p.id} to={`/devices/${p.device_id}?port=${p.if_index}`} style={{ textDecoration: 'none', display: 'contents' }}>
                 <tr style={{ cursor: 'pointer' }}>
@@ -278,6 +283,7 @@ function ProblemPortsWidget() {
 
 // ---- Widget: Top CPU ----
 function TopCpuWidget() {
+  const { t } = useTranslation();
   const [cpuData, setCpuData] = useState([]);
 
   useEffect(() => {
@@ -288,9 +294,9 @@ function TopCpuWidget() {
 
   return (
     <div className="nm-card" style={{ height: '100%' }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>🔥 Top 5 — עומס CPU</h2>
+      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>🔥 {t('top_cpu_title')}</h2>
       {cpuData.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>אין נתוני CPU</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>{t('no_cpu_data')}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {cpuData.map(d => (
@@ -306,7 +312,7 @@ function TopCpuWidget() {
                 <CpuBar pct={d.cpu_pct || 0} />
                 {d.mem_pct != null && (
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
-                    זיכרון: {d.mem_pct.toFixed(1)}%
+                    {t('mem_label')}: {d.mem_pct.toFixed(1)}%
                   </div>
                 )}
               </div>
@@ -320,9 +326,10 @@ function TopCpuWidget() {
 
 // ---- Widget: All Devices Grid ----
 function AllDevicesWidget({ devices }) {
+  const { t } = useTranslation();
   return (
     <div className="nm-card">
-      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>🖧 כל המכשירים ({devices.length})</h2>
+      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>🖧 {t('all_devices_title')} ({devices.length})</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 8 }}>
         {devices.map(d => (
           <Link key={d.id} to={`/devices/${d.id}`} style={{ textDecoration: 'none' }}>
@@ -352,6 +359,7 @@ function AllDevicesWidget({ devices }) {
 
 // ---- Widget: Duplicate IP / IP Conflicts ----
 function DuplicateIpWidget() {
+  const { t } = useTranslation();
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -366,12 +374,12 @@ function DuplicateIpWidget() {
 
   return (
     <div className="nm-card" style={{ height: '100%' }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>⚠️ IP Conflicts</h2>
+      <h2 style={{ margin: '0 0 14px', fontSize: 14 }}>⚠️ {t('ip_conflicts_title')}</h2>
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 16 }}>בודק...</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 16 }}>{t('checking')}</div>
       ) : total === 0 ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', color: '#4ade80', fontSize: 13 }}>
-          <span style={{ fontSize: 18 }}>✅</span> לא נמצאו conflicts
+          <span style={{ fontSize: 18 }}>✅</span> {t('no_conflicts')}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -380,7 +388,7 @@ function DuplicateIpWidget() {
                                   border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, fontSize: 12 }}>
               <div style={{ color: '#f87171', fontWeight: 600 }}>⚡ {c.ip}</div>
               <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
-                מוגדר: <b>{c.name}</b> &nbsp;|&nbsp; SNMP מדווח: <b>{c.sys_name}</b>
+                Configured: <b>{c.name}</b> &nbsp;|&nbsp; SNMP: <b>{c.sys_name}</b>
               </div>
             </div>
           ))}
@@ -389,7 +397,7 @@ function DuplicateIpWidget() {
                                         border: '1px solid rgba(251,191,36,0.3)', borderRadius: 6, fontSize: 12 }}>
               <div style={{ color: '#fbbf24', fontWeight: 600 }}>🔁 LLDP: {c.device_ip}</div>
               <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
-                <b>{c.device_name}</b> נראה ב-<b>{c.seen_on_switch}</b> תחת שם <b>{c.remote_sys_name}</b>
+                <b>{c.device_name}</b> seen on <b>{c.seen_on_switch}</b> as <b>{c.remote_sys_name}</b>
               </div>
             </div>
           ))}
@@ -478,14 +486,14 @@ export default function DashboardPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 22, color: 'var(--text-primary)' }}>⚡ {t('dashboard')}</h1>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>גרור widgets לסידור</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('drag_to_sort')}</span>
           {order.join() !== DEFAULT_ORDER.join() && (
             <button className="nm-btn nm-btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }}
               onClick={() => { setOrder(DEFAULT_ORDER); localStorage.removeItem('nm_dash_order'); }}>
-              ↺ איפוס סדר
+              ↺ {t('reset_order')}
             </button>
           )}
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>מתרענן כל 30 שניות</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('auto_refresh_30s')}</span>
         </div>
       </div>
 
@@ -495,7 +503,7 @@ export default function DashboardPage() {
         <StatCard label={t('devices_up')} value={up} color="var(--status-up)" icon="✅"
           sub={devices.length ? `${Math.round(up / devices.length * 100)}%` : ''} to="/devices?status=up" />
         <StatCard label={t('devices_down')} value={down} color="var(--status-down)" icon="❌" to="/devices?status=down" />
-        <StatCard label="לא ידוע" value={unknown} color="var(--status-unknown)" icon="❓" to="/devices?status=unknown" />
+        <StatCard label={t('unknown')} value={unknown} color="var(--status-unknown)" icon="❓" to="/devices?status=unknown" />
         <StatCard
           label={t('open_alerts')}
           value={alerts.filter(a => !a.resolved_at).length}
@@ -509,9 +517,9 @@ export default function DashboardPage() {
           background: '#7f1d1d', border: '1px solid #ef4444', borderRadius: 8,
           padding: '12px 16px', marginBottom: 20, color: '#fecaca',
         }}>
-          ⚠️ {down} מכשיר{down > 1 ? 'ים' : ''} לא זמינים:{' '}
+          ⚠️ {t('devices_unavailable', { count: down, plural: down > 1 ? 's' : '' })}:{' '}
           {devices.filter(d => d.status === 'down').map(d =>
-            <Link key={d.id} to={`/devices/${d.id}`} style={{ color: '#fca5a5', marginLeft: 8 }}>
+            <Link key={d.id} to={`/devices/${d.id}`} style={{ color: '#fca5a5', marginInlineStart: 8 }}>
               {d.name || d.ip}
             </Link>
           )}

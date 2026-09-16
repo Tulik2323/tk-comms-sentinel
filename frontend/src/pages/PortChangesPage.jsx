@@ -1,22 +1,11 @@
 // PortChangesPage — יומן שינויי פורטים גלובלי עם בוחר מכשיר בצד
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 import StatusDot from '../components/ui/StatusDot';
 
-const ATTR_LABELS = {
-  if_alias:     'תיאור פורט',
-  admin_status: 'סטטוס Admin',
-  if_speed:     'מהירות',
-  pvid:         'VLAN',
-};
-
-const ATTR_COLORS = {
-  admin_status: { up: '#22c55e', down: '#ef4444' },
-  pvid:         '#a78bfa',
-  if_speed:     '#60a5fa',
-  if_alias:     'var(--text-secondary)',
-};
+const ATTR_KEYS = ['if_alias', 'admin_status', 'if_speed', 'pvid'];
 
 function fmtVal(attr, v) {
   if (v == null) return '—';
@@ -30,22 +19,27 @@ function fmtVal(attr, v) {
   return v;
 }
 
-function fmtTime(ts) {
-  return new Date(ts * 1000).toLocaleString('he-IL', {
+function fmtTime(ts, locale) {
+  return new Date(ts * 1000).toLocaleString(locale, {
     day: '2-digit', month: '2-digit', year: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   });
 }
 
-function fmtAgo(ts) {
-  const diff = Math.floor(Date.now() / 1000 - ts);
-  if (diff < 60)   return `לפני ${diff}ש'`;
-  if (diff < 3600) return `לפני ${Math.floor(diff / 60)} דק'`;
-  if (diff < 86400) return `לפני ${Math.floor(diff / 3600)} שע'`;
-  return `לפני ${Math.floor(diff / 86400)} ימים`;
-}
-
 export default function PortChangesPage() {
+  const { t, i18n }  = useTranslation();
+  const locale       = i18n.language === 'he' ? 'he-IL' : 'en-GB';
+
+  const ATTR_LABELS = Object.fromEntries(ATTR_KEYS.map(k => [k, t(`attr_${k}`)]));
+
+  const fmtAgo = (ts) => {
+    const diff = Math.floor(Date.now() / 1000 - ts);
+    if (diff < 60)    return t('ago_sec',  { n: diff });
+    if (diff < 3600)  return t('ago_min',  { n: Math.floor(diff / 60) });
+    if (diff < 86400) return t('ago_hour', { n: Math.floor(diff / 3600) });
+    return t('ago_day', { n: Math.floor(diff / 86400) });
+  };
+
   const [devices,      setDevices]      = useState([]);
   const [selectedId,   setSelectedId]   = useState('all');
   const [changes,      setChanges]      = useState([]);
@@ -91,19 +85,19 @@ export default function PortChangesPage() {
   return (
     <div style={{ display: 'flex', height: '100%', minHeight: 'calc(100vh - 0px)' }}>
 
-      {/* פאנל שמאל — בוחר מכשיר */}
+      {/* פאנל צד — בוחר מכשיר */}
       <aside style={{
-        width: 240, flexShrink: 0, borderLeft: '1px solid var(--border)',
+        width: 240, flexShrink: 0, borderInlineEnd: '1px solid var(--border)',
         background: 'var(--bg-secondary)', display: 'flex', flexDirection: 'column',
         overflowY: 'auto',
       }}>
         <div style={{ padding: '16px 12px 8px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-            📋 יומן שינויי פורטים
+            📋 {t('port_changes_log')}
           </div>
           <input
             type="text"
-            placeholder="סנן מכשיר..."
+            placeholder={t('filter_device_ph')}
             value={devSearch}
             onChange={e => setDevSearch(e.target.value)}
             style={{
@@ -120,15 +114,16 @@ export default function PortChangesPage() {
           style={{
             width: '100%', padding: '10px 14px', border: 'none', cursor: 'pointer',
             background: selectedId === 'all' ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
-            borderBottom: '1px solid var(--border)', textAlign: 'right',
+            borderBottom: '1px solid var(--border)', textAlign: 'start',
             color: selectedId === 'all' ? 'var(--accent)' : 'var(--text-secondary)',
             fontSize: 13, fontWeight: selectedId === 'all' ? 700 : 400,
-            borderRight: selectedId === 'all' ? '3px solid var(--accent)' : '3px solid transparent',
+            borderInlineStart: selectedId === 'all' ? '3px solid var(--accent)' : '3px solid transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
           }}
         >
-          🌐 כל המכשירים
+          <span>🌐 {t('all_devices_btn')}</span>
           <span style={{
-            float: 'left', fontSize: 11,
+            fontSize: 11,
             background: 'var(--bg-hover)', padding: '1px 6px', borderRadius: 10,
             color: 'var(--text-muted)',
           }}>
@@ -146,10 +141,10 @@ export default function PortChangesPage() {
               background: String(selectedId) === String(d.id)
                 ? 'color-mix(in srgb, var(--accent) 15%, transparent)'
                 : 'transparent',
-              borderBottom: '1px solid var(--border)', textAlign: 'right',
+              borderBottom: '1px solid var(--border)', textAlign: 'start',
               color: String(selectedId) === String(d.id) ? 'var(--accent)' : 'var(--text-secondary)',
               fontSize: 12,
-              borderRight: String(selectedId) === String(d.id) ? '3px solid var(--accent)' : '3px solid transparent',
+              borderInlineStart: String(selectedId) === String(d.id) ? '3px solid var(--accent)' : '3px solid transparent',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -164,7 +159,7 @@ export default function PortChangesPage() {
                 {d.change_count}
               </span>
             </div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, paddingRight: 13 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, paddingInlineStart: 13 }}>
               {d.ip} · {fmtAgo(d.last_change)}
             </div>
           </button>
@@ -172,7 +167,7 @@ export default function PortChangesPage() {
 
         {filteredDevices.length === 0 && (
           <div style={{ padding: 16, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
-            אין מכשירים עם שינויים
+            {t('no_devices_with_changes')}
           </div>
         )}
       </aside>
@@ -189,8 +184,8 @@ export default function PortChangesPage() {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
               {selected
-                ? <><Link to={`/devices/${selected.id}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>🖧 {selected.name}</Link> — שינויי פורטים</>
-                : '🌐 כל השינויים'}
+                ? <><Link to={`/devices/${selected.id}`} style={{ color: 'var(--accent)', textDecoration: 'none' }}>🖧 {selected.name}</Link> — {t('port_changes')}</>
+                : `🌐 ${t('all_changes')}`}
             </div>
             {selected && (
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{selected.ip}</div>
@@ -207,7 +202,7 @@ export default function PortChangesPage() {
               color: 'var(--text-primary)',
             }}
           >
-            <option value="all">כל הסוגים</option>
+            <option value="all">{t('all_types')}</option>
             {Object.entries(ATTR_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
             ))}
@@ -220,7 +215,7 @@ export default function PortChangesPage() {
               checked={autoRefresh}
               onChange={e => setAutoRefresh(e.target.checked)}
             />
-            רענון אוטומטי
+            {t('auto_refresh')}
           </label>
 
           <button
@@ -232,17 +227,17 @@ export default function PortChangesPage() {
               color: 'var(--text-primary)', cursor: 'pointer',
             }}
           >
-            {loading ? '⏳' : '🔄'} רענן
+            {loading ? '⏳' : '🔄'} {t('refresh')}
           </button>
         </div>
 
         {/* טבלת שינויים */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>
           {loading && changes.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>טוען...</div>
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>{t('loading')}</div>
           ) : changes.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-              אין שינויים ב-14 הימים האחרונים
+              {t('no_changes_14d')}
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -252,13 +247,13 @@ export default function PortChangesPage() {
                   zIndex: 10, borderBottom: '2px solid var(--border)',
                 }}>
                   {selectedId === 'all' && (
-                    <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11, whiteSpace: 'nowrap' }}>מכשיר</th>
+                    <th style={{ padding: '10px 16px', textAlign: 'start', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11, whiteSpace: 'nowrap' }}>{t('col_device')}</th>
                   )}
-                  <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11, whiteSpace: 'nowrap' }}>זמן</th>
-                  <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11 }}>פורט</th>
-                  <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11 }}>שינוי</th>
-                  <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11 }}>מ</th>
-                  <th style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11 }}>אל</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'start', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11, whiteSpace: 'nowrap' }}>{t('col_time')}</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'start', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11 }}>{t('col_port')}</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'start', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11 }}>{t('col_change')}</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'start', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11 }}>{t('col_from')}</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'start', fontWeight: 600, color: 'var(--text-muted)', fontSize: 11 }}>{t('col_to')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -282,7 +277,7 @@ export default function PortChangesPage() {
                       </td>
                     )}
                     <td style={{ padding: '9px 16px', whiteSpace: 'nowrap' }}>
-                      <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>{fmtTime(c.changed_at)}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>{fmtTime(c.changed_at, locale)}</div>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtAgo(c.changed_at)}</div>
                     </td>
                     <td style={{ padding: '9px 16px', whiteSpace: 'nowrap' }}>
@@ -311,7 +306,7 @@ export default function PortChangesPage() {
         </div>
 
         <div style={{ padding: '8px 20px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)' }}>
-          {changes.length} שינויים · שמירה ל-14 ימים · {autoRefresh ? 'מתרענן כל 30 שניות' : 'רענון ידני'}
+          {t('changes_footer', { count: changes.length })} · {autoRefresh ? t('auto_refresh_30s') : t('manual_refresh')}
         </div>
       </div>
     </div>

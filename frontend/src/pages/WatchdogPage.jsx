@@ -2,6 +2,8 @@
 // מוציא מה-DevicesPage Modal לדף עצמאי נקי.
 // מציג רק פורטים שהשתנו, לפי סדר הזמן — לא את כל הפורטים.
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../lib/i18n';
 import { useDevices } from '../hooks/useDevices';
 
 const POLL_MS   = 3000;
@@ -32,7 +34,9 @@ function sendNotification(c) {
   try {
     if ('Notification' in window && Notification.permission === 'granted') {
       const n = new Notification(
-        c.curr === 'down' ? '🔴 פורט ירד — Watchdog' : '🟢 פורט עלה — Watchdog',
+        c.curr === 'down'
+          ? `🔴 ${i18n.t('notif_port_down')}`
+          : `🟢 ${i18n.t('notif_port_up')}`,
         { body: `${c.devName}\n${c.if_name}`, tag: `${c.deviceId}_${c.if_index}` }
       );
       setTimeout(() => { try { n.close(); } catch (_) {} }, 8000);
@@ -55,6 +59,7 @@ function buildIndex(portsArr) {
 }
 
 export default function WatchdogPage() {
+  const { t }                   = useTranslation();
   const { devices }             = useDevices();
   const upDevices               = devices.filter(d => d.status === 'up');
 
@@ -81,7 +86,7 @@ export default function WatchdogPage() {
 
   async function start() {
     setError('');
-    if (selected.size === 0) { setError('יש לבחור לפחות מתג אחד'); return; }
+    if (selected.size === 0) { setError(t('select_switch_first')); return; }
 
     // בקש הרשאת התראות
     try {
@@ -170,7 +175,7 @@ export default function WatchdogPage() {
       {/* ── Left panel — device selector ──────────────────────────────── */}
       <aside style={{
         width: 260, minWidth: 220, flexShrink: 0,
-        borderLeft: '1px solid var(--border)',
+        borderInlineEnd: '1px solid var(--border)',
         display: 'flex', flexDirection: 'column',
         padding: '16px 12px',
         background: 'var(--bg-card)',
@@ -181,7 +186,7 @@ export default function WatchdogPage() {
 
         <input
           className="nm-input"
-          placeholder="🔎 חפש מתג..."
+          placeholder={`🔎 ${t('search_switch')}`}
           value={devSearch}
           onChange={e => setDevSearch(e.target.value)}
           style={{ fontSize: 12, marginBottom: 8 }}
@@ -190,7 +195,7 @@ export default function WatchdogPage() {
         <div style={{ flex: 1, overflowY: 'auto', marginBottom: 12 }}>
           {filteredDevices.length === 0 && (
             <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: 8, textAlign: 'center' }}>
-              אין מתגים פעילים
+              {t('no_active_switches')}
             </div>
           )}
           {filteredDevices.map(d => {
@@ -242,7 +247,7 @@ export default function WatchdogPage() {
               opacity:    selected.size > 0 ? 1 : 0.5,
             }}
           >
-            ▶ התחל ניטור
+            ▶ {t('start_monitoring')}
           </button>
         ) : (
           <button
@@ -250,13 +255,13 @@ export default function WatchdogPage() {
             onClick={stop}
             style={{ width: '100%', justifyContent: 'center', color: '#ef4444' }}
           >
-            ⏹ עצור
+            ⏹ {t('stop_monitoring')}
           </button>
         )}
 
         {running && (
           <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
-            {notifyOk ? '🔔 התראות פעילות' : '🔕 ללא התראות דפדפן'}
+            {notifyOk ? `🔔 ${t('notifications_on')}` : `🔕 ${t('notifications_off')}`}
           </div>
         )}
       </aside>
@@ -270,7 +275,7 @@ export default function WatchdogPage() {
             <>
               <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
                              background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#22c55e' }}>מנטר</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#22c55e' }}>{t('monitoring_active')}</span>
               {[...selected].map(id => {
                 const d = devices.find(x => String(x.id) === id);
                 return d ? (
@@ -285,17 +290,17 @@ export default function WatchdogPage() {
             </>
           ) : (
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              {changes.length > 0 ? `${changes.length} שינויים זוהו — הניטור הופסק` : 'בחר מתג ולחץ "התחל ניטור"'}
+              {changes.length > 0 ? t('changes_stopped', { count: changes.length }) : t('select_switch_hint')}
             </span>
           )}
 
           {changes.length > 0 && (
             <button
               className="nm-btn nm-btn-ghost"
-              style={{ marginRight: 'auto', fontSize: 11, padding: '3px 10px' }}
+              style={{ marginInlineStart: 'auto', fontSize: 11, padding: '3px 10px' }}
               onClick={() => setChanges([])}
             >
-              נקה רשימה
+              {t('clear_list')}
             </button>
           )}
         </div>
@@ -306,7 +311,7 @@ export default function WatchdogPage() {
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: 'var(--text-muted)', fontSize: 13,
           }}>
-            {running ? '⏳ ממתין לשינויים...' : ''}
+            {running ? `⏳ ${t('waiting_changes')}` : ''}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -338,10 +343,10 @@ export default function WatchdogPage() {
                   {c.if_name}
                 </span>
                 <span style={{
-                  marginRight: 'auto', fontSize: 11, fontWeight: 700,
+                  marginInlineStart: 'auto', fontSize: 11, fontWeight: 700,
                   color: c.curr === 'down' ? '#ef4444' : '#22c55e',
                 }}>
-                  {c.curr === 'down' ? '↓ ירד' : '↑ עלה'}
+                  {c.curr === 'down' ? `↓ ${t('port_went_down')}` : `↑ ${t('port_went_up')}`}
                 </span>
               </div>
             ))}

@@ -10,10 +10,14 @@ router.get('/events', requireAuth, (req, res) => {
   const limit  = parseInt(req.query.limit  || '50');
   const offset = parseInt(req.query.offset || '0');
 
+  // port_label מאפשר ל-UI לבנות מחדש את נוסח ההתראה בשפה הנבחרת,
+  // במקום להציג את ה-message העברי הקפוא שנשמר ב-DB.
   const events = db.prepare(`
-    SELECT e.*, d.name AS device_name, d.ip AS device_ip
+    SELECT e.*, d.name AS device_name, d.ip AS device_ip,
+           COALESCE(p.if_alias, p.if_name, p.if_descr) AS port_label
     FROM alert_events e
     LEFT JOIN devices d ON d.id = e.device_id
+    LEFT JOIN ports   p ON p.device_id = e.device_id AND p.if_index = e.port_if_index
     ORDER BY e.sent_at DESC
     LIMIT ? OFFSET ?
   `).all(limit, offset);

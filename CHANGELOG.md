@@ -2,6 +2,22 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.3] — 2026-09-16
+
+### Fixed
+- **Full English translation coverage** — the v1.3.1/1.3.2 language switch only translated
+  the sidebar; every page's body content (Dashboard widgets, Alerts, Devices, Device Detail,
+  Port Changes, Watchdog, Trends, Audit, Topology, Map, Tools, Reports, Admin, License, Login)
+  was still hardcoded Hebrew. Added ~250 translation keys and wired every page through `t()`.
+- **Alert messages stored in Hebrew** — alert event messages were generated and saved in
+  Hebrew in the database, so they showed in Hebrew even in English mode. The frontend now
+  rebuilds the alert text client-side in the active language from the underlying metric/value/
+  threshold/port fields (`frontend/src/lib/alertFormat.js`); the `/alerts/events` API now also
+  returns `port_label` so port-specific alerts can be reworded.
+- **Remaining hardcoded `direction`/`textAlign: 'right'`/`he-IL` locale calls** — replaced with
+  logical CSS properties and locale-less `toLocaleString()` calls in Port Changes, Trends,
+  Topology, and Device Detail pages so dates and layout follow the selected language.
+
 ## [1.3.2] — 2026-09-15
 
 ### Fixed

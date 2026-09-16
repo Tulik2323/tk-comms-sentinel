@@ -1,11 +1,13 @@
 // ToolsPage — אבחון תקשורת מהשרת אל יעד נתון.
 // נועד לענות על השאלה "למה המכשיר הזה לא נקלט" בלי לצאת ל-CLI.
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 
 const DEFAULT_PORTS = '22,23,80,443';
 
 function Row({ label, ok, ms, children, muted }) {
+  const { t } = useTranslation();
   return (
     <div style={{
       display: 'grid',
@@ -19,7 +21,7 @@ function Row({ label, ok, ms, children, muted }) {
         fontWeight: 700, fontSize: 13,
         color: muted ? 'var(--text-muted)' : ok ? 'var(--status-up)' : 'var(--status-down)',
       }}>
-        {muted ? '—' : ok ? '✅ תקין' : '❌ נכשל'}
+        {muted ? '—' : ok ? `✅ ${t('ok_label')}` : `❌ ${t('failed_label')}`}
         {ms != null && !muted && (
           <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginInlineStart: 6 }}>
             {ms}ms
@@ -32,6 +34,7 @@ function Row({ label, ok, ms, children, muted }) {
 }
 
 export default function ToolsPage() {
+  const { t }                         = useTranslation();
   const [target,      setTarget]      = useState('');
   const [ports,       setPorts]       = useState(DEFAULT_PORTS);
   const [community,   setCommunity]   = useState('');
@@ -54,7 +57,7 @@ export default function ToolsPage() {
       });
       setResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'שגיאה בהרצת האבחון');
+      setError(err.response?.data?.error || t('diag_error'));
     } finally {
       setLoading(false);
     }
@@ -68,9 +71,9 @@ export default function ToolsPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 20, margin: '0 0 4px' }}>🧰 כלי אבחון תקשורת</h1>
+      <h1 style={{ fontSize: 20, margin: '0 0 4px' }}>🧰 {t('tools_title')}</h1>
       <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '0 0 20px' }}>
-        בדיקות מבוצעות <b>מהשרת</b> אל היעד — בדיוק מהמקום שממנו הניטור עובד.
+        {t('tools_subtitle')}
       </p>
 
       <div className="nm-card" style={{ marginBottom: 16 }}>
@@ -78,7 +81,7 @@ export default function ToolsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
             <div>
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                כתובת IP או שם מארח *
+                {t('ip_or_host')}
               </label>
               <input className="nm-input" value={target} required
                 onChange={e => setTarget(e.target.value)}
@@ -86,7 +89,7 @@ export default function ToolsPage() {
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                פורטי TCP לבדיקה
+                {t('tcp_ports')}
               </label>
               <input className="nm-input" value={ports}
                 onChange={e => setPorts(e.target.value)}
@@ -98,11 +101,11 @@ export default function ToolsPage() {
               </label>
               <input className="nm-input" value={community}
                 onChange={e => setCommunity(e.target.value)}
-                placeholder="ריק = ברירת המחדל של המערכת" />
+                placeholder={t('community_default_ph')} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-                גרסת SNMP
+                {t('snmp_version_label')}
               </label>
               <select className="nm-input" value={snmpVersion}
                 onChange={e => setSnmpVersion(e.target.value)}>
@@ -114,7 +117,7 @@ export default function ToolsPage() {
 
           <button type="submit" className="nm-btn nm-btn-primary" disabled={loading}
             style={{ marginTop: 16, padding: '9px 22px' }}>
-            {loading ? 'בודק…' : '▶ הרץ אבחון'}
+            {loading ? t('checking_btn') : `▶ ${t('run_diag')}`}
           </button>
         </form>
       </div>
@@ -143,33 +146,33 @@ export default function ToolsPage() {
             {result.verdict.text}
           </div>
 
-          <Row label="פתרון שם (DNS)" ok={result.dns.ok} ms={result.dns.skipped ? null : result.dns.ms}
+          <Row label={t('dns_resolution')} ok={result.dns.ok} ms={result.dns.skipped ? null : result.dns.ms}
                muted={result.dns.skipped}>
             {result.dns.skipped
-              ? 'הוזנה כתובת IP — אין צורך בפתרון שם'
+              ? t('dns_ip_given')
               : result.dns.ok
                 ? result.dns.addresses.join(', ')
-                : `כשל: ${result.dns.detail}`}
+                : `${t('fail_prefix')}: ${result.dns.detail}`}
           </Row>
 
           <Row label="ICMP (ping)" ok={result.icmp.ok} ms={result.icmp.avgMs ?? result.icmp.ms}>
             {result.icmp.ok
-              ? `אובדן ${result.icmp.loss}%${result.icmp.avgMs != null ? ` · ממוצע ${result.icmp.avgMs}ms` : ''}`
+              ? `${t('loss_label')} ${result.icmp.loss}%${result.icmp.avgMs != null ? ` · ${t('avg_label')} ${result.icmp.avgMs}ms` : ''}`
               : result.icmp.detail}
           </Row>
 
-          {result.tcp.map(t => (
-            <Row key={t.port} label={`TCP ${t.port}${t.port === 22 ? ' (SSH)' : t.port === 443 ? ' (HTTPS)' : t.port === 80 ? ' (HTTP)' : t.port === 23 ? ' (Telnet)' : ''}`}
-                 ok={t.ok && !t.intercepted} ms={t.ms} muted={t.intercepted}>
-              {t.intercepted
+          {result.tcp.map(tcp => (
+            <Row key={tcp.port} label={`TCP ${tcp.port}${tcp.port === 22 ? ' (SSH)' : tcp.port === 443 ? ' (HTTPS)' : tcp.port === 80 ? ' (HTTP)' : tcp.port === 23 ? ' (Telnet)' : ''}`}
+                 ok={tcp.ok && !tcp.intercepted} ms={tcp.ms} muted={tcp.intercepted}>
+              {tcp.intercepted
                 ? <span style={{ color: 'var(--status-warn)' }}>
-                    לא אמין — הפורט נענה גם עבור כתובת שאינה קיימת, כלומר משהו ברשת מיירט אותו
+                    {t('port_unreliable')}
                   </span>
-                : t.ok
-                  ? (t.banner
-                      ? <span style={{ fontFamily: 'monospace', fontSize: 12, direction: 'ltr', display: 'inline-block' }}>{t.banner}</span>
-                      : 'פורט פתוח')
-                  : (t.detail === 'timeout' ? 'אין תגובה — מסונן או חסום' : `סגור (${t.detail})`)}
+                : tcp.ok
+                  ? (tcp.banner
+                      ? <span style={{ fontFamily: 'monospace', fontSize: 12, direction: 'ltr', display: 'inline-block' }}>{tcp.banner}</span>
+                      : t('port_open'))
+                  : (tcp.detail === 'timeout' ? t('port_no_response') : `${t('port_closed')} (${tcp.detail})`)}
             </Row>
           ))}
 
@@ -178,9 +181,7 @@ export default function ToolsPage() {
               marginTop: 12, padding: '8px 12px', borderRadius: 6, fontSize: 12,
               background: 'rgba(120,53,15,0.22)', border: '1px solid #c2610c', color: '#fcd9a8',
             }}>
-              ⚠ ברשת הזו פורט {result.interceptedPorts.join(' ו-')} נענה עבור <b>כל</b> כתובת,
-              גם כזו שאינה קיימת — כנראה proxy או סינון web. לכן בדיקות בפורטים האלה אינן
-              מעידות שהיעד קיים, והכלי מסמן אותן כלא אמינות.
+              ⚠ {t('intercept_warning', { ports: result.interceptedPorts.join(', ') })}
             </div>
           )}
 
@@ -193,12 +194,12 @@ export default function ToolsPage() {
                 </div>
                 {result.snmp.uptimeSec != null && (
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                    Uptime: {Math.floor(result.snmp.uptimeSec / 86400)} ימים
+                    Uptime: {Math.floor(result.snmp.uptimeSec / 86400)} {t('days_suffix')}
                   </div>
                 )}
               </div>
             ) : (
-              `${result.snmp.detail || 'לא מגיב'} — community: ${result.snmp.community}`
+              `${result.snmp.detail || t('snmp_no_response')} — community: ${result.snmp.community}`
             )}
           </Row>
         </div>

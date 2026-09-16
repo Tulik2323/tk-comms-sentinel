@@ -1,6 +1,7 @@
 // DeviceDetailPage — פירוט מכשיר: פורטים + גרפים היסטוריים
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -19,7 +20,7 @@ function CustomTooltip({ active, payload, label }) {
       borderRadius: 6, padding: '8px 12px', fontSize: 12,
     }}>
       <div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>
-        {new Date(label * 1000).toLocaleString('he-IL')}
+        {new Date(label * 1000).toLocaleString()}
       </div>
       {payload.map(p => (
         <div key={p.dataKey} style={{ color: p.color }}>
@@ -31,6 +32,7 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function DeviceDetailPage() {
+  const { t }     = useTranslation();
   const { id }    = useParams();
   const [searchParams] = useSearchParams();
   const highlightIfIndex = Number(searchParams.get('port')) || null;
@@ -144,7 +146,7 @@ export default function DeviceDetailPage() {
   }, [ports, highlightIfIndex]);
 
   if (!device) {
-    return <div style={{ padding: 32, color: 'var(--text-muted)' }}>טוען...</div>;
+    return <div style={{ padding: 32, color: 'var(--text-muted)' }}>{t('loading_device')}</div>;
   }
 
   function togglePortSort(key) {
@@ -186,7 +188,7 @@ export default function DeviceDetailPage() {
     <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
       {/* Breadcrumb */}
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-        <Link to="/devices" style={{ color: 'var(--accent)' }}>מכשירים</Link>
+        <Link to="/devices" style={{ color: 'var(--accent)' }}>{t('devices')}</Link>
         {' › '}
         {device.name || device.ip}
       </div>
@@ -215,7 +217,7 @@ export default function DeviceDetailPage() {
         {/* Stats row */}
         <div style={{ display: 'flex', gap: 16 }}>
           {[
-            { label: 'פורטים פעילים', value: `${upPorts}/${ports.length}`, color: '#22c55e' },
+            { label: t('active_ports'), value: `${upPorts}/${ports.length}`, color: '#22c55e' },
             { label: 'CPU',   value: summary?.max_cpu   ? `${Math.round(summary.max_cpu)}%`      : '—', color: 'var(--accent)' },
             { label: 'Max ↓', value: summary?.max_in_bps ? formatBps(summary.max_in_bps)          : '—', color: '#22c55e' },
             { label: 'Max ↑', value: summary?.max_out_bps ? formatBps(summary.max_out_bps)        : '—', color: '#3b82f6' },
@@ -236,7 +238,7 @@ export default function DeviceDetailPage() {
         {/* Bandwidth Chart */}
         <div className="nm-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h3 style={{ margin: 0, fontSize: 14 }}>📊 תעבורה</h3>
+            <h3 style={{ margin: 0, fontSize: 14 }}>📊 {t('col_traffic')}</h3>
             <div style={{ display: 'flex', gap: 4 }}>
               {[6, 24, 72, 168].map(h => (
                 <button key={h} onClick={() => setHours(h)}
@@ -249,7 +251,7 @@ export default function DeviceDetailPage() {
           </div>
           {metricsLoading ? (
             <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-              טוען...
+              {t('loading')}
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
@@ -265,13 +267,13 @@ export default function DeviceDetailPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="ts" tickFormatter={ts => new Date(ts * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                <XAxis dataKey="ts" tickFormatter={ts => new Date(ts * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                   tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
                 <YAxis tickFormatter={v => formatBps(v)} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} width={70} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
-                <Area type="monotone" dataKey="total_in_bps"  name="נכנס"  stroke="#22c55e" fill="url(#inGrad)"  strokeWidth={2} dot={false} />
-                <Area type="monotone" dataKey="total_out_bps" name="יוצא"  stroke="#3b82f6" fill="url(#outGrad)" strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="total_in_bps"  name={t('in_word')}  stroke="#22c55e" fill="url(#inGrad)"  strokeWidth={2} dot={false} />
+                <Area type="monotone" dataKey="total_out_bps" name={t('out_word')} stroke="#3b82f6" fill="url(#outGrad)" strokeWidth={2} dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           )}
@@ -296,7 +298,7 @@ export default function DeviceDetailPage() {
       {/* Hardware Status (FAN / PSU / Temp) — מוצג רק למכשירי Comware עם נתונים */}
       {hw && (
         <div className="nm-card" style={{ marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>🔧 מצב חומרה</h3>
+          <h3 style={{ margin: '0 0 12px', fontSize: 14 }}>🔧 {t('hw_status')}</h3>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {/* FANs — badge ירוק כולל עם מונה, ו-badge אדום לכל FAN כושל */}
             {hw.fans && (() => {
@@ -335,14 +337,14 @@ export default function DeviceDetailPage() {
               </div>
             ))}
             {/* Temperature */}
-            {hw.temps && hw.temps.map(t => (
-              <div key={'temp' + t.idx} style={{
+            {hw.temps && hw.temps.map(tmp => (
+              <div key={'temp' + tmp.idx} style={{
                 padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                background: t.celsius > 60 ? 'rgba(239,68,68,0.15)' : t.celsius > 45 ? 'rgba(249,115,22,0.12)' : 'rgba(59,130,246,0.1)',
-                border: `1px solid ${t.celsius > 60 ? '#ef4444' : t.celsius > 45 ? '#f97316' : '#3b82f6'}`,
-                color: t.celsius > 60 ? '#ef4444' : t.celsius > 45 ? '#f97316' : '#3b82f6',
+                background: tmp.celsius > 60 ? 'rgba(239,68,68,0.15)' : tmp.celsius > 45 ? 'rgba(249,115,22,0.12)' : 'rgba(59,130,246,0.1)',
+                border: `1px solid ${tmp.celsius > 60 ? '#ef4444' : tmp.celsius > 45 ? '#f97316' : '#3b82f6'}`,
+                color: tmp.celsius > 60 ? '#ef4444' : tmp.celsius > 45 ? '#f97316' : '#3b82f6',
               }}>
-                🌡 {t.celsius}°C
+                🌡 {tmp.celsius}°C
               </div>
             ))}
           </div>
@@ -357,7 +359,7 @@ export default function DeviceDetailPage() {
           borderBottom: '1px solid var(--border)',
         }}>
           <h3 style={{ margin: 0, fontSize: 14 }}>
-            🔌 פורטים ({upPorts} פעילים / {downPorts} כבויים)
+            🔌 {t('ports_header', { up: upPorts, down: downPorts })}
           </h3>
           <div style={{ display: 'flex', gap: 6 }}>
             {['all', 'up', 'down'].map(f => (
@@ -365,7 +367,7 @@ export default function DeviceDetailPage() {
                 onClick={() => setPortFilter(f)}
                 className={`nm-btn ${portFilter === f ? 'nm-btn-primary' : 'nm-btn-ghost'}`}
                 style={{ padding: '4px 10px', fontSize: 11 }}>
-                {f === 'all' ? 'הכל' : f === 'up' ? '✅' : '❌'}
+                {f === 'all' ? t('filter_all') : f === 'up' ? '✅' : '❌'}
               </button>
             ))}
           </div>
@@ -377,19 +379,19 @@ export default function DeviceDetailPage() {
               <tr>
                 {[
                   ['if_index', '#'],
-                  ['if_name',  'שם פורט'],
-                  [null,       'תיאור'],
-                  ['if_speed', 'מהירות'],
+                  ['if_name',  t('col_port_name')],
+                  [null,       t('col_description')],
+                  ['if_speed', t('col_speed')],
                   [null,       'Admin'],
                   [null,       'Oper'],
-                  ['in_bps',   'תעבורה ↓'],
-                  ['out_bps',  'תעבורה ↑'],
-                  ['in_errors','שגיאות ↓'],
+                  ['in_bps',   `${t('col_traffic')} ↓`],
+                  ['out_bps',  `${t('col_traffic')} ↑`],
+                  ['in_errors',t('col_errors_in')],
                 ].map(([key, label]) => (
                   <th key={label}
                     onClick={key ? () => togglePortSort(key) : undefined}
                     style={{ cursor: key ? 'pointer' : 'default', userSelect: 'none', whiteSpace: 'nowrap' }}
-                    title={key ? 'לחץ למיון' : ''}
+                    title={key ? t('sort_hint') : ''}
                   >
                     {label}
                     {key && (
@@ -406,7 +408,7 @@ export default function DeviceDetailPage() {
               {filteredPorts.length === 0 ? (
                 <tr>
                   <td colSpan={9} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 20 }}>
-                    אין פורטים
+                    {t('no_ports')}
                   </td>
                 </tr>
               ) : filteredPorts.map(p => {
@@ -466,17 +468,17 @@ export default function DeviceDetailPage() {
         <button
           onClick={togglePortChanges}
           style={{
-            width: '100%', textAlign: 'right', padding: '12px 16px',
+            width: '100%', textAlign: 'start', padding: '12px 16px',
             background: 'none', border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             color: 'var(--text-primary)', fontSize: 14, fontWeight: 600,
           }}
         >
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            {portChanges ? `${portChanges.length} שינויים` : 'לחץ לטעינה'}
+            {portChanges ? `${portChanges.length} ${t('changes_word')}` : t('click_to_load')}
           </span>
           <span>
-            📋 יומן שינויי פורטים
+            📋 {t('port_changes_log')}
             <span style={{ marginInlineStart: 6, fontSize: 12, opacity: 0.6 }}>
               {changesOpen ? '▲' : '▼'}
             </span>
@@ -487,25 +489,25 @@ export default function DeviceDetailPage() {
           <div style={{ borderTop: '1px solid var(--border)', overflowX: 'auto' }}>
             {!portChanges || portChanges.length === 0 ? (
               <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                {portChanges === null ? 'טוען...' : 'לא נרשמו שינויים ב-14 הימים האחרונים'}
+                {portChanges === null ? t('loading') : t('no_changes_recorded')}
               </div>
             ) : (
               <table className="nm-table">
                 <thead>
                   <tr>
-                    <th>זמן</th>
-                    <th>פורט</th>
-                    <th>שדה</th>
-                    <th>לפני</th>
-                    <th>אחרי</th>
+                    <th>{t('col_time')}</th>
+                    <th>{t('col_port')}</th>
+                    <th>{t('col_field')}</th>
+                    <th>{t('col_before')}</th>
+                    <th>{t('col_after')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {portChanges.map(c => {
                     const ATTR_LABELS = {
-                      if_alias:     'תיאור',
+                      if_alias:     t('col_description'),
                       admin_status: 'Admin',
-                      if_speed:     'מהירות',
+                      if_speed:     t('col_speed'),
                       pvid:         'VLAN',
                     };
                     const fmtSpeed = v => {
@@ -520,7 +522,7 @@ export default function DeviceDetailPage() {
                     return (
                       <tr key={c.id}>
                         <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                          {new Date(c.changed_at * 1000).toLocaleString('he-IL')}
+                          {new Date(c.changed_at * 1000).toLocaleString()}
                         </td>
                         <td style={{ fontSize: 12, fontWeight: 600 }}>{c.if_name || `#${c.if_index}`}</td>
                         <td style={{ fontSize: 12 }}>{ATTR_LABELS[c.attribute] || c.attribute}</td>
@@ -577,10 +579,10 @@ export default function DeviceDetailPage() {
               {[
                 { label: 'Oper Status', value: selectedPort.oper_status, color: selectedPort.oper_status === 'up' ? '#22c55e' : '#ef4444' },
                 { label: 'Admin Status', value: selectedPort.admin_status, color: selectedPort.admin_status === 'up' ? '#22c55e' : '#94a3b8' },
-                { label: 'תעבורה ↓', value: formatBps(selectedPort.in_bps),  color: '#22c55e' },
-                { label: 'תעבורה ↑', value: formatBps(selectedPort.out_bps), color: '#3b82f6' },
-                { label: 'שגיאות ↓', value: selectedPort.in_errors  > 0 ? selectedPort.in_errors.toLocaleString()  : '—', color: selectedPort.in_errors  > 0 ? '#ef4444' : 'var(--text-muted)' },
-                { label: 'שגיאות ↑', value: selectedPort.out_errors > 0 ? selectedPort.out_errors.toLocaleString() : '—', color: selectedPort.out_errors > 0 ? '#ef4444' : 'var(--text-muted)' },
+                { label: `${t('col_traffic')} ↓`, value: formatBps(selectedPort.in_bps),  color: '#22c55e' },
+                { label: `${t('col_traffic')} ↑`, value: formatBps(selectedPort.out_bps), color: '#3b82f6' },
+                { label: t('col_errors_in'),  value: selectedPort.in_errors  > 0 ? selectedPort.in_errors.toLocaleString()  : '—', color: selectedPort.in_errors  > 0 ? '#ef4444' : 'var(--text-muted)' },
+                { label: t('col_errors_out'), value: selectedPort.out_errors > 0 ? selectedPort.out_errors.toLocaleString() : '—', color: selectedPort.out_errors > 0 ? '#ef4444' : 'var(--text-muted)' },
               ].map(s => (
                 <div key={s.label} style={{
                   padding: '8px 12px', borderRadius: 8,
@@ -594,10 +596,10 @@ export default function DeviceDetailPage() {
 
             {/* Port Traffic History */}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>📈 היסטוריית תעבורה (24h)</div>
-              {portHistory === null && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>טוען...</div>}
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>📈 {t('port_history_24h')}</div>
+              {portHistory === null && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('loading')}</div>}
               {portHistory !== null && portHistory.length === 0 && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>אין נתונים עדיין — יתמלא מה-poll הבא</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('no_data_yet_poll')}</div>
               )}
               {portHistory !== null && portHistory.length > 0 && (() => {
                 const fmt = ts => {
@@ -614,7 +616,7 @@ export default function DeviceDetailPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                       <XAxis dataKey="t" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} interval="preserveStartEnd" />
                       <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} unit="M" width={32} />
-                      <Tooltip formatter={(v, n) => [`${v} Mbps`, n === 'in' ? '↓ נכנס' : '↑ יוצא']}
+                      <Tooltip formatter={(v, n) => [`${v} Mbps`, n === 'in' ? `↓ ${t('in_word')}` : `↑ ${t('out_word')}`]}
                         contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', fontSize: 11 }} />
                       <Area type="monotone" dataKey="in"  stroke="#22c55e" fill="rgba(34,197,94,0.15)"  strokeWidth={1.5} dot={false} />
                       <Area type="monotone" dataKey="out" stroke="#3b82f6" fill="rgba(59,130,246,0.15)" strokeWidth={1.5} dot={false} />
@@ -626,22 +628,22 @@ export default function DeviceDetailPage() {
 
             {/* Endpoints */}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>🖥️ תחנות קצה מחוברות</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>🖥️ {t('connected_endpoints')}</div>
               {portEndpoints === null && (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>טוען...</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('loading')}</div>
               )}
               {portEndpoints !== null && portEndpoints.length === 0 && (
                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  לא נמצאו תחנות קצה — הנתונים מתעדכנים בכל poll (כל 5 דק׳)
+                  {t('no_endpoints_found')}
                 </div>
               )}
               {portEndpoints !== null && portEndpoints.length > 0 && (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
-                    <tr style={{ color: 'var(--text-muted)', textAlign: 'right' }}>
+                    <tr style={{ color: 'var(--text-muted)', textAlign: 'start' }}>
                       <th style={{ padding: '4px 8px', fontWeight: 500 }}>MAC</th>
                       <th style={{ padding: '4px 8px', fontWeight: 500 }}>IP</th>
-                      <th style={{ padding: '4px 8px', fontWeight: 500 }}>נראה לאחרונה</th>
+                      <th style={{ padding: '4px 8px', fontWeight: 500 }}>{t('last_seen')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -677,17 +679,17 @@ export default function DeviceDetailPage() {
 
             {/* Threshold Settings */}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>⚙️ סף התראה לפורט זה</div>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>⚙️ {t('port_threshold_title')}</div>
 
               {!portThresh && (
-                <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>טוען...</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t('loading')}</div>
               )}
 
               {portThresh && ['bandwidth_in', 'bandwidth_out'].map(metric => {
                 const eff     = portThresh.effective[metric];
                 const hasPort = portThresh.portOverrides?.[metric] != null;
                 const editVal = threshEdit[metric] ?? '';
-                const sourceLabel = { port: 'פורט ספציפי', device: 'מכשיר', global: 'גלובלי' };
+                const sourceLabel = { port: t('src_port'), device: t('src_device'), global: t('src_global') };
 
                 return (
                   <div key={metric} style={{
@@ -697,11 +699,11 @@ export default function DeviceDetailPage() {
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span style={{ fontSize: 12, fontWeight: 600 }}>
-                        {metric === 'bandwidth_in' ? '↓ תעבורה נכנסת' : '↑ תעבורה יוצאת'}
+                        {metric === 'bandwidth_in' ? `↓ ${t('metric_port_bandwidth_in')}` : `↑ ${t('metric_port_bandwidth_out')}`}
                       </span>
                       {eff && (
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          עכשיו: {eff.threshold_pct}% ({sourceLabel[eff.source] || eff.source})
+                          {t('now_label')}: {eff.threshold_pct}% ({sourceLabel[eff.source] || eff.source})
                         </span>
                       )}
                     </div>
@@ -724,7 +726,7 @@ export default function DeviceDetailPage() {
                         className="nm-btn nm-btn-primary"
                         style={{ padding: '5px 11px', fontSize: 12 }}
                       >
-                        שמור
+                        {t('save')}
                       </button>
                       {hasPort && (
                         <button
@@ -732,9 +734,9 @@ export default function DeviceDetailPage() {
                           disabled={threshSaving}
                           className="nm-btn nm-btn-ghost"
                           style={{ padding: '5px 9px', fontSize: 12, color: '#ef4444' }}
-                          title="הסר override — יחזור לסף המכשיר/גלובלי"
+                          title={t('reset_override_title')}
                         >
-                          ✕ אפס
+                          ✕ {t('reset_override')}
                         </button>
                       )}
                     </div>
@@ -743,8 +745,7 @@ export default function DeviceDetailPage() {
               })}
 
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>
-                סף ייעודי לפורט זה מנצח את הסף הגלובלי ואת סף המכשיר.
-                לחץ "אפס" כדי לחזור לירושה.
+                {t('port_threshold_hint')}
               </div>
             </div>
           </div>

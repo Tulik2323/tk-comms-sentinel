@@ -1,17 +1,19 @@
 // LicensePage — הצגת מצב רישוי + הפעלת מפתח (admin only)
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
-const STATUS_LABELS = {
-  valid:       { icon: '✅', text: 'בתוקף',           color: 'var(--tk-green)' },
-  grace:       { icon: '⏳', text: 'בתקופת גרייס',    color: '#f59e0b' },
-  expired:     { icon: '🚫', text: 'פג תוקף',          color: '#ef4444' },
-  invalid:     { icon: '⚠️', text: 'מפתח פגום',        color: '#ef4444' },
-  unlicensed:  { icon: '🔓', text: 'ללא רישוי (פיילוט)', color: 'var(--text-muted)' },
+const STATUS_META = {
+  valid:       { icon: '✅', key: 'lic_valid',      color: 'var(--tk-green)' },
+  grace:       { icon: '⏳', key: 'lic_grace',      color: '#f59e0b' },
+  expired:     { icon: '🚫', key: 'lic_expired',    color: '#ef4444' },
+  invalid:     { icon: '⚠️', key: 'lic_invalid',    color: '#ef4444' },
+  unlicensed:  { icon: '🔓', key: 'lic_unlicensed', color: 'var(--text-muted)' },
 };
 
 export default function LicensePage() {
+  const { t }    = useTranslation();
   const { user } = useAuth();
   const isAdmin  = user?.role === 'admin';
 
@@ -62,24 +64,25 @@ export default function LicensePage() {
       const { data } = await api.post('/license/activate', { key: key.trim() });
       setStatus(data.status);
       setKey('');
-      setMsg({ ok: true, text: 'הרישוי הופעל בהצלחה!' });
+      setMsg({ ok: true, text: t('lic_activated') });
     } catch (err) {
-      const errText = err.response?.data?.error || 'שגיאה לא צפויה';
+      const errText = err.response?.data?.error || t('unexpected_error');
       setMsg({ ok: false, text: errText });
     } finally {
       setSaving(false);
     }
   }
 
-  const info = status ? (STATUS_LABELS[status.status] || STATUS_LABELS.unlicensed) : null;
+  const meta = status ? (STATUS_META[status.status] || STATUS_META.unlicensed) : null;
+  const info = meta ? { ...meta, text: t(meta.key) } : null;
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 680, margin: '0 auto' }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-        🔑 רישוי מערכת
+        🔑 {t('license_title')}
       </h1>
       <p style={{ color: 'var(--text-muted)', marginBottom: 32, fontSize: 13 }}>
-        TK Comms Sentinel — ניהול רישוי ותוקף
+        {t('license_sub')}
       </p>
 
       {/* ─── Machine Fingerprint ─── */}
@@ -88,13 +91,13 @@ export default function LicensePage() {
         borderRadius: 12, padding: '24px 28px', marginBottom: 24,
       }}>
         <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          טביעת אצבע של המחשב
+          {t('machine_fingerprint')}
         </h2>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-          שלח קוד זה ל-TK כדי לקבל מפתח רישוי עבור מחשב זה.
+          {t('fingerprint_hint')}
         </p>
         {loading ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>טוען...</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('loading')}</div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <input
@@ -113,7 +116,7 @@ export default function LicensePage() {
               className="nm-btn"
               style={{ padding: '12px 20px', whiteSpace: 'nowrap', minWidth: 100 }}
             >
-              {copied ? '✅ הועתק' : '📋 העתק'}
+              {copied ? `✅ ${t('copied')}` : `📋 ${t('copy_btn')}`}
             </button>
           </div>
         )}
@@ -126,7 +129,7 @@ export default function LicensePage() {
           borderRadius: 12, padding: '24px 28px', marginBottom: 24,
         }}>
           <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            מצב רישוי נוכחי
+            {t('current_license')}
           </h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
             <span style={{ fontSize: 28 }}>{info.icon}</span>
@@ -136,29 +139,29 @@ export default function LicensePage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', fontSize: 13 }}>
             {status.customer && (
               <>
-                <span style={{ color: 'var(--text-muted)' }}>לקוח</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('customer')}</span>
                 <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{status.customer}</span>
               </>
             )}
             {status.expiry && (
               <>
-                <span style={{ color: 'var(--text-muted)' }}>תוקף עד</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('valid_until')}</span>
                 <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{status.expiry}</span>
               </>
             )}
             {status.status === 'valid' && (
               <>
-                <span style={{ color: 'var(--text-muted)' }}>ימים נותרו</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('days_left')}</span>
                 <span style={{ color: status.daysLeft <= 30 ? '#f59e0b' : 'var(--tk-green)', fontWeight: 700 }}>
-                  {status.daysLeft} יום
+                  {status.daysLeft} {t('day_unit')}
                 </span>
               </>
             )}
             {status.status === 'grace' && (
               <>
-                <span style={{ color: 'var(--text-muted)' }}>ימי גרייס נותרו</span>
+                <span style={{ color: 'var(--text-muted)' }}>{t('grace_days_left')}</span>
                 <span style={{ color: '#f59e0b', fontWeight: 700 }}>
-                  {status.graceDaysLeft} יום (מתוך {status.graceDays})
+                  {status.graceDaysLeft} {t('day_unit')} ({t('of_word')} {status.graceDays})
                 </span>
               </>
             )}
@@ -170,7 +173,7 @@ export default function LicensePage() {
               background: 'rgba(79,195,247,0.08)', border: '1px solid rgba(79,195,247,0.2)',
               fontSize: 13, color: 'var(--text-muted)',
             }}>
-              המערכת פועלת במצב פיילוט. לרישוי מסחרי — שלח את טביעת האצבע לעיל ל-TK.
+              {t('pilot_note')}
             </div>
           )}
         </section>
@@ -183,16 +186,16 @@ export default function LicensePage() {
           borderRadius: 12, padding: '24px 28px',
         }}>
           <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            הפעלת מפתח רישוי
+            {t('activate_key_title')}
           </h2>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-            הדבק את מפתח הרישוי שקיבלת מ-TK ולחץ "הפעל".
+            {t('activate_key_hint')}
           </p>
           <form onSubmit={handleActivate}>
             <textarea
               value={key}
               onChange={e => setKey(e.target.value)}
-              placeholder="הדבק מפתח רישוי כאן..."
+              placeholder={t('paste_key_ph')}
               rows={4}
               style={{
                 width: '100%', boxSizing: 'border-box',
@@ -220,11 +223,11 @@ export default function LicensePage() {
                 disabled={saving || !key.trim()}
                 style={{ padding: '10px 28px' }}
               >
-                {saving ? 'מפעיל...' : '🔑 הפעל רישוי'}
+                {saving ? t('activating') : `🔑 ${t('activate_license_btn')}`}
               </button>
               {key && (
                 <button type="button" className="nm-btn nm-btn-ghost" onClick={() => { setKey(''); setMsg(null); }}>
-                  נקה
+                  {t('clear_btn')}
                 </button>
               )}
             </div>
@@ -234,7 +237,7 @@ export default function LicensePage() {
 
       {!isAdmin && status?.status === 'unlicensed' && (
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 16, textAlign: 'center' }}>
-          פנה למנהל המערכת להפעלת רישוי.
+          {t('contact_admin')}
         </p>
       )}
     </div>

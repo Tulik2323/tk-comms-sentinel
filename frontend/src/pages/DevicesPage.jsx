@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import i18n from '../lib/i18n';
 import { useDevices } from '../hooks/useDevices';
 import { useAuth } from '../hooks/useAuth';
 import StatusDot from '../components/ui/StatusDot';
@@ -10,6 +11,7 @@ import { formatBps, formatUptime } from '../lib/api';
 import api from '../lib/api';
 
 function AddDeviceModal({ open, onClose, onAdded }) {
+  const { t } = useTranslation();
   const [form, setForm]   = useState({
     ip: '', name: '', community: 'public', snmp_version: 'v2c',
     poll_interval_sec: 300, location: '', notes: ''
@@ -27,7 +29,7 @@ function AddDeviceModal({ open, onClose, onAdded }) {
       onClose();
       setForm({ ip: '', name: '', community: 'public', snmp_version: 'v2c', poll_interval_sec: 300, location: '', notes: '' });
     } catch (err) {
-      setError(err.response?.data?.error || 'שגיאה');
+      setError(err.response?.data?.error || t('error'));
     } finally {
       setLoading(false);
     }
@@ -49,24 +51,24 @@ function AddDeviceModal({ open, onClose, onAdded }) {
   );
 
   return (
-    <Modal open={open} onClose={onClose} title="הוסף מכשיר">
+    <Modal open={open} onClose={onClose} title={t('add_device_title')}>
       {error && (
         <div style={{ background: '#7f1d1d', color: '#fecaca', padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
           {error}
         </div>
       )}
       <form onSubmit={submit}>
-        {field('כתובת IP *', 'ip', 'text', { required: true, placeholder: '192.168.1.1' })}
-        {field('שם (אופציונלי)', 'name', 'text', { placeholder: 'Core-SW-01' })}
+        {field(t('ip_address_req'), 'ip', 'text', { required: true, placeholder: '192.168.1.1' })}
+        {field(t('name_optional'), 'name', 'text', { placeholder: 'Core-SW-01' })}
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>גרסת SNMP</label>
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('snmp_version_label')}</label>
           <select
             className="nm-input"
             value={form.snmp_version}
             onChange={e => setForm(f => ({ ...f, snmp_version: e.target.value }))}
           >
             <option value="v2c">v2c (Community String)</option>
-            <option value="v3">v3 (מאובטח)</option>
+            <option value="v3">{t('snmp_v3_secure')}</option>
           </select>
         </div>
         {form.snmp_version === 'v2c'
@@ -77,12 +79,12 @@ function AddDeviceModal({ open, onClose, onAdded }) {
             {field('Priv Password', 'snmp_v3_priv', 'password')}
           </>
         }
-        {field('Polling Interval (שניות)', 'poll_interval_sec', 'number', { min: 30 })}
-        {field('מיקום', 'location', 'text', { placeholder: 'קומה 1 / מרכז נתונים' })}
+        {field(t('poll_interval_label'), 'poll_interval_sec', 'number', { min: 30 })}
+        {field(t('location_label'), 'location', 'text', { placeholder: t('location_ph') })}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-          <button type="button" className="nm-btn nm-btn-ghost" onClick={onClose}>ביטול</button>
+          <button type="button" className="nm-btn nm-btn-ghost" onClick={onClose}>{t('cancel')}</button>
           <button type="submit" className="nm-btn nm-btn-primary" disabled={loading}>
-            {loading ? 'מוסיף...' : 'הוסף מכשיר'}
+            {loading ? t('adding') : t('add_device_btn')}
           </button>
         </div>
       </form>
@@ -91,6 +93,7 @@ function AddDeviceModal({ open, onClose, onAdded }) {
 }
 
 function ScanModal({ open, onClose, onDone }) {
+  const { t } = useTranslation();
   const [startIp,     setStartIp]     = useState('');
   const [endIp,       setEndIp]       = useState('');
   const [cidr,        setCidr]        = useState('');
@@ -116,30 +119,30 @@ function ScanModal({ open, onClose, onDone }) {
       setResult(res.data);
       onDone();
     } catch (err) {
-      setError(err.response?.data?.error || 'שגיאת סריקה');
+      setError(err.response?.data?.error || t('scan_error'));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="🔍 סרוק טווח רשת">
+    <Modal open={open} onClose={onClose} title={`🔍 ${t('scan_network_title')}`}>
       {!result ? (
       <form onSubmit={submit}>
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-            CIDR (למשל 10.221.0.0/24):
+            {t('cidr_label')}
           </label>
           <input className="nm-input" value={cidr} onChange={e => { setCidr(e.target.value); if (e.target.value) { setStartIp(''); setEndIp(''); } }} placeholder="10.221.0.0/24" />
         </div>
-        <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: 8 }}>— או —</div>
+        <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: 8 }}>— {t('or_word')} —</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
           <div>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>IP התחלה:</label>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('ip_start')}</label>
             <input className="nm-input" value={startIp} onChange={e => { setStartIp(e.target.value); if (e.target.value) setCidr(''); }} placeholder="10.221.0.1" />
           </div>
           <div>
-            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>IP סיום:</label>
+            <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('ip_end')}</label>
             <input className="nm-input" value={endIp} onChange={e => { setEndIp(e.target.value); if (e.target.value) setCidr(''); }} placeholder="10.221.0.254" />
           </div>
         </div>
@@ -159,7 +162,7 @@ function ScanModal({ open, onClose, onDone }) {
         {loading && (
           <div style={{ padding: '10px 12px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
                         borderRadius: 6, marginBottom: 12, fontSize: 13, color: 'var(--accent)', textAlign: 'center' }}>
-            ⏳ סריקה בתהליך — המתן עד לסיום...
+            ⏳ {t('scan_in_progress')}
           </div>
         )}
         {error && (
@@ -169,16 +172,16 @@ function ScanModal({ open, onClose, onDone }) {
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" className="nm-btn nm-btn-ghost" onClick={onClose}>סגור</button>
+          <button type="button" className="nm-btn nm-btn-ghost" onClick={onClose}>{t('close_btn')}</button>
           <button type="submit" className="nm-btn nm-btn-primary" disabled={loading}>
-            {loading ? '⏳ סורק...' : '🔍 סרוק'}
+            {loading ? `⏳ ${t('scanning')}` : `🔍 ${t('scan')}`}
           </button>
         </div>
       </form>
       ) : (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
-            {[['נסרקו', result.total], ['הגיבו SNMP', result.found], ['נוספו חדשים', result.added]].map(([label, val]) => (
+            {[[t('scanned_label'), result.total], [t('snmp_responded'), result.found], [t('newly_added'), result.added]].map(([label, val]) => (
               <div key={label} style={{ textAlign: 'center', padding: '12px 8px', background: 'var(--bg-secondary)', borderRadius: 8 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: val > 0 ? 'var(--accent)' : 'var(--text-primary)' }}>{val}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{label}</div>
@@ -197,12 +200,12 @@ function ScanModal({ open, onClose, onDone }) {
           )}
           {result.found === 0 && (
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, textAlign: 'center' }}>
-              לא נמצאו מכשירי SNMP. בדוק community string וניתוב רשת.
+              {t('no_snmp_found')}
             </div>
           )}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="nm-btn nm-btn-ghost" onClick={() => reset()}>סריקה נוספת</button>
-            <button className="nm-btn nm-btn-primary" onClick={onClose}>סגור</button>
+            <button className="nm-btn nm-btn-ghost" onClick={() => reset()}>{t('scan_again')}</button>
+            <button className="nm-btn nm-btn-primary" onClick={onClose}>{t('close_btn')}</button>
           </div>
         </div>
       )}
@@ -212,6 +215,7 @@ function ScanModal({ open, onClose, onDone }) {
 
 // מודל עריכת מכשיר קיים
 function EditDeviceModal({ device, onClose, onSaved }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({
     ip:               device.ip           || '',
     name:             device.name         || '',
@@ -240,7 +244,7 @@ function EditDeviceModal({ device, onClose, onSaved }) {
       onSaved();
       onClose();
     } catch (err) {
-      setError(err.response?.data?.error || 'שגיאה בשמירה');
+      setError(err.response?.data?.error || t('save_error'));
     } finally {
       setLoading(false);
     }
@@ -260,37 +264,37 @@ function EditDeviceModal({ device, onClose, onSaved }) {
   );
 
   return (
-    <Modal open onClose={onClose} title={`✏️ עריכת מכשיר — ${device.name || device.ip}`}>
+    <Modal open onClose={onClose} title={`✏️ ${t('edit_device_title')} — ${device.name || device.ip}`}>
       {error && (
         <div style={{ background: '#7f1d1d', color: '#fecaca', padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
           {error}
         </div>
       )}
       <form onSubmit={submit}>
-        {field('כתובת IP *', 'ip', 'text', { required: true })}
-        {field('שם', 'name', 'text', { placeholder: 'Core-SW-01' })}
+        {field(t('ip_address_req'), 'ip', 'text', { required: true })}
+        {field(t('col_name'), 'name', 'text', { placeholder: 'Core-SW-01' })}
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>גרסת SNMP</label>
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('snmp_version_label')}</label>
           <select className="nm-input" value={form.snmp_version} onChange={e => setForm(f => ({ ...f, snmp_version: e.target.value }))}>
             <option value="v2c">v2c (Community String)</option>
-            <option value="v3">v3 (מאובטח)</option>
+            <option value="v3">{t('snmp_v3_secure')}</option>
           </select>
         </div>
         {form.snmp_version === 'v2c'
           ? field('Community String', 'community', 'text')
           : <>
             {field('SNMPv3 Username', 'snmp_v3_user')}
-            {field('Auth Password (השאר ריק לשמור הקיים)', 'snmp_v3_auth', 'password')}
-            {field('Priv Password (השאר ריק לשמור הקיים)', 'snmp_v3_priv', 'password')}
+            {field(t('keep_existing_auth'), 'snmp_v3_auth', 'password')}
+            {field(t('keep_existing_priv'), 'snmp_v3_priv', 'password')}
           </>
         }
-        {field('Polling Interval (שניות)', 'poll_interval_sec', 'number', { min: 30 })}
-        {field('מיקום', 'location', 'text', { placeholder: 'קומה 1 / מרכז נתונים' })}
-        {field('הערות', 'notes', 'text')}
+        {field(t('poll_interval_label'), 'poll_interval_sec', 'number', { min: 30 })}
+        {field(t('location_label'), 'location', 'text', { placeholder: t('location_ph') })}
+        {field(t('notes_label'), 'notes', 'text')}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-          <button type="button" className="nm-btn nm-btn-ghost" onClick={onClose}>ביטול</button>
+          <button type="button" className="nm-btn nm-btn-ghost" onClick={onClose}>{t('cancel')}</button>
           <button type="submit" className="nm-btn nm-btn-primary" disabled={loading}>
-            {loading ? 'שומר...' : '💾 שמור'}
+            {loading ? t('saving') : `💾 ${t('save')}`}
           </button>
         </div>
       </form>
@@ -300,6 +304,7 @@ function EditDeviceModal({ device, onClose, onSaved }) {
 
 // מודל ייבוא CSV
 function CsvImportModal({ open, onClose, onImported }) {
+  const { t } = useTranslation();
   const [csvText,  setCsvText]  = useState('');
   const [loading,  setLoading]  = useState(false);
   const [result,   setResult]   = useState(null);
@@ -315,7 +320,7 @@ function CsvImportModal({ open, onClose, onImported }) {
 
   async function submit(e) {
     e.preventDefault();
-    if (!csvText.trim()) { setError('הכנס תוכן CSV'); return; }
+    if (!csvText.trim()) { setError(t('enter_csv_content')); return; }
     setError('');
     setLoading(true);
     setResult(null);
@@ -324,7 +329,7 @@ function CsvImportModal({ open, onClose, onImported }) {
       setResult(res.data);
       onImported();
     } catch (err) {
-      setError(err.response?.data?.error || 'שגיאת ייבוא');
+      setError(err.response?.data?.error || t('import_error'));
     } finally {
       setLoading(false);
     }
@@ -336,22 +341,22 @@ function CsvImportModal({ open, onClose, onImported }) {
   }
 
   return (
-    <Modal open={open} onClose={handleClose} title="📥 ייבוא מכשירים מ-CSV">
+    <Modal open={open} onClose={handleClose} title={`📥 ${t('import_csv_title')}`}>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, background: 'var(--bg-secondary)', padding: '8px 12px', borderRadius: 6 }}>
-        פורמט: <code>ip,name,community,snmp_version,location</code><br />
-        דוגמה: <code>10.221.0.1,Core-SW-01,POCrd19,v2c,קומה 1</code><br />
-        שורות המתחילות ב-# מתעלמים מהן. <code>snmp_version</code> ברירת מחדל: v2c
+        {t('csv_format_hint')} <code>ip,name,community,snmp_version,location</code><br />
+        {t('csv_example')} <code>10.221.0.1,Core-SW-01,POCrd19,v2c,Floor 1</code><br />
+        {t('csv_comment_hint')} <code>snmp_version</code> {t('csv_default')}
       </div>
       <div style={{ marginBottom: 12 }}>
         <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-          העלה קובץ CSV:
+          {t('upload_csv')}
         </label>
         <input type="file" accept=".csv,.txt" onChange={handleFile}
           style={{ fontSize: 12, color: 'var(--text-secondary)' }} />
       </div>
       <div style={{ marginBottom: 12 }}>
         <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
-          או הדבק תוכן ישירות:
+          {t('paste_csv')}
         </label>
         <textarea
           className="nm-input"
@@ -359,7 +364,7 @@ function CsvImportModal({ open, onClose, onImported }) {
           style={{ fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
           value={csvText}
           onChange={e => setCsvText(e.target.value)}
-          placeholder={'192.168.1.1,SW-Core,public,מרכז נתונים\n192.168.1.2,SW-Floor1,public,קומה 1'}
+          placeholder={'192.168.1.1,SW-Core,public,DC\n192.168.1.2,SW-Floor1,public,Floor 1'}
         />
       </div>
       {error && (
@@ -369,9 +374,9 @@ function CsvImportModal({ open, onClose, onImported }) {
       )}
       {result && (
         <div style={{ background: '#14532d', color: '#bbf7d0', padding: '10px 14px', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
-          ✅ נוספו: {result.added?.length || 0} &nbsp;|&nbsp;
-          קיימים: {result.skipped?.length || 0} &nbsp;|&nbsp;
-          שגיאות: {result.errors?.length || 0}
+          ✅ {t('added_label')}: {result.added?.length || 0} &nbsp;|&nbsp;
+          {t('existing_label')}: {result.skipped?.length || 0} &nbsp;|&nbsp;
+          {t('errors_label')}: {result.errors?.length || 0}
           {result.added?.length > 0 && (
             <div style={{ marginTop: 6, fontSize: 11, color: '#86efac' }}>
               {result.added.join(', ')}
@@ -385,16 +390,16 @@ function CsvImportModal({ open, onClose, onImported }) {
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
                 a.download = 'import_errors.csv'; a.click();
               }}>
-              ⬇ הורד שגיאות כ-CSV ({result.errors.length})
+              ⬇ {t('download_errors', { count: result.errors.length })}
             </button>
           )}
         </div>
       )}
       <form onSubmit={submit}>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" className="nm-btn nm-btn-ghost" onClick={handleClose}>סגור</button>
+          <button type="button" className="nm-btn nm-btn-ghost" onClick={handleClose}>{t('close_btn')}</button>
           <button type="submit" className="nm-btn nm-btn-primary" disabled={loading || !!result}>
-            {loading ? 'מייבא...' : '📥 ייבא'}
+            {loading ? t('importing') : `📥 ${t('import')}`}
           </button>
         </div>
       </form>
@@ -524,8 +529,8 @@ export default function DevicesPage() {
         <div style={{ display: 'flex', gap: 8 }}>
           {isAdmin && <>
             <button onClick={() => setScanOpen(true)} className="nm-btn nm-btn-ghost">🔍 {t('scan')}</button>
-            <button onClick={() => setCsvOpen(true)} className="nm-btn nm-btn-ghost">📥 ייבוא CSV</button>
-            <button onClick={() => setWatchdogOpen(true)} className="nm-btn nm-btn-ghost" title="זיהוי פורט בניתוק">🔌 Watchdog</button>
+            <button onClick={() => setCsvOpen(true)} className="nm-btn nm-btn-ghost">📥 {t('import_csv')}</button>
+            <button onClick={() => setWatchdogOpen(true)} className="nm-btn nm-btn-ghost" title="Port Watchdog">🔌 Watchdog</button>
           </>}
           <button onClick={() => {
             const token = localStorage.getItem('nm_token');
@@ -534,7 +539,7 @@ export default function DevicesPage() {
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
                 a.download = 'devices_export.csv'; a.click();
               });
-          }} className="nm-btn nm-btn-ghost" title="ייצא מכשירים">⬇ ייצא</button>
+          }} className="nm-btn nm-btn-ghost">⬇ {t('export_btn')}</button>
           {isAdmin && (
             <button onClick={() => setAddOpen(true)} className="nm-btn nm-btn-primary">+ {t('add')}</button>
           )}
@@ -547,7 +552,7 @@ export default function DevicesPage() {
           <input
             className="nm-input"
             style={{ maxWidth: 280 }}
-            placeholder="🔎 שם / IP מכשיר / IP תחנה / MAC"
+            placeholder={`🔎 ${t('search_device_ph')}`}
             value={search}
             onChange={e => onSearchChange(e.target.value)}
           />
@@ -559,7 +564,7 @@ export default function DevicesPage() {
               minWidth: 380, maxWidth: 480, marginTop: 4, direction: 'rtl',
             }}>
               <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
-                🖥️ תחנות קצה שנמצאו ({endpResults.length})
+                🖥️ {t('endpoints_found', { count: endpResults.length })}
               </div>
               {endpResults.map((r, i) => (
                 <Link
@@ -588,7 +593,7 @@ export default function DevicesPage() {
                     </div>
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span>פורט: {r.if_alias || r.if_name || (r.phys_if_index ? `if_index ${r.phys_if_index}` : '—')}</span>
+                    <span>{t('port_label')}: {r.if_alias || r.if_name || (r.phys_if_index ? `if_index ${r.phys_if_index}` : '—')}</span>
                     {r.phys_if_index != null && (
                       r.is_uplink ? (
                         <span style={{ fontSize: 10, color: '#94a3b8' }}>
@@ -596,7 +601,7 @@ export default function DevicesPage() {
                         </span>
                       ) : (
                         <span style={{ fontSize: 10, color: '#4ade80', fontWeight: 600 }}>
-                          🔌 פורט קצה{r.macs_on_port != null ? ` · ${r.macs_on_port} MAC` : ''}
+                          🔌 {t('edge_port')}{r.macs_on_port != null ? ` · ${r.macs_on_port} MAC` : ''}
                         </span>
                       )
                     )}
@@ -606,7 +611,7 @@ export default function DevicesPage() {
               <div style={{ padding: '6px 14px', borderTop: '1px solid var(--border)' }}>
                 <button onClick={() => setEndpResults(null)}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--text-muted)' }}>
-                  סגור
+                  {t('close_btn')}
                 </button>
               </div>
             </div>
@@ -619,18 +624,17 @@ export default function DevicesPage() {
             className={`nm-btn ${filter === f ? 'nm-btn-primary' : 'nm-btn-ghost'}`}
             style={{ padding: '6px 14px' }}
           >
-            {f === 'all' ? 'הכל' : f === 'up' ? '✅ פעיל' : '❌ Down'}
+            {f === 'all' ? t('filter_all') : f === 'up' ? `✅ ${t('filter_up')}` : `❌ ${t('filter_down')}`}
           </button>
         ))}
         <button
-          onClick={() => setTempFilter(t => !t)}
+          onClick={() => setTempFilter(tf => !tf)}
           className={`nm-btn ${tempFilter ? 'nm-btn-primary' : 'nm-btn-ghost'}`}
           style={{ padding: '6px 14px' }}
-          title="סנן מכשירים עם טמפרטורה מעל 50°C"
         >
-          🌡️ חם ({'>'}50°C)
+          🌡️ {t('temp_filter')}
         </button>
-        <button onClick={refetch} className="nm-btn nm-btn-ghost" title="רענן">↺</button>
+        <button onClick={refetch} className="nm-btn nm-btn-ghost" title={t('refresh')}>↺</button>
       </div>
 
       {loading ? (
@@ -641,21 +645,21 @@ export default function DevicesPage() {
             <thead>
               <tr>
                 {[
-                  ['status',   'סטטוס'],
-                  ['name',     'שם'],
-                  ['model',    'דגם'],
+                  ['status',   t('status')],
+                  ['name',     t('col_name')],
+                  ['model',    t('col_model')],
                   ['ip',       'IP'],
-                  ['in_bps',   'תעבורה ↓'],
-                  ['out_bps',  'תעבורה ↑'],
+                  ['in_bps',   `${t('col_traffic')} ↓`],
+                  ['out_bps',  `${t('col_traffic')} ↑`],
                   ['cpu',      'CPU'],
-                  ['uptime',   'Uptime'],
-                  ['temp',     '🌡️ °C'],
-                  ['location', 'מיקום'],
+                  ['uptime',   t('col_uptime')],
+                  ['temp',     t('col_temp')],
+                  ['location', t('col_location')],
                 ].map(([key, label]) => (
                   <th
                     key={key}
                     onClick={() => toggleSort(key)}
-                    title="לחץ למיון"
+                    title={t('sort_hint')}
                     style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
                   >
                     {label}
@@ -668,7 +672,7 @@ export default function DevicesPage() {
                     </span>
                   </th>
                 ))}
-                {isAdmin && <th>פעולות</th>}
+                {isAdmin && <th>{t('col_actions')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -739,7 +743,7 @@ export default function DevicesPage() {
                             disabled={pollingIds.has(d.id)}
                             onClick={() => checkDevice(d.id)}
                           >
-                            {pollingIds.has(d.id) ? '⏳' : '🔍 בדיקה'}
+                            {pollingIds.has(d.id) ? '⏳' : `🔍 ${t('check_btn')}`}
                           </button>
                         )}
                         <button
@@ -747,14 +751,14 @@ export default function DevicesPage() {
                           style={{ padding: '4px 10px', fontSize: 12 }}
                           onClick={() => setEditDevice(d)}
                         >
-                          ✏️ ערוך
+                          ✏️ {t('edit_btn')}
                         </button>
                         <button
                           className="nm-btn nm-btn-danger"
                           style={{ padding: '4px 10px', fontSize: 12 }}
                           onClick={(e) => deleteDevice(d.id, e)}
                         >
-                          מחק
+                          {t('delete_btn')}
                         </button>
                       </div>
                     </td>
@@ -783,6 +787,7 @@ export default function DevicesPage() {
 
 // ---- Port Watchdog Modal ----
 function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
+  const { t } = useTranslation();
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [running,     setRunning]     = useState(false);
   const [baseline,    setBaseline]    = useState(null);
@@ -829,8 +834,8 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
     try {
       if ('Notification' in window && Notification.permission === 'granted') {
         const n = new Notification(
-          c.curr === 'down' ? '🔴 פורט ירד — Watchdog' : '🟢 פורט עלה — Watchdog',
-          { body: `${c.name}\nפורט ${c.if_name} · ${c.ts}`, tag: `${c.deviceId}_${c.if_index}` }
+          c.curr === 'down' ? `🔴 ${i18n.t('notif_port_down')}` : `🟢 ${i18n.t('notif_port_up')}`,
+          { body: `${c.name}\n${i18n.t('port_label')} ${c.if_name} · ${c.ts}`, tag: `${c.deviceId}_${c.if_index}` }
         );
         setTimeout(() => { try { n.close(); } catch (_) {} }, 8000);
       }
@@ -909,7 +914,7 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
   async function start() {
     setError(''); setChanged([]);
     const ids = [...selectedIds];
-    if (ids.length === 0) { setError('בחר לפחות מכשיר אחד'); return; }
+    if (ids.length === 0) { setError(t('select_at_least_one')); return; }
 
     // אתחול אודיו תחת מחוות המשתמש (לחיצה) — אחרת הדפדפן חוסם צליל.
     try {
@@ -932,7 +937,7 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
     } catch (_) {}
 
     const rawBase = await fetchStatuses(ids);
-    if (Object.keys(rawBase).length === 0) { setError('לא הצליח לקרוא סטטוס פורטים'); return; }
+    if (Object.keys(rawBase).length === 0) { setError(t('read_status_failed')); return; }
 
     const baseIdx = buildIndex(rawBase);
     prevIdxRef.current = baseIdx;  // נקודת ההשוואה הראשונה = הבסיס
@@ -1000,30 +1005,30 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
   }
 
   return (
-    <Modal open={open} onClose={() => { reset(); onClose(); }} title="🔌 Port Watchdog — זיהוי ניתוק פורט">
+    <Modal open={open} onClose={() => { reset(); onClose(); }} title={`🔌 ${t('port_watchdog_title')}`}>
       {/* בחירת מכשירים — checkboxes, עד 5 */}
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            בחר עד {MAX_SELECT} מתגים לניטור ({selectedIds.size}/{MAX_SELECT} נבחרו)
+            {t('select_switches', { max: MAX_SELECT, selected: selectedIds.size })}
           </label>
           {selectedIds.size > 0 && (
             <button className="nm-btn nm-btn-ghost" style={{ fontSize: 11, padding: '2px 8px' }}
               onClick={() => { setSelectedIds(new Set()); reset(); }}>
-              נקה הכל
+              {t('clear_all')}
             </button>
           )}
         </div>
         <input
           className="nm-input"
           style={{ width: '100%', marginBottom: 6, fontSize: 13 }}
-          placeholder="🔎 חפש מתג לפי שם או IP..."
+          placeholder={`🔎 ${t('search_switch_ph')}`}
           value={devSearch}
           onChange={e => setDevSearch(e.target.value)}
         />
         <div style={{ maxHeight: 160, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
           {devices.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: 8, textAlign: 'center' }}>אין מכשירים פעילים</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: 8, textAlign: 'center' }}>{t('no_active_devices')}</div>
           ) : (() => {
             const q = devSearch.trim().toLowerCase();
             const list = q
@@ -1032,7 +1037,7 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
                                   || (d.sys_name || '').toLowerCase().includes(q))
               : devices;
             if (list.length === 0) {
-              return <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: 8, textAlign: 'center' }}>לא נמצא מתג תואם</div>;
+              return <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: 8, textAlign: 'center' }}>{t('no_matching_switch')}</div>;
             }
             return list.map(d => {
             const id = String(d.id);
@@ -1057,12 +1062,12 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
         {!running ? (
           <button className="nm-btn nm-btn-primary" onClick={start} disabled={selectedIds.size === 0}
             style={{ padding: '8px 18px', opacity: selectedIds.size === 0 ? 0.5 : 1 }}>
-            ▶ התחל ניטור
+            ▶ {t('start_monitoring')}
           </button>
         ) : (
-          <button className="nm-btn nm-btn-ghost" onClick={stop} style={{ padding: '8px 18px', color: '#ef4444' }}>⏹ עצור</button>
+          <button className="nm-btn nm-btn-ghost" onClick={stop} style={{ padding: '8px 18px', color: '#ef4444' }}>⏹ {t('stop_monitoring')}</button>
         )}
-        {baseline && <button className="nm-btn nm-btn-ghost" onClick={reset} style={{ fontSize: 12 }}>↺ איפוס</button>}
+        {baseline && <button className="nm-btn nm-btn-ghost" onClick={reset} style={{ fontSize: 12 }}>↺ {t('reset_btn')}</button>}
       </div>
 
       {error && <div style={{ color: '#f87171', fontSize: 13, marginBottom: 10 }}>⚠ {error}</div>}
@@ -1077,10 +1082,10 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
         }}>
           <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 2,
             color: changed[0].curr === 'down' ? '#f87171' : '#4ade80' }}>
-            {changed[0].curr === 'down' ? '🔴 פורט ירד!' : '🟢 פורט עלה!'}
+            {changed[0].curr === 'down' ? `🔴 ${t('port_down_banner')}` : `🟢 ${t('port_up_banner')}`}
           </div>
           <div style={{ fontSize: 15, fontWeight: 600 }}>
-            {changed[0].name} — פורט <span style={{ fontFamily: 'monospace' }}>{changed[0].if_name}</span>
+            {changed[0].name} — {t('port_label')} <span style={{ fontFamily: 'monospace' }}>{changed[0].if_name}</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{changed[0].ts}</div>
         </div>
@@ -1088,19 +1093,19 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
 
       {running && (
         <div style={{ fontSize: 11, color: notifyOk ? '#4ade80' : 'var(--text-muted)', marginBottom: 8 }}>
-          {notifyOk ? '🔔 התראות דפדפן + צליל פעילים' : '🔕 התראות דפדפן חסומות — צליל ובאנר בלבד (אשר הרשאה בדפדפן להתראה קופצת)'}
+          {notifyOk ? `🔔 ${t('notify_ok')}` : `🔕 ${t('notify_blocked')}`}
         </div>
       )}
 
       {!baseline && !running && selectedIds.size === 0 && (
         <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-          סמן מתגים למעלה ולחץ "התחל ניטור" — נתק כבל ותוך 3 שניות הפורט יסומן אדום
+          {t('watchdog_hint')}
         </div>
       )}
 
       {changed.length > 0 && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)' }}>שינויים שנתגלו:</div>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)' }}>{t('changes_detected')}:</div>
           {changed.map((c, i) => (
             <div key={i} style={{
               padding: '7px 10px', marginBottom: 4, borderRadius: 6, fontSize: 12,
@@ -1109,9 +1114,9 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
               animation: i === 0 ? 'pulse 1s ease-in-out 3' : 'none',
             }}>
               <span style={{ fontWeight: 700, color: c.curr === 'down' ? '#f87171' : '#4ade80' }}>
-                {c.curr === 'down' ? '🔴 ירד' : '🟢 עלה'}
+                {c.curr === 'down' ? `🔴 ${t('port_went_down')}` : `🟢 ${t('port_went_up')}`}
               </span>
-              {' '}<b>{c.name}</b> — פורט <b>{c.if_name}</b>
+              {' '}<b>{c.name}</b> — {t('port_label')} <b>{c.if_name}</b>
               <span style={{ color: 'var(--text-muted)', marginRight: 6 }}>{c.ts}</span>
             </div>
           ))}
@@ -1121,7 +1126,7 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
       {portRows.length > 0 && (
         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
           <table className="nm-table" style={{ fontSize: 12 }}>
-            <thead><tr><th>מכשיר</th><th>פורט</th><th>סטטוס</th><th>בסיס</th></tr></thead>
+            <thead><tr><th>{t('col_device')}</th><th>{t('col_port')}</th><th>{t('status')}</th><th>{t('col_base')}</th></tr></thead>
             <tbody>
               {portRows.filter(r => r.p.oper_status === 'up' || r.p.oper_status === 'down' || r.statusChanged).map((r, i) => (
                 <tr key={i} style={{
@@ -1145,7 +1150,7 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
 
       {running && (
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, textAlign: 'center' }}>
-          ● polling פעיל — 3 שניות | {selectedIds.size} מתגים | {portRows.length} פורטים
+          ● {t('polling_status', { switches: selectedIds.size, ports: portRows.length })}
         </div>
       )}
     </Modal>

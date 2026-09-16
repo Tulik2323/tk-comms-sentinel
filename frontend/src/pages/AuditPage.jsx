@@ -1,6 +1,7 @@
 // AuditPage — לוג אירועי מערכת
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
 import api from '../lib/api';
 
@@ -35,6 +36,7 @@ function Badge({ text, color }) {
 }
 
 export default function AuditPage() {
+  const { t }     = useTranslation();
   const { user }  = useAuth();
   const isAdmin   = user?.role === 'admin';
 
@@ -67,7 +69,7 @@ export default function AuditPage() {
   }, [load]);
 
   async function clearOld() {
-    if (!window.confirm('מחק אירועים מעל 30 יום?')) return;
+    if (!window.confirm(t('clean_old_confirm'))) return;
     await api.delete('/audit?older_than_days=30');
     load();
   }
@@ -75,12 +77,12 @@ export default function AuditPage() {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>📋 לוג מערכת (Audit)</h1>
+        <h1 style={{ margin: 0, fontSize: 22 }}>📋 {t('audit_title')}</h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={load} className="nm-btn nm-btn-ghost">↺ רענן</button>
+          <button onClick={load} className="nm-btn nm-btn-ghost">↺ {t('refresh')}</button>
           {isAdmin && (
             <button onClick={clearOld} className="nm-btn nm-btn-danger" style={{ fontSize: 12, padding: '6px 12px' }}>
-              🗑 נקה ישן
+              🗑 {t('clean_old')}
             </button>
           )}
         </div>
@@ -94,7 +96,7 @@ export default function AuditPage() {
           value={filters.level}
           onChange={e => setFilters(f => ({ ...f, level: e.target.value }))}
         >
-          <option value="">כל הרמות</option>
+          <option value="">{t('all_levels')}</option>
           <option value="info">✅ Info</option>
           <option value="warn">⚠️ Warn</option>
           <option value="error">❌ Error</option>
@@ -106,7 +108,7 @@ export default function AuditPage() {
           value={filters.source}
           onChange={e => setFilters(f => ({ ...f, source: e.target.value }))}
         >
-          <option value="">כל המקורות</option>
+          <option value="">{t('all_sources')}</option>
           <option value="poller">📡 Poller</option>
           <option value="auth">🔑 Auth</option>
           <option value="admin">⚙️ Admin</option>
@@ -119,44 +121,44 @@ export default function AuditPage() {
           value={filters.limit}
           onChange={e => setFilters(f => ({ ...f, limit: e.target.value }))}
         >
-          <option value="100">100 שורות</option>
-          <option value="200">200 שורות</option>
-          <option value="500">500 שורות</option>
-          <option value="1000">1000 שורות</option>
+          <option value="100">100 {t('rows_suffix')}</option>
+          <option value="200">200 {t('rows_suffix')}</option>
+          <option value="500">500 {t('rows_suffix')}</option>
+          <option value="1000">1000 {t('rows_suffix')}</option>
         </select>
 
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          {rows.length} אירועים
+          {t('events_count', { count: rows.length })}
         </span>
       </div>
 
       {/* טבלה */}
       {loading ? (
-        <div style={{ color: 'var(--text-muted)', padding: 20 }}>טוען...</div>
+        <div style={{ color: 'var(--text-muted)', padding: 20 }}>{t('loading')}</div>
       ) : rows.length === 0 ? (
         <div className="nm-card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-          <div>אין אירועים עדיין</div>
-          <div style={{ fontSize: 12, marginTop: 8 }}>אירועים יופיעו כשמכשיר יאבד תקשורת, מישהו יתחבר, או תשנה הגדרות</div>
+          <div>{t('no_events_yet')}</div>
+          <div style={{ fontSize: 12, marginTop: 8 }}>{t('no_events_hint')}</div>
         </div>
       ) : (
         <div className="nm-card" style={{ padding: 0, overflow: 'hidden' }}>
           <table className="nm-table">
             <thead>
               <tr>
-                <th style={{ width: 160 }}>זמן</th>
-                <th style={{ width: 70 }}>רמה</th>
-                <th style={{ width: 110 }}>מקור</th>
-                <th>הודעה</th>
-                <th style={{ width: 160 }}>מכשיר</th>
-                <th style={{ width: 120 }}>משתמש / IP</th>
+                <th style={{ width: 160 }}>{t('col_time')}</th>
+                <th style={{ width: 70 }}>{t('col_level')}</th>
+                <th style={{ width: 110 }}>{t('col_source')}</th>
+                <th>{t('col_message')}</th>
+                <th style={{ width: 160 }}>{t('col_device')}</th>
+                <th style={{ width: 120 }}>{t('col_user_ip')}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map(row => (
                 <tr key={row.id}>
                   <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                    {new Date(row.ts * 1000).toLocaleString('he-IL')}
+                    {new Date(row.ts * 1000).toLocaleString()}
                   </td>
                   <td>
                     <Badge

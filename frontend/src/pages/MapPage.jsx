@@ -1,12 +1,14 @@
 // MapPage — מפת קומה עם סוויצ'ים ב-drag&drop
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
 import StatusDot from '../components/ui/StatusDot';
 import { formatBps } from '../lib/api';
 import api from '../lib/api';
 
 export default function MapPage() {
+  const { t }        = useTranslation();
   const { user }     = useNavigate ? useAuth() : { user: null };
   const navigate     = useNavigate();
   const isAdmin      = user?.role === 'admin';
@@ -93,7 +95,7 @@ export default function MapPage() {
   return (
     <div style={{ padding: 24, height: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h1 style={{ margin: 0, fontSize: 22 }}>🗺️ מפת הרשת</h1>
+        <h1 style={{ margin: 0, fontSize: 22 }}>🗺️ {t('map_title')}</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           {isAdmin && (
             <>
@@ -101,10 +103,10 @@ export default function MapPage() {
                 onClick={() => setEditMode(m => !m)}
                 className={`nm-btn ${editMode ? 'nm-btn-primary' : 'nm-btn-ghost'}`}
               >
-                {editMode ? '✅ מצב עריכה' : '✏️ ערוך'}
+                {editMode ? `✅ ${t('edit_mode')}` : `✏️ ${t('edit_btn')}`}
               </button>
               <label className="nm-btn nm-btn-ghost" style={{ cursor: 'pointer' }}>
-                📷 העלה תמונה
+                📷 {t('upload_image')}
                 <input type="file" accept="image/*" style={{ display: 'none' }} onChange={uploadImage} />
               </label>
             </>
@@ -141,8 +143,8 @@ export default function MapPage() {
             }}>
               <div>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>🗺️</div>
-                <div>העלה תמונת קומה/בניין</div>
-                <div style={{ fontSize: 12, marginTop: 8 }}>PNG, JPG עד 10MB</div>
+                <div>{t('upload_floor_plan')}</div>
+                <div style={{ fontSize: 12, marginTop: 8 }}>{t('image_formats')}</div>
               </div>
             </div>
           )}
@@ -231,7 +233,7 @@ export default function MapPage() {
             overflowY:   'auto',
           }}>
             <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--text-muted)' }}>
-              מכשירים לא ממוקמים ({unplaced.length})
+              {t('unplaced_devices', { count: unplaced.length })}
             </div>
             {unplaced.map(d => (
               <div
@@ -281,14 +283,12 @@ export default function MapPage() {
           <div style={{ color: 'var(--text-muted)' }}>{tooltip.device.ip}</div>
           <div>↓ {formatBps(tooltip.device.total_in_bps)}</div>
           <div>↑ {formatBps(tooltip.device.total_out_bps)}</div>
-          {!editMode && <div style={{ color: 'var(--accent)', marginTop: 4 }}>לחץ לפרטים</div>}
+          {!editMode && <div style={{ color: 'var(--accent)', marginTop: 4 }}>{t('click_for_details')}</div>}
         </div>
       )}
 
       <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
-        {editMode
-          ? '✏️ מצב עריכה — גרור מכשירים לסמן את מיקומם · לחץ × להסרה'
-          : 'לחץ על מכשיר לפרטים · מתרענן כל 30 שניות'}
+        {editMode ? `✏️ ${t('map_edit_hint')}` : t('map_view_hint')}
       </div>
     </div>
   );
