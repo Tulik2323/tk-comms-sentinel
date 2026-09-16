@@ -153,7 +153,7 @@ router.post('/diagnose', requireAdmin, async (req, res) => {
 
   const comm = (community && String(community).trim()) || getSetting('default_snmp_community') || process.env.DEFAULT_SNMP_COMMUNITY || 'public';
 
-  logAudit('info', 'admin', `אבחון תקשורת אל ${host}`, { username: req.user.username, ip: req.ip });
+  logAudit('info', 'admin', 'diagnose', { host }, { username: req.user.username, ip: req.ip });
 
   const started = Date.now();
   const [dnsR, icmp, tcpRaw, snmpR, cal] = await Promise.all([

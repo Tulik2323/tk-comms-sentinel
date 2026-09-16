@@ -364,7 +364,7 @@ router.post('/scan', requireAdmin, async (req, res) => {
   }
 
   const scanTarget = cidr || `${start_ip}–${end_ip}`;
-  logAudit('info', 'admin', `Scan started: ${scanTarget} (${ips.length} IPs, community=${community})`, { username: req.user?.username });
+  logAudit('info', 'admin', 'scan_started', { target: scanTarget, count: ips.length, community }, { username: req.user?.username });
 
   const db = getDb();
   const BATCH = 20;
@@ -385,17 +385,17 @@ router.post('/scan', requireAdmin, async (req, res) => {
 
           if (result.changes > 0) {
             newDevices.push(ip);
-            logAudit('info', 'admin', `Scan found new SNMP device: ${ip}`, { username: req.user?.username });
+            logAudit('info', 'admin', 'scan_found', { ip }, { username: req.user?.username });
             forcePoll(result.lastInsertRowid).catch(() => {});
           }
         }
       } catch (e) {
-        logAudit('warn', 'admin', `Scan error for ${ip}: ${e.message}`, { username: req.user?.username });
+        logAudit('warn', 'admin', 'scan_error', { ip, error: e.message }, { username: req.user?.username });
       }
     }));
   }
 
-  logAudit('info', 'admin', `Scan complete: ${scanTarget} — found ${found.length} SNMP devices, ${newDevices.length} new`, { username: req.user?.username });
+  logAudit('info', 'admin', 'scan_complete', { target: scanTarget, found: found.length, added: newDevices.length }, { username: req.user?.username });
   res.json({ message: `סריקה הושלמה`, total: ips.length, found: found.length, added: newDevices.length, devices: found });
 });
 
@@ -431,7 +431,7 @@ router.post('/import-csv', requireAdmin, (req, res) => {
     }
   }
 
-  logAudit('info', 'admin', `CSV import: ${added.length} added, ${skipped.length} skipped, ${errors.length} errors`, { username: req.user?.username });
+  logAudit('info', 'admin', 'csv_import', { added: added.length, skipped: skipped.length, errors: errors.length }, { username: req.user?.username });
   res.json({ added, skipped, errors });
 });
 

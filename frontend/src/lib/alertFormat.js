@@ -30,5 +30,9 @@ export function formatAlert(a, t) {
     });
   }
 
+  if (a.metric === 'path') {
+    return t('alert_path_outage', { count: value });
+  }
+
   return a.message || '';
 }

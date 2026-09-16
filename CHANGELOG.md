@@ -2,6 +2,22 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.4] — 2026-09-16
+
+### Fixed
+- **Audit page still showing Hebrew in English mode** — audit log messages (`logAudit()`
+  calls across auth/admin/devices/tools/updates/poller) were generated and stored as raw
+  Hebrew sentences in `audit_log.message`. Added `msg_key`/`msg_params` columns; every
+  `logAudit()` call site now passes a translation key + structured params, and the frontend
+  (`frontend/src/lib/auditFormat.js`) rebuilds the message in the active language. Also
+  translated the path-outage alert (`metric = 'path'`) the same way in `alertFormat.js`.
+- **Broken "latest" download link** — `docs/index.html`, `docs/index.en.html`, and
+  `docs/latest.json` all pointed at
+  `releases/latest/download/TKCommsSentinel-Setup-latest.exe`, but only an asset named
+  `TKCommsSentinel-Setup-<version>.exe` was ever uploaded, so the link 404'd. `deploy-local.ps1`
+  now also uploads a second copy of the installer named exactly `TKCommsSentinel-Setup-latest.exe`
+  on every release, so the evergreen link always resolves.
+
 ## [1.3.3] — 2026-09-16
 
 ### Fixed

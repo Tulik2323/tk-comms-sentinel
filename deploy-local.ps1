@@ -101,6 +101,11 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Inno Setup build failed" -ForegroundColor
 $exePath = "$outDir\TKCommsSentinel-Setup-$ver.exe"
 Write-Host "  EXE: $exePath" -ForegroundColor Green
 
+# Extra copy named "latest" so releases/latest/download/TKCommsSentinel-Setup-latest.exe
+# always points at the newest build without editing the website on every release.
+$exeLatestPath = "$outDir\TKCommsSentinel-Setup-latest.exe"
+Copy-Item $exePath $exeLatestPath -Force
+
 # 6. SHA256 + GitHub Release
 Write-Host "`n[6/7] publishing GitHub Release v$ver..." -ForegroundColor Yellow
 $sha256 = (Get-FileHash $exePath -Algorithm SHA256).Hash.ToLower()
@@ -113,7 +118,7 @@ $notes = (Get-Content "$SRC\CHANGELOG.md" -Raw) -replace '(?s)^.*?## \[' , '## [
 $notesFile = "$env:TEMP\release-notes-$ver.md"
 $notes | Set-Content $notesFile -Encoding UTF8
 
-& $GH release create "v$ver" $exePath `
+& $GH release create "v$ver" $exePath $exeLatestPath `
     --title "TK Comms Sentinel v$ver" `
     --notes-file $notesFile `
     --latest

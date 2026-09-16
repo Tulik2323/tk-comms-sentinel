@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
+import { formatAuditMessage } from '../lib/auditFormat';
 import api from '../lib/api';
 
 const LEVEL_COLOR = {
@@ -170,7 +171,7 @@ export default function AuditPage() {
                     {SOURCE_LABEL[row.source] || row.source}
                   </td>
                   <td style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-                    {row.message}
+                    {formatAuditMessage(row, t)}
                   </td>
                   <td>
                     {row.device_id ? (

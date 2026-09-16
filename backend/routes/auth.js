@@ -49,7 +49,7 @@ router.post('/login', loginRateLimit, async (req, res) => {
     }
   } catch (err) {
     console.warn(`[Auth] כשל login ל-${username}: ${err.message}`);
-    logAudit('warn', 'auth', `כשל התחברות: ${username} — ${err.message}`, { username, ip: req.ip });
+    logAudit('warn', 'auth', 'login_failed', { username, error: err.message }, { username, ip: req.ip });
 
     // סיסמה שגויה ותקלת תשתית הן לא אותו דבר. החזרת 401 גנרי על הכל
     // שלחה משתמשים לאפס את הסיסמה כשהבעיה הייתה חברות בקבוצה או DC למטה.
@@ -89,7 +89,7 @@ router.post('/login', loginRateLimit, async (req, res) => {
       process.env.JWT_TEMP_SECRET || process.env.JWT_SECRET + '_temp',
       { expiresIn: '15m' }
     );
-    logAudit('info', 'auth', `התחברות: ${username} (${role}) — נדרשת הגדרת 2FA`, { username, ip: req.ip });
+    logAudit('info', 'auth', 'login_2fa_required', { username, role }, { username, ip: req.ip });
     resetAttempts(req.ip);
     return res.json({ setupToken, setupRequired: true, role, displayName });
   }
@@ -141,7 +141,7 @@ router.post('/verify-2fa', async (req, res) => {
   }
 
   db.prepare('UPDATE user_accounts SET last_login = unixepoch() WHERE username = ?').run(payload.username);
-  logAudit('info', 'auth', `התחברות עם 2FA: ${payload.username} (${payload.role})`, { username: payload.username, ip: req.ip });
+  logAudit('info', 'auth', 'login_2fa_success', { username: payload.username, role: payload.role }, { username: payload.username, ip: req.ip });
 
   const token = jwt.sign(
     { username: payload.username, role: payload.role },
@@ -191,7 +191,7 @@ router.post('/confirm-2fa', requireSetupOrAuth, (req, res) => {
   }
 
   db.prepare('UPDATE user_accounts SET totp_enabled = 1, last_login = unixepoch() WHERE username = ?').run(req.user.username);
-  logAudit('info', 'auth', `2FA הוגדר ואומת: ${req.user.username}`, { username: req.user.username, ip: req.ip });
+  logAudit('info', 'auth', 'twofa_setup_done', { username: req.user.username }, { username: req.user.username, ip: req.ip });
 
   // הנפק JWT מלא — המשתמש מוכן להיכנס למערכת
   const token = jwt.sign(

@@ -46,7 +46,7 @@ async function pollDevice(device, opts = {}) {
     // אם חזר מ-down — סגור event ורשום audit
     if (device.status === 'down') {
       resolveDeviceDown(device);
-      logAudit('info', 'poller', `מכשיר חזר לאוויר: ${device.name || device.ip}`, { device_id: device.id, ip: device.ip });
+      logAudit('info', 'poller', 'device_back_online', { device: device.name || device.ip }, { device_id: device.id, ip: device.ip });
     }
 
     // --- פורטים ---
@@ -304,7 +304,7 @@ async function pollDevice(device, opts = {}) {
 
     if (wasUp) {
       logAudit('warn', 'poller',
-        `מכשיר לא מגיב: ${device.name || device.ip} — ${why} [${err.message}]`,
+        'device_unresponsive', { device: device.name || device.ip, why, error: err.message },
         { device_id: device.id, ip: device.ip });
     }
 
@@ -376,10 +376,10 @@ async function runCycle() {
       // בתקלה נפרדת לכל אחד מהם.
       if (!_pathDown) {
         _pathDown = true;
-        const msg = `נפילת נתיב: כל ${results.length} המכשירים אינם מגיבים בו-זמנית. ` +
-                    `סביר שזו תקלת ניתוב או חומת אש ולא תקלה במכשירים עצמם.`;
+        const msg = `Path outage: all ${results.length} devices unresponsive simultaneously. ` +
+                    `Likely a routing or firewall issue, not the devices themselves.`;
         console.error(`[Poller] ${msg}`);
-        logAudit('error', 'poller', msg, {});
+        logAudit('error', 'poller', 'path_outage', { count: results.length }, {});
         try {
           db.prepare(`
             INSERT INTO alert_events (device_id, metric, value, threshold, message)
@@ -396,9 +396,9 @@ async function runCycle() {
       const anySucceeded = failed.length < results.length;
       if (_pathDown && anySucceeded) {
         _pathDown = false;
-        const msg = `הנתיב חזר: ${results.length - failed.length} מתוך ${results.length} מכשירים מגיבים.`;
+        const msg = `Path recovered: ${results.length - failed.length} of ${results.length} devices responding.`;
         console.log(`[Poller] ${msg}`);
-        logAudit('info', 'poller', msg, {});
+        logAudit('info', 'poller', 'path_recovered', { responding: results.length - failed.length, total: results.length }, {});
         db.prepare(`
           UPDATE alert_events SET resolved_at = unixepoch()
           WHERE metric = 'path' AND resolved_at IS NULL

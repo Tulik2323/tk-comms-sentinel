@@ -132,6 +132,8 @@ async function initDb() {
     'ALTER TABLE devices          ADD COLUMN hw_status     TEXT',
     'ALTER TABLE alert_thresholds ADD COLUMN port_if_index INTEGER',
     'ALTER TABLE alert_events     ADD COLUMN port_if_index INTEGER',
+    'ALTER TABLE audit_log        ADD COLUMN msg_key       TEXT',
+    'ALTER TABLE audit_log        ADD COLUMN msg_params    TEXT',
   ]) {
     try { _sqlDb.exec(sql); } catch (_) {}   // כבר קיים — מתעלמים
   }

@@ -47,7 +47,7 @@ router.put('/settings', requireAdmin, (req, res) => {
   }
 
   if (changed.length > 0) {
-    logAudit('info', 'admin', `עדכון הגדרות: ${changed.join(', ')}`, { username: req.user?.username });
+    logAudit('info', 'admin', 'settings_updated', { fields: changed.join(', ') }, { username: req.user?.username });
   }
 
   res.json({ ok: true });
@@ -155,7 +155,7 @@ router.post('/test-smtp', requireAdmin, async (req, res) => {
     const connectMs = Date.now() - t0;
 
     if (!sendTest) {
-      logAudit('info', 'admin', `בדיקת SMTP הצליחה: ${host}:${port}`, { username: req.user.username, ip: req.ip });
+      logAudit('info', 'admin', 'smtp_test_ok', { host, port }, { username: req.user.username, ip: req.ip });
       return res.json({ ok: true, stage: 'connect', host, port, ms: connectMs,
                         message: `החיבור ל-${host}:${port} תקין (${connectMs}ms)` });
     }
@@ -170,7 +170,7 @@ router.post('/test-smtp', requireAdmin, async (req, res) => {
             `אם קיבלת אותו — הגדרות הדואר תקינות.`,
     });
 
-    logAudit('info', 'admin', `נשלח מייל בדיקה אל ${to}`, { username: req.user.username, ip: req.ip });
+    logAudit('info', 'admin', 'test_email_sent', { to }, { username: req.user.username, ip: req.ip });
     res.json({ ok: true, stage: 'send', host, port, to, ms: Date.now() - t0,
                messageId: info.messageId,
                message: `מייל בדיקה נשלח אל ${to}` });
@@ -184,7 +184,7 @@ router.post('/test-smtp', requireAdmin, async (req, res) => {
     else if (/EAUTH|535|534/.test(err.message))      hint = `שם המשתמש או הסיסמה נדחו על ידי השרת.`;
     else if (/self.signed|certificate/i.test(err.message)) hint = `בעיית תעודת TLS מול ${host}.`;
 
-    logAudit('warn', 'admin', `בדיקת SMTP נכשלה: ${err.message}`, { username: req.user.username, ip: req.ip });
+    logAudit('warn', 'admin', 'smtp_test_failed', { error: err.message }, { username: req.user.username, ip: req.ip });
     res.status(200).json({ ok: false, stage: 'connect', host, port, ms, error: hint, raw: err.message });
   } finally {
     try { transporter.close(); } catch {}

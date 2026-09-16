@@ -193,7 +193,7 @@ router.post('/install', requireAdmin, async (req, res) => {
     });
 
     // 4. תשובה ללקוח *לפני* הפעלת המעדכן — כי update.ps1 עוצר את השירות הזה
-    logAudit('warn', 'admin', `הופעל עדכון מערכת לגרסה ${safeVersion}`,
+    logAudit('warn', 'admin', 'update_triggered', { version: safeVersion },
       { username: req.user?.username, ip: req.ip });
     res.json({ started: true,
       message: `העדכון לגרסה ${safeVersion} החל. המערכת תופעל מחדש בקרוב.` });
@@ -207,12 +207,12 @@ router.post('/install', requireAdmin, async (req, res) => {
           { detached: true, stdio: 'ignore', windowsHide: true });
         child.unref();
       } catch (e) {
-        logAudit('error', 'admin', `כשל בהפעלת update.ps1: ${e.message}`,
+        logAudit('error', 'admin', 'update_ps1_failed', { error: e.message },
           { username: req.user?.username });
       }
     });
   } catch (err) {
-    logAudit('error', 'admin', `כשל בעדכון: ${err.message}`,
+    logAudit('error', 'admin', 'update_failed', { error: err.message },
       { username: req.user?.username, ip: req.ip });
     if (!res.headersSent) {
       return res.json({ started: false, reason: 'error',
