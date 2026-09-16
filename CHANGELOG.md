@@ -2,6 +2,24 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.5] — 2026-09-16
+
+### Added
+- **Hostname resolution (reverse DNS) for endpoints** — every IP address shown for an
+  endpoint (port "connected endpoints" table, endpoint search, global header search) now
+  also shows the computer name, when one is available via reverse DNS (PTR record). Relies
+  on the DHCP server registering dynamic DNS updates (the common default in AD-integrated
+  environments) — no new credentials or external service required.
+  - New `hostname_cache` table (`backend/db/database.js`) caches PTR lookups for 6 hours.
+  - New `backend/services/hostnames.js`: `refreshStaleHostnames()` runs every 5 minutes from
+    the poller process (`backend/services/poller.js`), resolving IPs seen in `mac_entries`
+    that aren't cached or are stale; `attachHostnames()` is a synchronous cache-only lookup
+    used by the API routes, so pages never wait on live DNS.
+  - Wired into `/api/devices/endpoint-search`, `/api/devices/:id/port-endpoints/:ifIndex`,
+    and `/api/search`.
+  - If your DHCP does not update DNS, this will show nothing — ask if you want direct
+    DHCP-lease-based resolution instead (option B from the earlier discussion).
+
 ## [1.3.4] — 2026-09-16
 
 ### Fixed

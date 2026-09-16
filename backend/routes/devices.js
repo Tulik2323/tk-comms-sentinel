@@ -6,6 +6,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { pingSnmp }      = require('../services/snmp');
 const { forcePoll }     = require('../services/poller');
 const { logAudit }      = require('../db/audit');
+const { attachHostnames } = require('../services/hostnames');
 
 // ייצוא כל המכשירים כ-CSV (לפני /:id כדי לא להתנגש)
 router.get('/export', requireAuth, (req, res) => {
@@ -123,7 +124,7 @@ router.get('/endpoint-search', requireAuth, (req, res) => {
   // מחזירים רק אותו/אותם. רק אם לא נמצא שום פורט קצה (הסוויץ' לא מנוטר),
   // נופלים חזרה לכל מה שיש (uplinks + ARP) כדי לא להשאיר את המשתמש בלי כלום.
   if (accessRows.length > 0) {
-    return res.json(accessRows.slice(0, 10));
+    return res.json(attachHostnames(accessRows.slice(0, 10)));
   }
 
   rows.sort((a, b) => {
@@ -135,7 +136,7 @@ router.get('/endpoint-search', requireAuth, (req, res) => {
     if (am !== bm) return am - bm;
     return b.last_seen - a.last_seen;
   });
-  res.json(rows.slice(0, 20));
+  res.json(attachHostnames(rows.slice(0, 20)));
 });
 
 // מכשיר בודד
@@ -174,7 +175,7 @@ router.get('/:id/port-endpoints/:ifIndex', requireAuth, (req, res) => {
     ORDER BY last_seen DESC
     LIMIT 30
   `).all(devId, ifIndex);
-  res.json(rows);
+  res.json(attachHostnames(rows));
 });
 
 // ===== סף התראה לפורט ספציפי =====

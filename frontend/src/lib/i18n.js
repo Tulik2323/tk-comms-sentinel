@@ -599,6 +599,7 @@ const he = {
     csv_comment_hint:     'שורות המתחילות ב-# מתעלמים מהן.',
     csv_default:          'ברירת מחדל: v2c',
     edge_port:            'פורט קצה',
+    col_hostname:         'שם מחשב',
   }
 };
 
@@ -1183,6 +1184,7 @@ const en = {
     csv_comment_hint:     'Lines starting with # are ignored.',
     csv_default:          'default: v2c',
     edge_port:            'Edge port',
+    col_hostname:         'Hostname',
   }
 };
 

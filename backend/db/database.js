@@ -203,6 +203,16 @@ async function initDb() {
   try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_mac_devport ON mac_entries(device_id, phys_if_index, mac_address)'); } catch (_) {}
   try { _sqlDb.exec('ALTER TABLE mac_entries ADD COLUMN phys_if_index INTEGER'); } catch (_) {}
 
+  // מטמון תרגום IP -> hostname (reverse DNS). hostname=NULL means "checked,
+  // no PTR record" — עדיין נשמר עם resolved_at כדי לא לנסות שוב מייד.
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS hostname_cache (
+      ip          TEXT PRIMARY KEY,
+      hostname    TEXT,
+      resolved_at INTEGER NOT NULL DEFAULT (unixepoch())
+    )
+  `);
+
   // היסטוריית תעבורה פר-פורט — שומרים 48 שעות אחורה
   _sqlDb.exec(`
     CREATE TABLE IF NOT EXISTS port_samples (

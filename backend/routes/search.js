@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const { getDb }       = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
+const { attachHostnames } = require('../services/hostnames');
 
 router.get('/', requireAuth, (req, res) => {
   const q = (req.query.q || '').trim();
@@ -74,7 +75,7 @@ router.get('/', requireAuth, (req, res) => {
     .map(r => ({ ...r, ip_address: r.ip_address || ipByMac[r.mac_address] || null }))
     .sort((a, b) => (a.macs_on_port ?? Infinity) - (b.macs_on_port ?? Infinity) || b.last_seen - a.last_seen);
   if (access.length === 0) access = macRows.slice(0, 10);
-  const macs = access.slice(0, 10).map(m => ({ type: 'mac', ...m }));
+  const macs = attachHostnames(access.slice(0, 10)).map(m => ({ type: 'mac', ...m }));
 
   res.json([...devices, ...macs]);
 });

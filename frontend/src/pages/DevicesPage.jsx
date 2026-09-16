@@ -561,7 +561,7 @@ export default function DevicesPage() {
               position: 'absolute', top: '100%', right: 0, zIndex: 200,
               background: 'var(--bg-card)', border: '1px solid var(--border)',
               borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-              minWidth: 380, maxWidth: 480, marginTop: 4, direction: 'rtl',
+              minWidth: 380, maxWidth: 480, marginTop: 4,
             }}>
               <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
                 🖥️ {t('endpoints_found', { count: endpResults.length })}
@@ -582,13 +582,18 @@ export default function DevicesPage() {
                       <span style={{ fontFamily: 'monospace', color: 'var(--accent)', fontSize: 13 }}>
                         {r.ip_address || r.mac_address}
                       </span>
+                      {r.hostname && (
+                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginInlineStart: 8 }}>
+                          {r.hostname}
+                        </span>
+                      )}
                       {r.ip_address && r.mac_address && (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 8 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginInlineStart: 8 }}>
                           {r.mac_address}
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'left' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'end' }}>
                       {r.device_name || r.device_ip}
                     </div>
                   </div>

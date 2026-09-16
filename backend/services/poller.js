@@ -6,6 +6,7 @@ const { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getHardwar
 const { saveMetrics, pruneOldMetrics } = require('./history');
 const { checkThresholds, checkDeviceDown, resolveDeviceDown } = require('./alerts');
 const { logAudit } = require('../db/audit');
+const { refreshStaleHostnames } = require('./hostnames');
 
 // Map: deviceId -> last poll timestamp
 const lastPollTime = new Map();
@@ -437,6 +438,11 @@ function startPoller() {
   // ניקוי metrics ישנים — פעם ביום בחצות
   cron.schedule('0 0 * * *', () => {
     pruneOldMetrics();
+  });
+
+  // רענון hostname (reverse DNS) לכתובות IP שנצפו ב-mac_entries — כל 5 דקות
+  cron.schedule('*/5 * * * *', () => {
+    refreshStaleHostnames().catch(err => console.error('[Poller] hostname refresh failed:', err.message));
   });
 }
 

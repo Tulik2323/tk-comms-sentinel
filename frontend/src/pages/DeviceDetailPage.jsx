@@ -643,6 +643,7 @@ export default function DeviceDetailPage() {
                     <tr style={{ color: 'var(--text-muted)', textAlign: 'start' }}>
                       <th style={{ padding: '4px 8px', fontWeight: 500 }}>MAC</th>
                       <th style={{ padding: '4px 8px', fontWeight: 500 }}>IP</th>
+                      <th style={{ padding: '4px 8px', fontWeight: 500 }}>{t('col_hostname')}</th>
                       <th style={{ padding: '4px 8px', fontWeight: 500 }}>{t('last_seen')}</th>
                     </tr>
                   </thead>
@@ -666,8 +667,11 @@ export default function DeviceDetailPage() {
                           <td style={{ padding: '5px 8px', fontFamily: 'monospace', color: e.ip_address ? 'var(--accent)' : 'var(--text-muted)' }}>
                             {e.ip_address || '—'}
                           </td>
+                          <td style={{ padding: '5px 8px', color: e.hostname ? 'var(--text-primary)' : 'var(--text-muted)', fontSize: 11 }}>
+                            {e.hostname || '—'}
+                          </td>
                           <td style={{ padding: '5px 8px', color: 'var(--text-muted)', whiteSpace: 'nowrap', fontSize: 11 }}>
-                            {e.last_seen ? new Date(e.last_seen * 1000).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                            {e.last_seen ? new Date(e.last_seen * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '—'}
                           </td>
                         </tr>
                       );

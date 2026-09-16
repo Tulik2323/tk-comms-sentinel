@@ -191,6 +191,7 @@ export default function Layout({ children }) {
                       </div>
                       <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
                         {r.ip_address && <span>{r.ip_address} · </span>}
+                        {r.hostname && <span>{r.hostname} · </span>}
                         {r.device_name || r.device_ip}
                         {(r.if_alias || r.if_descr || r.if_name) && (
                           <span> · {r.if_alias || r.if_descr || r.if_name}</span>
