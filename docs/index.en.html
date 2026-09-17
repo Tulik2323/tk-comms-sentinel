@@ -309,7 +309,7 @@
         <div class="panel-bar mono"><span>LATEST RELEASE</span><span>●●●</span></div>
         <div class="dl-row">
           <div>
-            <span class="dl-tag mono">VERSION <b>1.3.7</b></span>
+            <span class="dl-tag mono">VERSION <b>1.3.8</b></span>
             <div class="dl-os">Windows Server 2019 · 2022 · 2025 &nbsp;·&nbsp; x64</div>
           </div>
           <a class="btn btn-primary" href="https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe">Download Installer</a>
@@ -330,6 +330,7 @@
             <tr><td class="rev mono">1.0</td><td class="desc">Basic SNMP monitoring, an initial dashboard, and email alerts.</td></tr>
             <tr><td class="rev mono">1.1</td><td class="desc">LLDP topology detection, automatically distinguishing an uplink from an end-device port.</td></tr>
             <tr><td class="rev mono">1.2</td><td class="desc">Device lookup by IP/MAC down to the physical port, and 48-hour traffic history for every interface.</td></tr>
+            <tr><td class="rev mono">1.3.8</td><td class="desc">Added an Endpoint Inventory page — classifies all active MACs by OUI (vendor) into categories: Computers, Printers, APs/WiFi, Cameras, Medical Devices, Network Infrastructure, VMs, and Unknown. Includes summary cards, a searchable/filterable paginated table, and Hebrew + English UI.</td></tr>
             <tr><td class="rev mono">1.3.7</td><td class="desc">Added a "Collect Diagnostics" tool (Start Menu shortcut) that gathers a safe-to-share report — version, service status, recent logs, database schema/counts only (never row data), and .env key names only — for remote troubleshooting. Also fixed a second deploy pipeline gap where the installer's own scripts folder could silently go stale.</td></tr>
             <tr><td class="rev mono">1.3.6</td><td class="desc">Fixed a deploy pipeline gap that had silently blocked every backend/db code change from reaching the live server since v1.3.4 — this is why the audit log and main search stopped working. Also fixed endpoint IP/hostname not showing on some ports, false "fan failed" hardware alarms on HPE 5130 switches, and added a VLAN column to the ports table.</td></tr>
             <tr><td class="rev mono">1.3.5</td><td class="desc">Added hostname resolution (reverse DNS) for endpoints — every IP shown for a connected device now also shows its computer name, when available via DNS, in the port endpoints table and both search views.</td></tr>
