@@ -63,20 +63,18 @@ function classify(vendor) {
   return 'Unknown';
 }
 
-// Access threshold: ports with ≤ this many MACs are considered edge ports (not uplinks)
+// Access threshold: ports with > this many MACs are considered uplinks
 const ACCESS_MAX_MACS = 8;
 
-// Build the is_uplink subquery (same logic as devices.js / search.js)
-const IS_UPLINK_SQL = `
-  CASE
-    WHEN me.phys_if_index IS NULL THEN 0
-    WHEN (
-      SELECT COUNT(DISTINCT m2.mac_address)
-      FROM mac_entries m2
-      WHERE m2.device_id = me.device_id AND m2.phys_if_index = me.phys_if_index
-    ) > ${ACCESS_MAX_MACS} THEN 1
-    ELSE 0
-  END
+// CTE-based query: pre-aggregate uplink ports, then join once
+const BASE_CTE = `
+  WITH uplink_ports AS (
+    SELECT device_id, phys_if_index
+    FROM mac_entries
+    WHERE phys_if_index IS NOT NULL
+    GROUP BY device_id, phys_if_index
+    HAVING COUNT(DISTINCT mac_address) > ${ACCESS_MAX_MACS}
+  )
 `;
 
 // ---- GET /api/inventory — summary counts per category ----
@@ -84,29 +82,18 @@ const IS_UPLINK_SQL = `
 router.get('/', requireAuth, (req, res) => {
   const db = getDb();
 
-  const rows = db.prepare(`
-    SELECT
-      me.mac_address,
-      me.ip_address,
-      me.last_seen,
-      d.name  AS device_name,
-      d.ip    AS device_ip,
-      p.if_name,
-      p.if_alias,
-      hc.hostname,
-      ${IS_UPLINK_SQL} AS is_uplink
+  const rows = db.prepare(`${BASE_CTE}
+    SELECT me.mac_address
     FROM mac_entries me
     JOIN devices d ON d.id = me.device_id
-    LEFT JOIN ports p
-      ON p.device_id = me.device_id AND p.if_index = me.phys_if_index
-    LEFT JOIN hostname_cache hc ON hc.ip_address = me.ip_address
+    LEFT JOIN uplink_ports up
+      ON up.device_id = me.device_id AND up.phys_if_index = me.phys_if_index
     WHERE me.phys_if_index IS NOT NULL
-    ORDER BY me.last_seen DESC
+      AND up.device_id IS NULL
   `).all();
 
   const counts = {};
   for (const r of rows) {
-    if (r.is_uplink) continue;
     const vendor = lookupVendor(r.mac_address);
     const cat    = classify(vendor);
     counts[cat]  = (counts[cat] || 0) + 1;
@@ -128,7 +115,7 @@ router.get('/entries', requireAuth, (req, res) => {
   const page = Math.max(1, parseInt(req.query.page  || '1'));
   const lim  = Math.min(200, Math.max(1, parseInt(req.query.limit || '100')));
 
-  const rows = db.prepare(`
+  const rows = db.prepare(`${BASE_CTE}
     SELECT
       me.mac_address,
       me.ip_address,
@@ -138,25 +125,25 @@ router.get('/entries', requireAuth, (req, res) => {
       d.ip    AS device_ip,
       p.if_name,
       p.if_alias,
-      hc.hostname,
-      ${IS_UPLINK_SQL} AS is_uplink
+      hc.hostname
     FROM mac_entries me
     JOIN devices d ON d.id = me.device_id
     LEFT JOIN ports p
       ON p.device_id = me.device_id AND p.if_index = me.phys_if_index
-    LEFT JOIN hostname_cache hc ON hc.ip_address = me.ip_address
+    LEFT JOIN hostname_cache hc ON hc.ip = me.ip_address
+    LEFT JOIN uplink_ports up
+      ON up.device_id = me.device_id AND up.phys_if_index = me.phys_if_index
     WHERE me.phys_if_index IS NOT NULL
+      AND up.device_id IS NULL
     ORDER BY me.last_seen DESC
   `).all();
 
-  // Enrich with vendor + category, filter uplinks
-  let enriched = [];
-  for (const r of rows) {
-    if (r.is_uplink) continue;
+  // Enrich with vendor + category
+  let enriched = rows.map(r => {
     const vendor   = lookupVendor(r.mac_address);
     const category = classify(vendor);
-    enriched.push({ ...r, vendor: vendor || '', category });
-  }
+    return { ...r, vendor: vendor || '', category };
+  });
 
   // Apply category filter
   if (cat && cat !== 'All') {
