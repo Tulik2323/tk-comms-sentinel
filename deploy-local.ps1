@@ -133,9 +133,17 @@ Write-Host "  SHA256: $sha256"
 # Delete existing release if exists (re-release same version)
 & $GH release delete "v$ver" --yes 2>$null
 
-$notes = (Get-Content "$SRC\CHANGELOG.md" -Raw) -replace '(?s)^.*?## \[' , '## [' -replace '(?s)(## \[' + [regex]::Escape($ver) + '\].*?)(## \[.*)$', '$1'
+# Cut just this version's section out of the CHANGELOG to use as the release body.
+# The pattern must be built before -replace sees it: -replace binds tighter than string
+# concatenation, so an inline '...' + $ver + '...' passes only the first fragment as the
+# pattern and the cut silently does nothing -- every release up to 1.3.8 shipped with the
+# entire changelog as its body. Read as UTF-8 explicitly as well, or Get-Content assumes
+# ANSI for this BOM-less file and turns every em-dash into mojibake.
+$changelog   = [System.IO.File]::ReadAllText("$SRC\CHANGELOG.md", [System.Text.Encoding]::UTF8)
+$sectionOnly = '(?s)(## \[' + [regex]::Escape($ver) + '\].*?)(## \[.*)$'
+$notes = ($changelog -replace '(?s)^.*?## \[', '## [') -replace $sectionOnly, '$1'
 $notesFile = "$env:TEMP\release-notes-$ver.md"
-$notes | Set-Content $notesFile -Encoding UTF8
+[System.IO.File]::WriteAllText($notesFile, $notes, $utf8NoBom)
 
 & $GH release create "v$ver" $exePath $exeLatestPath `
     --title "TK Comms Sentinel v$ver" `

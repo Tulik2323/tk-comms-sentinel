@@ -2,6 +2,56 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.9] — 2026-09-17
+
+### Fixed
+- **Inventory showed "Error" and no rows at all** — the summary and table queries joined
+  `hostname_cache` on `hc.ip_address`, but that table's column is `ip`, so every request
+  failed with `no such column` and returned a 500. The page surfaced that only as a red
+  "Error" label, which is why nothing loaded.
+- **Inventory query timed out on a real dataset** — uplink detection ran a correlated
+  `COUNT(DISTINCT mac_address)` subquery once per row, i.e. once per each of 970K
+  `mac_entries` rows. Replaced with a single pre-aggregated `uplink_ports` CTE.
+- **Most of the network was missing from Inventory, and searching a subnet found nothing**
+  — the query required `phys_if_index IS NOT NULL`, which silently dropped every
+  ARP-learned entry: 5,266 rows, including *all* of the wireless subnets. Those rows come
+  from a router's ARP table rather than a switch MAC table, so they have no switch port
+  and the uplink test cannot apply to them — they are edge devices by definition. Entering
+  an AP subnet in the search box returned "No data" purely because of this.
+- **Most rows showed no IP address** — a switch MAC table yields a MAC and a port but no
+  IP, leaving about a third of rows blank. The same MAC generally also appears in a
+  router's ARP table carrying its address, so the two are now cross-referenced by MAC
+  (most recent observation wins, which is correct under DHCP). IP coverage went from 64%
+  to 94% and hostname coverage from 24% to 42%. The addresses still missing have no PTR
+  record at all, so neither DNS nor `ping -a` can name them.
+- **Aruba access points were counted as computers** — HPE registers Aruba APs and
+  ProLiant servers under the same `Hewlett Packard Enterprise` OUI name, so the vendor
+  string alone cannot tell them apart and every AP fell through to the Computers rule.
+  APs here are named `<Location>_<last 2 MAC bytes>` (`ec:1b:5f:c2:31:41` resolves to
+  `TZ_Flr0_Cardio_Eco_31:41`), which servers and iLO interfaces never are; that split is
+  exact across all 239 resolvable HPE devices. Where an AP has no PTR record the verdict
+  is taken from its /24, since AP subnets resolve unanimously to APs while server subnets
+  score zero. Access Points went from 0 to 571, with the ESXi, iLO and `SRV-*` subnets
+  verified to stay out of the category.
+
+### Added
+- **Reverse-DNS backfill for endpoint names** — addresses the poller has not resolved yet
+  are looked up and written into `hostname_cache`, so names fill in as the page is used.
+  Each address is attempted once per process, since roughly half have no PTR record and
+  retrying them on every request would be pure waste.
+- **Inventory search now also matches switch port descriptions** (`if_alias`/`if_name`),
+  alongside MAC, IP, hostname, vendor and switch name.
+
+## [1.3.8] — 2026-09-17
+
+### Added
+- **Endpoint Inventory page** — classifies every active endpoint on the network by MAC OUI
+  (manufacturer prefix) into Computers, Printers, Access Points, Cameras, Medical Devices,
+  Network Infrastructure, VMs and Unknown. Ships a bundled 40,161-entry IEEE OUI database
+  (`backend/data/oui.json`), summary cards per category, and a searchable, filterable,
+  paginated table. Uplink ports are excluded so the list reflects real endpoints rather
+  than traffic transiting a trunk. Hebrew and English UI.
+
 ## [1.3.7] — 2026-09-17
 
 ### Added
