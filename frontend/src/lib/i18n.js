@@ -82,6 +82,7 @@ const he = {
     reports:       'דוחות',
     license:       'רישוי',
     watchdog:      'Watchdog',
+    inventory:     'מלאי',
 
     // layout — מחרוזות ממשק
     net_monitoring:       'ניטור רשת ארגוני',
@@ -600,6 +601,26 @@ const he = {
     csv_default:          'ברירת מחדל: v2c',
     edge_port:            'פורט קצה',
     col_hostname:         'שם מחשב',
+
+    // inventory page
+    inventory_title:      'מלאי תחנות קצה',
+    inventory_subtitle:   'סיווג תחנות קצה לפי יצרן (OUI) — רק פורטי גישה, ללא uplinks',
+    inventory_total:      'סה"כ {{count}} תחנות קצה',
+    inventory_search_ph:  'MAC / IP / שם מחשב / יצרן...',
+    inventory_footer:     '{{count}} רשומות · עמוד {{page}} מתוך {{pages}}',
+    inv_col_mac:          'MAC',
+    inv_col_ip:           'IP',
+    inv_col_vendor:       'יצרן',
+    inv_col_category:     'קטגוריה',
+    inv_col_device:       'מתג / פורט',
+    inv_cat_computers:    'מחשבים',
+    inv_cat_printers:     'מדפסות',
+    inv_cat_aps:          'נקודות גישה (AP)',
+    inv_cat_cameras:      'מצלמות',
+    inv_cat_medical:      'ציוד רפואי',
+    inv_cat_network:      'תשתית רשת',
+    inv_cat_vms:          'מכונות וירטואליות',
+    inv_cat_unknown:      'לא מזוהה',
   }
 };
 
@@ -667,6 +688,7 @@ const en = {
     reports:       'Reports',
     license:       'License',
     watchdog:      'Watchdog',
+    inventory:     'Inventory',
 
     // layout strings
     net_monitoring:       'Enterprise Network Monitoring',
@@ -1185,6 +1207,26 @@ const en = {
     csv_default:          'default: v2c',
     edge_port:            'Edge port',
     col_hostname:         'Hostname',
+
+    // inventory page
+    inventory_title:      'Endpoint Inventory',
+    inventory_subtitle:   'Endpoint classification by OUI (vendor) — access ports only, no uplinks',
+    inventory_total:      '{{count}} endpoints total',
+    inventory_search_ph:  'MAC / IP / Hostname / Vendor...',
+    inventory_footer:     '{{count}} records · page {{page}} of {{pages}}',
+    inv_col_mac:          'MAC',
+    inv_col_ip:           'IP',
+    inv_col_vendor:       'Vendor',
+    inv_col_category:     'Category',
+    inv_col_device:       'Switch / Port',
+    inv_cat_computers:    'Computers',
+    inv_cat_printers:     'Printers',
+    inv_cat_aps:          'Access Points',
+    inv_cat_cameras:      'Cameras',
+    inv_cat_medical:      'Medical Devices',
+    inv_cat_network:      'Network Infra',
+    inv_cat_vms:          'Virtual Machines',
+    inv_cat_unknown:      'Unknown',
   }
 };
 

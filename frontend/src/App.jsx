@@ -19,6 +19,7 @@ import PortChangesPage  from './pages/PortChangesPage';
 import TrendsPage       from './pages/TrendsPage';
 import LicensePage     from './pages/LicensePage';
 import WatchdogPage    from './pages/WatchdogPage';
+import InventoryPage   from './pages/InventoryPage';
 
 function AppRoutes() {
   return (
@@ -126,6 +127,14 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <TrendsPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/inventory" element={
+        <ProtectedRoute>
+          <Layout>
+            <InventoryPage />
           </Layout>
         </ProtectedRoute>
       } />

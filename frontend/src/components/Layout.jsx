@@ -22,6 +22,7 @@ const Icons = {
   admin:       '⚙️',
   license:     '🔑',
   watchdog:    '🔌',
+  inventory:   '📦',
   logout:      '🚪',
   dark:        '🌙',
   light:       '☀️',
@@ -225,6 +226,7 @@ export default function Layout({ children }) {
           <NavItem to="/port-changes" icon={Icons.portChanges} label={t('port_changes')} />
           <NavItem to="/watchdog"     icon={Icons.watchdog}    label={t('watchdog')}     />
           <NavItem to="/trends"       icon={Icons.trends}      label={t('trends')}       />
+          <NavItem to="/inventory"    icon={Icons.inventory}   label={t('inventory')}    />
           <NavItem to="/audit"        icon={Icons.audit}       label={t('audit')}        />
           {user?.role === 'admin' && (
             <NavItem to="/tools"   icon={Icons.tools}     label={t('diagnostics')} />
