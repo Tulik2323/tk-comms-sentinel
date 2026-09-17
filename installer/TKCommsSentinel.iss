@@ -55,6 +55,10 @@ Source: "assets\icon.ico";            DestDir: "{app}";            Flags: ignore
 
 [Icons]
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{group}\Collect Diagnostics"; \
+  Filename: "powershell.exe"; \
+  Parameters: "-NoProfile -NoExit -ExecutionPolicy Bypass -File ""{app}\installer\scripts\collect-diagnostics.ps1"" -InstallRoot ""{app}"""; \
+  IconFilename: "{app}\icon.ico"
 
 ; Runs before Inno deletes any files -- stop/remove services and the
 ; firewall rule first. data\ (DB, certs, .env) is never in [Files], so

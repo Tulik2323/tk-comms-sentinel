@@ -101,6 +101,16 @@ if (-not (Test-Path "$pkgVer\frontend")) { New-Item -ItemType Directory -Path "$
 
 Write-Host "  package\versions\$ver OK" -ForegroundColor Green
 
+# Sync installer\scripts\ (canonical, git-tracked) -> package\installer\scripts\
+# (what TKCommsSentinel.iss actually bundles via {#PackageDir}\installer\*).
+# These two folders are NOT the same directory and nothing else here kept
+# them in sync -- a script added/edited only under installer\scripts\ would
+# silently never reach a built installer. Same class of bug as the
+# backend\db\ exclusion fixed above: fix at the source, not by remembering
+# to run a separate step by hand.
+& robocopy "$SRC\installer\scripts" "$SRC\package\installer\scripts" /MIR /NFL /NDL /NJS /NC /NS /NP | Out-Null
+Write-Host "  package\installer\scripts synced from installer\scripts OK" -ForegroundColor Green
+
 # build EXE installer
 $outDir = "$SRC\dist-pkg"
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }

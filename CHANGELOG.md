@@ -2,6 +2,28 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.7] — 2026-09-17
+
+### Added
+- **"Collect Diagnostics" tool** — new Start Menu shortcut (and standalone script,
+  `installer/scripts/collect-diagnostics.ps1`) that gathers a single, safe-to-share
+  report for remote troubleshooting: installed version, which build the `current`
+  junction actually points at, both services' status, the last 200 lines of each
+  service's stdout/stderr log, which frontend bundle files are on disk vs which one
+  `index.html` references (catches stale-build/stale-cache mismatches at a glance),
+  database schema shape and **row counts only** (never row data — no device inventory,
+  SNMP community strings, or credentials leave the machine), `.env` key names only
+  (never values), and basic OS/Node/disk info. Entirely read-only: never stops a
+  service, never writes to the database, doesn't require Administrator.
+
+### Fixed
+- **`package\installer\scripts\` was never synced from the canonical `installer\scripts\`**
+  — the folder the installer `.exe` actually bundles is a separate copy that nothing in
+  `deploy-local.ps1` kept up to date, so an edit made only under `installer\scripts\`
+  (the git-tracked source) could silently never reach a built installer. Same class of
+  bug as the `backend\db\` exclusion fixed in v1.3.6. `deploy-local.ps1` now syncs
+  `installer\scripts\` -> `package\installer\scripts\` on every deploy, before compiling.
+
 ## [1.3.6] — 2026-09-16
 
 ### Fixed
