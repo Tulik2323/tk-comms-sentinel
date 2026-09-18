@@ -14,6 +14,8 @@
     - Installed version (VERSION file + backend/frontend package.json),
       which version the "current" junction actually points at.
     - Windows service status for both services (running/stopped, PID).
+    - The "NetMonitor Poller" Scheduled Task (IIS deployments run the
+      poller this way instead of as a service).
     - The last N lines of each service's stdout/stderr log
       (data\logs\<service>.out.log / .err.log).
     - Which frontend bundle files are on disk and their timestamps, plus the
@@ -117,6 +119,23 @@ try {
   $procs = Get-CimInstance Win32_Service -Filter "Name='$WebServiceName' or Name='$PollerServiceName'" -ErrorAction Stop
   foreach ($p in $procs) { Add-Line "  $($p.Name): PID=$($p.ProcessId) StartMode=$($p.StartMode)" }
 } catch { }
+
+# ---- Scheduled tasks ----
+# IIS deployments have no Windows services: the site runs under iisnode and the
+# poller runs as a Scheduled Task, so "service not found" above is expected there.
+Add-Section "SCHEDULED TASKS"
+foreach ($taskName in @('NetMonitor Poller')) {
+  $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+  if ($task) {
+    $info = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+    Add-Line "$taskName : State=$($task.State)"
+    if ($info) {
+      Add-Line "  LastRunTime=$($info.LastRunTime)  LastTaskResult=$($info.LastTaskResult)  NextRunTime=$($info.NextRunTime)"
+    }
+  } else {
+    Add-Line "$taskName : task not found"
+  }
+}
 
 # ---- Recent logs ----
 Add-Section "RECENT LOGS (last $LogTailLines lines each)"

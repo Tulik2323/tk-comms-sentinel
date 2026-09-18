@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
+import { useAuth } from '../hooks/useAuth';
 
 // ---- Category metadata ----
 
@@ -49,11 +50,217 @@ function SummaryCard({ name, count, icon, color, selected, onClick }) {
   );
 }
 
+function TabButton({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '8px 16px', fontSize: 13, fontWeight: active ? 600 : 400,
+        background: 'transparent', border: 'none', cursor: 'pointer',
+        color: active ? 'var(--accent)' : 'var(--text-muted)',
+        borderBottom: `2px solid ${active ? 'var(--accent)' : 'transparent'}`,
+        marginBottom: -1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+const inputStyle = {
+  padding: '5px 8px', borderRadius: 6, fontSize: 12,
+  background: 'var(--bg-hover)', border: '1px solid var(--border)',
+  color: 'var(--text-primary)', outline: 'none',
+};
+
+// ---- VLAN names tab ----
+
+function VlanRow({ v, categories, isAdmin, onSaved, onShowDevices }) {
+  const { t } = useTranslation();
+  const [name, setName]         = useState(v.name);
+  const [category, setCategory] = useState(v.category);
+  const [saving, setSaving]     = useState(false);
+  const [status, setStatus]     = useState('');
+
+  useEffect(() => { setName(v.name); setCategory(v.category); }, [v.name, v.category]);
+
+  const dirty = name.trim() !== v.name || category !== v.category;
+
+  async function save() {
+    setSaving(true);
+    setStatus('');
+    try {
+      await api.put(`/inventory/vlans/${v.vlan_id}`, { name: name.trim(), category });
+      setStatus('ok');
+      onSaved();
+    } catch (e) {
+      setStatus(e?.response?.data?.error || t('error'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const cell = { padding: '7px 12px', borderBottom: '1px solid var(--border)' };
+  const num  = { ...cell, color: 'var(--text-muted)', textAlign: 'end', fontVariantNumeric: 'tabular-nums' };
+
+  return (
+    <tr>
+      <td style={{ ...cell, fontFamily: 'monospace', fontWeight: 600 }}>{v.vlan_id}</td>
+      <td style={cell}>
+        {isAdmin ? (
+          <input
+            value={name}
+            maxLength={64}
+            onChange={e => { setName(e.target.value); setStatus(''); }}
+            onKeyDown={e => { if (e.key === 'Enter' && dirty) save(); }}
+            placeholder={t('inv_vlan_name_ph')}
+            style={{ ...inputStyle, width: 220 }}
+          />
+        ) : (v.name || <span style={{ color: 'var(--text-muted)' }}>—</span>)}
+      </td>
+      <td style={cell}>
+        {isAdmin ? (
+          <select
+            value={category}
+            onChange={e => { setCategory(e.target.value); setStatus(''); }}
+            style={inputStyle}
+          >
+            <option value="">{t('inv_vlan_no_category')}</option>
+            {categories.map(c => (
+              <option key={c} value={c}>{CAT_META[c]?.icon} {t(`inv_cat_${c.toLowerCase()}`)}</option>
+            ))}
+          </select>
+        ) : (v.category ? `${CAT_META[v.category]?.icon || ''} ${t(`inv_cat_${v.category.toLowerCase()}`)}` : '—')}
+      </td>
+      <td style={num}>{v.endpoints.toLocaleString()}</td>
+      <td style={{ ...num, color: v.unknown ? CAT_META.Unknown.color : 'var(--text-muted)' }}>{v.unknown.toLocaleString()}</td>
+      <td style={num}>{v.ports.toLocaleString()}</td>
+      <td style={num}>{v.switches.toLocaleString()}</td>
+      <td style={{ ...cell, whiteSpace: 'nowrap', minWidth: isAdmin ? 250 : 0 }}>
+        {isAdmin && (
+          <button
+            className="nm-btn nm-btn-primary"
+            style={{ padding: '4px 12px', fontSize: 12, marginInlineEnd: 6 }}
+            disabled={!dirty || saving}
+            onClick={save}
+          >
+            {saving ? t('saving') : t('save')}
+          </button>
+        )}
+        {v.endpoints > 0 && (
+          <button
+            className="nm-btn nm-btn-ghost"
+            style={{ padding: '4px 10px', fontSize: 12 }}
+            onClick={() => onShowDevices(v.vlan_id)}
+          >
+            {t('inv_vlan_show')}
+          </button>
+        )}
+        {status === 'ok' && <span style={{ marginInlineStart: 8, fontSize: 12, color: '#10b981' }}>✓ {t('inv_vlan_saved')}</span>}
+        {status && status !== 'ok' && <span style={{ marginInlineStart: 8, fontSize: 12, color: '#ef4444' }}>{status}</span>}
+      </td>
+    </tr>
+  );
+}
+
+function VlanTab({ isAdmin, onSaved, onShowDevices }) {
+  const { t } = useTranslation();
+  const [data, setData]       = useState(null);
+  const [error, setError]     = useState('');
+  const [filter, setFilter]   = useState('');
+
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      const r = await api.get('/inventory/vlans');
+      setData(r.data);
+    } catch (_) {
+      setError(t('error'));
+    }
+  }, [t]);
+
+  useEffect(() => { load(); }, [load]);
+
+  function handleSaved() {
+    load();
+    onSaved();
+  }
+
+  if (error)  return <div style={{ color: '#ef4444' }}>{error}</div>;
+  if (!data)  return <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('loading')}</div>;
+
+  const q = filter.trim().toLowerCase();
+  const vlans = q
+    ? data.vlans.filter(v => String(v.vlan_id).includes(q) || (v.name || '').toLowerCase().includes(q))
+    : data.vlans;
+
+  const th = { padding: '10px 12px', textAlign: 'start', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' };
+  const thNum = { ...th, textAlign: 'end' };
+
+  return (
+    <>
+      <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-muted)', maxWidth: 820 }}>
+        {t('inv_vlans_hint')}
+        {!isAdmin && <><br />{t('inv_vlan_readonly')}</>}
+      </p>
+      <div style={{ marginBottom: 14 }}>
+        <input
+          type="text"
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          placeholder={`🔍 ${t('inv_vlan_search_ph')}`}
+          style={{ ...inputStyle, width: 280, padding: '7px 12px', fontSize: 13 }}
+        />
+      </div>
+      <div className="nm-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-hover)', borderBottom: '1px solid var(--border)' }}>
+                <th style={th}>VLAN</th>
+                <th style={th}>{t('inv_vlan_name')}</th>
+                <th style={th}>{t('inv_vlan_category')}</th>
+                <th style={thNum}>{t('inv_vlan_endpoints')}</th>
+                <th style={thNum}>{t('inv_vlan_unknown')}</th>
+                <th style={thNum}>{t('inv_vlan_ports')}</th>
+                <th style={thNum}>{t('inv_vlan_switches')}</th>
+                <th style={th}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {vlans.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    {t('no_data')}
+                  </td>
+                </tr>
+              ) : vlans.map(v => (
+                <VlanRow
+                  key={v.vlan_id}
+                  v={v}
+                  categories={data.categories}
+                  isAdmin={isAdmin}
+                  onSaved={handleSaved}
+                  onShowDevices={onShowDevices}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ---- Main page ----
 
 export default function InventoryPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
+  const [tab, setTab]                 = useState('devices');
+  const [vlanFilter, setVlanFilter]   = useState(null);
   const [summary, setSummary]         = useState(null);
   const [rows, setRows]               = useState([]);
   const [total, setTotal]             = useState(0);
@@ -83,11 +290,11 @@ export default function InventoryPage() {
   }, [t]);
 
   // Load table rows
-  const loadRows = useCallback(async (cat, q, pg) => {
+  const loadRows = useCallback(async (cat, q, pg, vlan) => {
     setLoadingRows(true);
     try {
       const r = await api.get('/inventory/entries', {
-        params: { category: cat === 'All' ? '' : cat, search: q, page: pg, limit: LIMIT },
+        params: { category: cat === 'All' ? '' : cat, search: q, page: pg, limit: LIMIT, vlan: vlan || '' },
       });
       setRows(r.data.rows);
       setTotal(r.data.total);
@@ -105,20 +312,33 @@ export default function InventoryPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setPage(1);
-      loadRows(selectedCat, search, 1);
+      loadRows(selectedCat, search, 1, vlanFilter);
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, selectedCat, loadRows]);
+  }, [search, selectedCat, vlanFilter, loadRows]);
 
   // When page changes
   useEffect(() => {
-    loadRows(selectedCat, search, page);
+    loadRows(selectedCat, search, page, vlanFilter);
   }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleCatClick(cat) {
     const next = selectedCat === cat ? 'All' : cat;
     setSelectedCat(next);
     setPage(1);
+  }
+
+  function showVlanDevices(vlan) {
+    setVlanFilter(vlan);
+    setSelectedCat('All');
+    setSearch('');
+    setTab('devices');
+  }
+
+  // A VLAN category re-classifies Unknown rows, so the cards and table both change.
+  function handleVlanSaved() {
+    loadSummary();
+    loadRows(selectedCat, search, page, vlanFilter);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -135,6 +355,18 @@ export default function InventoryPage() {
           {t('inventory_subtitle')}
         </p>
       </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+        <TabButton active={tab === 'devices'} onClick={() => setTab('devices')}>{t('inv_tab_devices')}</TabButton>
+        <TabButton active={tab === 'vlans'} onClick={() => setTab('vlans')}>{t('inv_tab_vlans')}</TabButton>
+      </div>
+
+      {tab === 'vlans' && (
+        <VlanTab isAdmin={isAdmin} onSaved={handleVlanSaved} onShowDevices={showVlanDevices} />
+      )}
+
+      <div style={{ display: tab === 'devices' ? 'block' : 'none' }}>
 
       {/* Summary cards */}
       {loading ? (
@@ -190,6 +422,21 @@ export default function InventoryPage() {
             color: 'var(--text-primary)', outline: 'none',
           }}
         />
+        {vlanFilter && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '4px 10px', borderRadius: 12, fontSize: 12,
+            background: 'var(--bg-hover)', border: '1px solid var(--accent)', color: 'var(--text-primary)',
+          }}>
+            {t('inv_vlan_filter', { vlan: vlanFilter })}
+            <span
+              onClick={() => { setVlanFilter(null); setPage(1); }}
+              style={{ cursor: 'pointer', color: 'var(--accent)', textDecoration: 'underline' }}
+            >
+              {t('inv_vlan_clear')}
+            </span>
+          </span>
+        )}
         {loadingRows && (
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('loading')}</span>
         )}
@@ -207,6 +454,7 @@ export default function InventoryPage() {
                   t('col_hostname'),
                   t('inv_col_vendor'),
                   t('inv_col_category'),
+                  t('inv_col_vlan'),
                   t('inv_col_device'),
                   t('last_seen'),
                 ].map(h => (
@@ -219,7 +467,7 @@ export default function InventoryPage() {
             <tbody>
               {rows.length === 0 && !loadingRows ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan={8} style={{ padding: '20px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     {t('no_data')}
                   </td>
                 </tr>
@@ -246,14 +494,29 @@ export default function InventoryPage() {
                       {r.vendor || <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td style={{ padding: '8px 12px' }}>
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        padding: '2px 8px', borderRadius: 10, fontSize: 11,
-                        background: `${meta.color}22`, border: `1px solid ${meta.color}55`,
-                        color: meta.color,
-                      }}>
+                      <span
+                        title={r.category_source === 'vlan' ? t('inv_vlan_by_vlan') : undefined}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '2px 8px', borderRadius: 10, fontSize: 11,
+                          background: `${meta.color}22`,
+                          border: `1px ${r.category_source === 'vlan' ? 'dashed' : 'solid'} ${meta.color}${r.category_source === 'vlan' ? '' : '55'}`,
+                          color: meta.color,
+                        }}
+                      >
                         {meta.icon} {t(`inv_cat_${r.category.toLowerCase()}`)}
                       </span>
+                    </td>
+                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', fontSize: 11 }}>
+                      {r.vlan ? (
+                        <span
+                          onClick={() => { setVlanFilter(r.vlan); setPage(1); }}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>{r.vlan}</span>
+                          {r.vlan_name && <span style={{ color: 'var(--text-muted)' }}> · {r.vlan_name}</span>}
+                        </span>
+                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 11 }}>
                       <div>{r.device_name || r.device_ip}</div>
@@ -297,6 +560,7 @@ export default function InventoryPage() {
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

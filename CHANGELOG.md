@@ -2,6 +2,39 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.10] — 2026-09-18
+
+### Added
+- **VLAN names in Inventory** — a new **VLANs** tab lists every VLAN the system sees on
+  the network, with its device count, how many of those devices are still Unknown, and
+  how many switch ports and switches carry it. An administrator can give each VLAN a
+  name (e.g. 220 = Cameras, 443 = IT workstations) and optionally a category. VLANs
+  are read straight from the equipment over SNMP, with no manual list: first the L3
+  interface a device's ARP entry was learned on (`VLAN300`, `Vlan-interface1`,
+  `DEFAULT_VLAN`, `bond100.60`), falling back to the access VLAN (PVID) of its switch
+  port. The ARP VLAN wins because an IP phone sits on the voice VLAN while its port's
+  PVID is the data VLAN behind it. On the live dataset 9,800 of 9,844 endpoints (99.6%)
+  get a VLAN, across 82 VLANs.
+- **A VLAN's category classifies its unknown devices** — when a VLAN has a category,
+  endpoints on it that OUI/hostname classification left as Unknown take that category.
+  Devices that were already identified keep their own category. Those rows show the
+  category badge with a dashed border and a "Classified by VLAN name" tooltip.
+- **VLAN column and filter on the device table** — each row shows `220 · Cameras`;
+  clicking it (or "Show devices" on the VLANs tab) filters the table to that VLAN, and
+  the search box also matches VLAN names. Viewers see the names read-only; only admins
+  can edit them (`PUT /api/inventory/vlans/:id`), and every change is written to the
+  audit log.
+
+### Fixed
+- **Diagnostics report on IIS installs said the poller was missing** —
+  `collect-diagnostics.ps1` checked only Windows services, but an IIS deployment runs the
+  poller as the `NetMonitor Poller` Scheduled Task. The report now has a Scheduled Tasks
+  section with its state, last run and last result.
+- **CHANGELOG v1.3.0 deployment note** said `sc query TKCSPoller`. In PowerShell `sc` is
+  an alias for `Set-Content`, so the command silently wrote a file named `query` instead
+  of checking anything, and `TKCSPoller` was never the service name. It now reads
+  `Get-Service TKCommsSentinelPoller`.
+
 ## [1.3.9] — 2026-09-17
 
 ### Fixed
@@ -199,7 +232,8 @@ All notable changes to TK Comms Sentinel are documented here.
 1. `git pull` in `C:\dev\tkcs-installer`
 2. `npm run build` in `frontend\`
 3. Restart IIS app pool: `Stop-WebAppPool TKCommsSentinel; Start-WebAppPool TKCommsSentinel`
-4. Verify poller is running: `sc query TKCSPoller` — if STOPPED, run `sc start TKCSPoller`
+4. Verify poller is running: `Get-Service TKCommsSentinelPoller` — if Stopped, run `Start-Service TKCommsSentinelPoller`
+   (on an IIS deployment the poller is the Scheduled Task instead: `Get-ScheduledTask "NetMonitor Poller"`)
    (metrics data may be missing if poller stopped during v1.2.0 upgrade)
 
 ## [1.2.0] — 2026-09-14

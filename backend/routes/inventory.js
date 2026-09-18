@@ -2,7 +2,8 @@
 const express = require('express');
 const router  = express.Router();
 const { getDb }       = require('../db/database');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { logAudit }    = require('../db/audit');
 const dns  = require('dns');
 const path = require('path');
 const fs   = require('fs');
@@ -136,6 +137,48 @@ function classify(vendor, hostname, mac, ip, apSubnets) {
   return 'Unknown';
 }
 
+// Categories a VLAN may assign. Unknown is excluded: assigning it would be a no-op.
+const CATEGORIES      = ['Computers', 'Printers', 'APs', 'Cameras', 'Medical', 'Network', 'VMs', 'Unknown'];
+const VLAN_CATEGORIES = CATEGORIES.filter(c => c !== 'Unknown');
+
+// ---- VLAN detection ----
+
+function validVlan(n) {
+  return Number.isInteger(n) && n >= 1 && n <= 4094 ? n : null;
+}
+
+// Routers name their L3 VLAN interfaces differently per vendor: "VLAN300" (Aruba/
+// ProCurve), "Vlan-interface1" (H3C/HPE Comware), "DEFAULT_VLAN" (ProCurve VLAN 1),
+// and "bond100.60" / "irb.220" (a sub-interface tagged with the VLAN).
+function vlanFromIfName(name) {
+  if (!name) return null;
+  let m = name.match(/vlan[-_ ]?(?:interface)?[-_ ]?(\d{1,4})\b/i);
+  if (m) return validVlan(+m[1]);
+  if (/^default_vlan$/i.test(name)) return 1;
+  m = name.match(/\.(\d{1,4})$/);
+  if (m) return validVlan(+m[1]);
+  return null;
+}
+
+// device_id:if_index → { pvid, ifVlan }. pvid is the access VLAN of a switch port;
+// ifVlan is the VLAN an L3 interface (where ARP entries are learned) belongs to.
+function buildPortVlanMap(db) {
+  const rows = db.prepare(`SELECT device_id, if_index, if_name, pvid FROM ports`).all();
+  const map = new Map();
+  for (const r of rows) {
+    map.set(`${r.device_id}:${r.if_index}`, {
+      pvid:   validVlan(r.pvid),
+      ifVlan: vlanFromIfName(r.if_name),
+    });
+  }
+  return map;
+}
+
+function loadVlanNames(db) {
+  const rows = db.prepare(`SELECT vlan_id, name, category FROM vlan_names`).all();
+  return new Map(rows.map(r => [r.vlan_id, { name: r.name || '', category: r.category || '' }]));
+}
+
 // Access threshold: ports with > this many MACs are considered uplinks
 const ACCESS_MAX_MACS = 8;
 
@@ -219,9 +262,11 @@ function resolveOne(db, ip, done) {
 // carrying its IP, so cross-referencing by MAC recovers it. Doing the aggregation here
 // rather than as a SQL GROUP BY is ~5x faster on this table, and it lets the hostname
 // be looked up against the recovered address.
-function buildMacIpMap(db) {
+// The ARP row also tells which L3 interface the address was learned on, which gives
+// the VLAN the device actually lives in.
+function buildMacIpMap(db, portVlans) {
   const rows = db.prepare(`
-    SELECT mac_address, ip_address, last_seen
+    SELECT mac_address, ip_address, last_seen, device_id, if_index
     FROM mac_entries
     WHERE ip_address IS NOT NULL AND ip_address != ''
   `).all();
@@ -231,7 +276,8 @@ function buildMacIpMap(db) {
     const prev = map.get(r.mac_address);
     // A MAC can hold several IPs over time (DHCP); keep the most recent.
     if (!prev || r.last_seen > prev.seen) {
-      map.set(r.mac_address, { ip: r.ip_address, seen: r.last_seen });
+      const port = portVlans.get(`${r.device_id}:${r.if_index}`);
+      map.set(r.mac_address, { ip: r.ip_address, seen: r.last_seen, vlan: port ? port.ifVlan : null });
     }
   }
   return map;
@@ -242,7 +288,7 @@ function buildHostnameMap(db) {
   return new Map(rows.map(r => [r.ip, r.hostname]));
 }
 
-// Loads the inventory row set and attaches address, hostname, vendor and category.
+// Loads the inventory row set and attaches address, hostname, vendor, VLAN and category.
 function loadInventory(db) {
   const rows = db.prepare(`${BASE_CTE}
     SELECT
@@ -250,6 +296,8 @@ function loadInventory(db) {
       me.ip_address,
       me.last_seen,
       me.device_id,
+      me.if_index,
+      me.phys_if_index,
       d.name  AS device_name,
       d.ip    AS device_ip,
       p.if_name,
@@ -264,19 +312,40 @@ function loadInventory(db) {
     ORDER BY me.last_seen DESC
   `).all();
 
-  const macIp    = buildMacIpMap(db);
+  const portVlans = buildPortVlanMap(db);
+  const macIp     = buildMacIpMap(db, portVlans);
   const hostnames = buildHostnameMap(db);
+  const vlanNames = loadVlanNames(db);
 
-  const resolved = rows.map(r => {
+  const resolved = rows.map(({ if_index, phys_if_index, ...r }) => {
     const known    = macIp.get(r.mac_address);
     const ip       = r.ip_address || (known ? known.ip : null);
     const hostname = ip ? (hostnames.get(ip) || null) : null;
-    return { ...r, ip_address: ip, hostname, vendor: lookupVendor(r.mac_address) || '' };
+
+    // Prefer the L3 (ARP) VLAN over the port's access VLAN: an IP phone sits on the
+    // voice VLAN while its port's PVID is the data VLAN behind it.
+    const ownArp  = r.ip_address && if_index != null ? portVlans.get(`${r.device_id}:${if_index}`) : null;
+    const phys    = phys_if_index != null ? portVlans.get(`${r.device_id}:${phys_if_index}`) : null;
+    const vlan    = (ownArp && ownArp.ifVlan) || (known && known.vlan) || (phys && phys.pvid) || null;
+    const vlanRec = vlan ? vlanNames.get(vlan) : null;
+
+    return {
+      ...r,
+      ip_address: ip,
+      hostname,
+      vendor:    lookupVendor(r.mac_address) || '',
+      vlan,
+      vlan_name: vlanRec ? vlanRec.name : '',
+    };
   });
 
   const apSubnets = findApSubnets(resolved);
   for (const r of resolved) {
-    r.category = classify(r.vendor, r.hostname, r.mac_address, r.ip_address, apSubnets);
+    const auto = classify(r.vendor, r.hostname, r.mac_address, r.ip_address, apSubnets);
+    const vlanCat = auto === 'Unknown' && r.vlan ? (vlanNames.get(r.vlan) || {}).category : '';
+    r.auto_category   = auto;
+    r.category        = vlanCat || auto;
+    r.category_source = vlanCat ? 'vlan' : 'auto';
   }
   return resolved;
 }
@@ -290,13 +359,91 @@ router.get('/', requireAuth, (req, res) => {
   for (const r of rows) counts[r.category] = (counts[r.category] || 0) + 1;
 
   const total    = Object.values(counts).reduce((s, n) => s + n, 0);
-  const cats     = ['Computers', 'Printers', 'APs', 'Cameras', 'Medical', 'Network', 'VMs', 'Unknown'];
-  const categories = cats.map(name => ({ name, count: counts[name] || 0 }));
+  const categories = CATEGORIES.map(name => ({ name, count: counts[name] || 0 }));
 
   res.json({ categories, total });
 });
 
-// ---- GET /api/inventory/entries?category=&search=&page=1&limit=100 ----
+// ---- GET /api/inventory/vlans — detected VLANs with their user-given names ----
+
+router.get('/vlans', requireAuth, (req, res) => {
+  const db    = getDb();
+  const rows  = loadInventory(db);
+  const names = loadVlanNames(db);
+
+  const stats = new Map();
+  const statOf = vlan => {
+    if (!stats.has(vlan)) stats.set(vlan, { endpoints: 0, unknown: 0, ports: 0, switches: new Set() });
+    return stats.get(vlan);
+  };
+
+  for (const r of rows) {
+    if (!r.vlan) continue;
+    const s = statOf(r.vlan);
+    s.endpoints++;
+    if (r.auto_category === 'Unknown') s.unknown++;
+  }
+
+  const ports = db.prepare(`SELECT device_id, pvid FROM ports WHERE pvid IS NOT NULL`).all();
+  for (const p of ports) {
+    const vlan = validVlan(p.pvid);
+    if (!vlan) continue;
+    const s = statOf(vlan);
+    s.ports++;
+    s.switches.add(p.device_id);
+  }
+
+  // Keep named VLANs listed even when nothing is currently seen on them.
+  for (const vlan of names.keys()) statOf(vlan);
+
+  const vlans = [...stats.entries()].map(([vlan_id, s]) => {
+    const n = names.get(vlan_id) || { name: '', category: '' };
+    return {
+      vlan_id,
+      name:      n.name,
+      category:  n.category,
+      endpoints: s.endpoints,
+      unknown:   s.unknown,
+      ports:     s.ports,
+      switches:  s.switches.size,
+    };
+  }).sort((a, b) => b.endpoints - a.endpoints || b.ports - a.ports || a.vlan_id - b.vlan_id);
+
+  res.json({ vlans, categories: VLAN_CATEGORIES });
+});
+
+// ---- PUT /api/inventory/vlans/:id  { name, category } — admin only ----
+
+router.put('/vlans/:id', requireAdmin, (req, res) => {
+  const vlan = validVlan(Number(req.params.id));
+  if (!vlan) return res.status(400).json({ error: 'VLAN must be 1-4094' });
+
+  const name     = String((req.body && req.body.name) || '').trim().slice(0, 64);
+  const category = String((req.body && req.body.category) || '').trim();
+  if (category && !VLAN_CATEGORIES.includes(category)) {
+    return res.status(400).json({ error: `Unknown category: ${category}` });
+  }
+
+  const db    = getDb();
+  const audit = { username: req.user && req.user.username, ip: req.ip };
+
+  if (!name && !category) {
+    db.prepare(`DELETE FROM vlan_names WHERE vlan_id = ?`).run(vlan);
+    logAudit('info', 'admin', 'vlan_name_cleared', { vlan }, audit);
+  } else {
+    db.prepare(`
+      INSERT INTO vlan_names (vlan_id, name, category, updated_at)
+      VALUES (?, ?, ?, unixepoch())
+      ON CONFLICT(vlan_id) DO UPDATE SET
+        name = excluded.name, category = excluded.category, updated_at = excluded.updated_at
+    `).run(vlan, name, category || null);
+    logAudit('info', 'admin', 'vlan_name_updated', { vlan, name, category }, audit);
+  }
+
+  res.json({ vlan_id: vlan, name, category });
+});
+
+// ---- GET /api/inventory/entries?category=&vlan=&search=&page=1&limit=100 ----
 
 router.get('/entries', requireAuth, (req, res) => {
   const db   = getDb();
@@ -315,8 +462,14 @@ router.get('/entries', requireAuth, (req, res) => {
     enriched = enriched.filter(r => r.category === cat);
   }
 
+  const vlan = validVlan(Number(req.query.vlan));
+  if (vlan) {
+    enriched = enriched.filter(r => r.vlan === vlan);
+  }
+
   if (q) {
     enriched = enriched.filter(r =>
+      (r.vlan_name   || '').toLowerCase().includes(q) ||
       (r.mac_address || '').toLowerCase().includes(q) ||
       (r.ip_address  || '').toLowerCase().includes(q) ||
       (r.hostname    || '').toLowerCase().includes(q) ||

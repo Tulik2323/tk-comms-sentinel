@@ -203,6 +203,17 @@ async function initDb() {
   try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_mac_devport ON mac_entries(device_id, phys_if_index, mac_address)'); } catch (_) {}
   try { _sqlDb.exec('ALTER TABLE mac_entries ADD COLUMN phys_if_index INTEGER'); } catch (_) {}
 
+  // שמות VLAN שהמשתמש נותן בדף Inventory. category (אופציונלי) מסווג
+  // תחנות שנשארו Unknown אחרי סיווג OUI/hostname.
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS vlan_names (
+      vlan_id    INTEGER PRIMARY KEY,
+      name       TEXT,
+      category   TEXT,
+      updated_at INTEGER DEFAULT (unixepoch())
+    )
+  `);
+
   // מטמון תרגום IP -> hostname (reverse DNS). hostname=NULL means "checked,
   // no PTR record" — עדיין נשמר עם resolved_at כדי לא לנסות שוב מייד.
   _sqlDb.exec(`

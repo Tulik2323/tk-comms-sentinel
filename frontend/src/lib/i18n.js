@@ -274,6 +274,8 @@ const he = {
 
     // audit log message templates
     audit_settings_updated:   'עדכון הגדרות: {{fields}}',
+    audit_vlan_name_updated:  'VLAN {{vlan}} קיבל את השם "{{name}}"',
+    audit_vlan_name_cleared:  'השם של VLAN {{vlan}} נמחק',
     audit_smtp_test_ok:       'בדיקת SMTP הצליחה: {{host}}:{{port}}',
     audit_smtp_test_failed:   'בדיקת SMTP נכשלה: {{error}}',
     audit_test_email_sent:    'נשלח מייל בדיקה אל {{to}}',
@@ -621,6 +623,25 @@ const he = {
     inv_cat_network:      'תשתית רשת',
     inv_cat_vms:          'מכונות וירטואליות',
     inv_cat_unknown:      'לא מזוהה',
+    inv_tab_devices:      'מכשירים',
+    inv_tab_vlans:        'VLANים',
+    inv_col_vlan:         'VLAN',
+    inv_vlans_hint:       'ה-VLANים שזוהו ברשת (מטבלאות ARP ומה-VLAN של הפורטים במתגים). תן לכל VLAN שם. אם תבחר גם קטגוריה, מכשירים לא מזוהים ב-VLAN הזה יסווגו לפיה.',
+    inv_vlan_name:        'שם',
+    inv_vlan_name_ph:     'למשל: מחשבי IT',
+    inv_vlan_category:    'קטגוריה ללא-מזוהים',
+    inv_vlan_no_category: '— ללא —',
+    inv_vlan_endpoints:   'מכשירים',
+    inv_vlan_unknown:     'לא מזוהים',
+    inv_vlan_ports:       'פורטים',
+    inv_vlan_switches:    'מתגים',
+    inv_vlan_show:        'הצג מכשירים',
+    inv_vlan_search_ph:   'חיפוש VLAN / שם...',
+    inv_vlan_filter:      'מסונן לפי VLAN {{vlan}}',
+    inv_vlan_clear:       'נקה סינון',
+    inv_vlan_readonly:    'רק מנהל מערכת יכול לערוך שמות VLAN',
+    inv_vlan_by_vlan:     'סווג לפי שם ה-VLAN',
+    inv_vlan_saved:       'נשמר',
   }
 };
 
@@ -880,6 +901,8 @@ const en = {
 
     // audit log message templates
     audit_settings_updated:   'Settings updated: {{fields}}',
+    audit_vlan_name_updated:  'VLAN {{vlan}} named "{{name}}"',
+    audit_vlan_name_cleared:  'VLAN {{vlan}} name cleared',
     audit_smtp_test_ok:       'SMTP test succeeded: {{host}}:{{port}}',
     audit_smtp_test_failed:   'SMTP test failed: {{error}}',
     audit_test_email_sent:    'Test email sent to {{to}}',
@@ -1227,6 +1250,25 @@ const en = {
     inv_cat_network:      'Network Infra',
     inv_cat_vms:          'Virtual Machines',
     inv_cat_unknown:      'Unknown',
+    inv_tab_devices:      'Devices',
+    inv_tab_vlans:        'VLANs',
+    inv_col_vlan:         'VLAN',
+    inv_vlans_hint:       'VLANs detected on the network (from ARP tables and switch port VLANs). Give each VLAN a name. If you also pick a category, unknown devices on that VLAN are classified with it.',
+    inv_vlan_name:        'Name',
+    inv_vlan_name_ph:     'e.g. IT workstations',
+    inv_vlan_category:    'Category for unknowns',
+    inv_vlan_no_category: '— none —',
+    inv_vlan_endpoints:   'Devices',
+    inv_vlan_unknown:     'Unknown',
+    inv_vlan_ports:       'Ports',
+    inv_vlan_switches:    'Switches',
+    inv_vlan_show:        'Show devices',
+    inv_vlan_search_ph:   'Search VLAN / name...',
+    inv_vlan_filter:      'Filtered by VLAN {{vlan}}',
+    inv_vlan_clear:       'Clear filter',
+    inv_vlan_readonly:    'Only an administrator can edit VLAN names',
+    inv_vlan_by_vlan:     'Classified by VLAN name',
+    inv_vlan_saved:       'Saved',
   }
 };
 
