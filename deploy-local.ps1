@@ -65,7 +65,11 @@ Write-Host "  App Pool restarted OK" -ForegroundColor Green
 # 5. prepare package\versions\{ver} for Inno Setup
 Write-Host "`n[5/7] preparing package\versions\$ver..." -ForegroundColor Yellow
 $pkgVer     = "$SRC\package\versions\$ver"
-$pkgVerPrev = (Get-ChildItem "$SRC\package\versions" -Directory | Sort-Object Name | Select-Object -Last 1).FullName
+# Sort by version, not by name: as text "1.3.10" sorts before "1.3.9", so a name sort
+# would clone an older version as the base once the patch number reaches two digits.
+$pkgVerPrev = (Get-ChildItem "$SRC\package\versions" -Directory |
+    Sort-Object { $v = $null; if ([version]::TryParse($_.Name, [ref]$v)) { $v } else { [version]'0.0' } } |
+    Select-Object -Last 1).FullName
 
 if (-not (Test-Path $pkgVer)) {
     if ($pkgVerPrev -and $pkgVerPrev -ne $pkgVer) {
