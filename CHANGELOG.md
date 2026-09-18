@@ -2,6 +2,23 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.11] — 2026-09-18
+
+### Added
+- **`backend/scripts/check-schema.js`** — a fixed, read-only tool for inspecting the
+  database structure: `node check-schema.js` lists the tables, and
+  `node check-schema.js <table>` shows a table's columns and row count. It finds the
+  database the same way the server does (`.env` from `TKCS_DATA_DIR` or `backend\`, then
+  `DB_PATH`), so it works on both installed and IIS deployments. The table name is
+  checked against the real table list before any SQL runs.
+
+### Fixed
+- **The schema tool kept disappearing from the live server** — it had been created
+  directly in the IIS folder rather than in the repo, and `deploy-local.ps1` mirrors
+  `backend\` with `robocopy /MIR`, which deletes every file that is not in the repo. The
+  1.3.9 deploy deleted it hours after it was created. It is now tracked, so every deploy
+  puts it back.
+
 ## [1.3.10] — 2026-09-18
 
 ### Added
