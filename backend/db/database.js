@@ -214,6 +214,20 @@ async function initDb() {
     )
   `);
 
+  // force=1: הקטגוריה של ה-VLAN גוברת גם על מכשירים שסווגו אוטומטית (ולא רק על Unknown).
+  try { _sqlDb.exec('ALTER TABLE vlan_names ADD COLUMN force INTEGER DEFAULT 0'); } catch (_) {}
+
+  // קטגוריות Inventory שהמשתמש הגדיר בעצמו (בנוסף לקטגוריות המובנות).
+  // vlan_names.category מצביע אליהן במפתח 'custom_<id>'.
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS inv_categories (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL,
+      icon       TEXT NOT NULL,
+      created_at INTEGER DEFAULT (unixepoch())
+    )
+  `);
+
   // מטמון תרגום IP -> hostname (reverse DNS). hostname=NULL means "checked,
   // no PTR record" — עדיין נשמר עם resolved_at כדי לא לנסות שוב מייד.
   _sqlDb.exec(`

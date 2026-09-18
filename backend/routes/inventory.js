@@ -141,6 +141,54 @@ function classify(vendor, hostname, mac, ip, apSubnets) {
 const CATEGORIES      = ['Computers', 'Printers', 'APs', 'Cameras', 'Medical', 'Network', 'VMs', 'Unknown'];
 const VLAN_CATEGORIES = CATEGORIES.filter(c => c !== 'Unknown');
 
+// ---- Custom categories ----
+// User-defined categories live in inv_categories and are referenced everywhere as the
+// key 'custom_<id>', so they never collide with the built-in names above.
+
+const CUSTOM_ICONS = [
+  '🩻', '❤️', '🏥', '🔬', '🧪', '💊', '🩺', '🧬',
+  '🖥️', '⚙️', '🏭', '🔌', '📞', '📺', '🎛️', '🗄️',
+  '🔒', '🚪', '💡', '🧊', '📦', '🔧', '🛰️', '📟',
+];
+const CUSTOM_COLORS   = ['#ec4899', '#14b8a6', '#f97316', '#84cc16', '#a855f7', '#0ea5e9', '#eab308', '#f43f5e'];
+const CUSTOM_MAX      = 30;
+const CUSTOM_NAME_MAX = 32;
+
+const customKey = id => `custom_${id}`;
+
+function loadCustomCategories(db) {
+  return db.prepare(`SELECT id, name, icon FROM inv_categories ORDER BY id`).all().map(r => ({
+    key:   customKey(r.id),
+    id:    r.id,
+    label: r.name,
+    icon:  r.icon,
+    color: CUSTOM_COLORS[r.id % CUSTOM_COLORS.length],
+    custom: true,
+  }));
+}
+
+// Validates an admin-supplied category: '' (none), a built-in, or an existing custom one.
+function isAssignableCategory(db, category) {
+  if (!category) return true;
+  if (VLAN_CATEGORIES.includes(category)) return true;
+  return loadCustomCategories(db).some(c => c.key === category);
+}
+
+function cleanCategoryInput(body) {
+  const name = String((body && body.name) || '').replace(/\s+/g, ' ').trim();
+  const icon = String((body && body.icon) || '');
+  if (!name) return { error: 'Name is required' };
+  if (name.length > CUSTOM_NAME_MAX) return { error: `Name is limited to ${CUSTOM_NAME_MAX} characters` };
+  if (!CUSTOM_ICONS.includes(icon)) return { error: 'Choose an icon from the list' };
+  return { name, icon };
+}
+
+function categoryNameTaken(db, name, exceptId) {
+  const lower = name.toLowerCase();
+  if (CATEGORIES.some(c => c.toLowerCase() === lower)) return true;
+  return loadCustomCategories(db).some(c => c.id !== exceptId && c.label.toLowerCase() === lower);
+}
+
 // ---- VLAN detection ----
 
 function validVlan(n) {
@@ -175,8 +223,10 @@ function buildPortVlanMap(db) {
 }
 
 function loadVlanNames(db) {
-  const rows = db.prepare(`SELECT vlan_id, name, category FROM vlan_names`).all();
-  return new Map(rows.map(r => [r.vlan_id, { name: r.name || '', category: r.category || '' }]));
+  const rows = db.prepare(`SELECT vlan_id, name, category, force FROM vlan_names`).all();
+  return new Map(rows.map(r => [r.vlan_id, {
+    name: r.name || '', category: r.category || '', force: r.force ? 1 : 0,
+  }]));
 }
 
 // Access threshold: ports with > this many MACs are considered uplinks
@@ -339,13 +389,25 @@ function loadInventory(db) {
     };
   });
 
+  const custom    = new Map(loadCustomCategories(db).map(c => [c.key, c]));
+  const validCat  = c => VLAN_CATEGORIES.includes(c) || custom.has(c);
+
   const apSubnets = findApSubnets(resolved);
   for (const r of resolved) {
     const auto = classify(r.vendor, r.hostname, r.mac_address, r.ip_address, apSubnets);
-    const vlanCat = auto === 'Unknown' && r.vlan ? (vlanNames.get(r.vlan) || {}).category : '';
+    const rec  = r.vlan ? vlanNames.get(r.vlan) : null;
+
+    // A VLAN's category fills in devices that OUI/hostname left as Unknown. With the
+    // per-VLAN "force" flag it also overrides devices that were already identified.
+    const vlanCat = rec && rec.category && validCat(rec.category) && (auto === 'Unknown' || rec.force)
+      ? rec.category : '';
+
     r.auto_category   = auto;
     r.category        = vlanCat || auto;
     r.category_source = vlanCat ? 'vlan' : 'auto';
+
+    const c = custom.get(r.category);
+    if (c) r.category_meta = { label: c.label, icon: c.icon, color: c.color };
   }
   return resolved;
 }
@@ -358,10 +420,69 @@ router.get('/', requireAuth, (req, res) => {
   const counts = {};
   for (const r of rows) counts[r.category] = (counts[r.category] || 0) + 1;
 
-  const total    = Object.values(counts).reduce((s, n) => s + n, 0);
-  const categories = CATEGORIES.map(name => ({ name, count: counts[name] || 0 }));
+  const total = Object.values(counts).reduce((s, n) => s + n, 0);
+
+  // Built-ins first, then the user's own, with Unknown always last.
+  const builtin = CATEGORIES.filter(c => c !== 'Unknown').map(name => ({ name, count: counts[name] || 0 }));
+  const custom  = loadCustomCategories(getDb()).map(c => ({
+    name: c.key, label: c.label, icon: c.icon, color: c.color, custom: true, count: counts[c.key] || 0,
+  }));
+  const categories = [...builtin, ...custom, { name: 'Unknown', count: counts.Unknown || 0 }];
 
   res.json({ categories, total });
+});
+
+// ---- Custom categories — admin only to change ----
+
+router.get('/categories', requireAuth, (req, res) => {
+  res.json({ categories: loadCustomCategories(getDb()), icons: CUSTOM_ICONS });
+});
+
+router.post('/categories', requireAdmin, (req, res) => {
+  const db = getDb();
+  const c  = cleanCategoryInput(req.body);
+  if (c.error) return res.status(400).json({ error: c.error });
+  if (db.prepare(`SELECT COUNT(*) n FROM inv_categories`).get().n >= CUSTOM_MAX) {
+    return res.status(400).json({ error: `At most ${CUSTOM_MAX} custom categories` });
+  }
+  if (categoryNameTaken(db, c.name, null)) return res.status(409).json({ error: 'A category with this name already exists' });
+
+  const info = db.prepare(`INSERT INTO inv_categories (name, icon) VALUES (?, ?)`).run(c.name, c.icon);
+  logAudit('info', 'admin', 'inv_category_created', { name: c.name }, { username: req.user && req.user.username, ip: req.ip });
+
+  const created = loadCustomCategories(db).find(x => x.id === Number(info.lastInsertRowid));
+  res.status(201).json(created);
+});
+
+router.put('/categories/:id', requireAdmin, (req, res) => {
+  const db  = getDb();
+  const id  = Number(req.params.id);
+  const cur = Number.isInteger(id) ? db.prepare(`SELECT name FROM inv_categories WHERE id = ?`).get(id) : null;
+  if (!cur) return res.status(404).json({ error: 'No such category' });
+
+  const c = cleanCategoryInput(req.body);
+  if (c.error) return res.status(400).json({ error: c.error });
+  if (categoryNameTaken(db, c.name, id)) return res.status(409).json({ error: 'A category with this name already exists' });
+
+  db.prepare(`UPDATE inv_categories SET name = ?, icon = ? WHERE id = ?`).run(c.name, c.icon, id);
+  logAudit('info', 'admin', 'inv_category_updated', { old: cur.name, name: c.name }, { username: req.user && req.user.username, ip: req.ip });
+  res.json(loadCustomCategories(db).find(x => x.id === id));
+});
+
+// Deleting releases every VLAN that used the category; those devices fall back to
+// their own automatic classification (Unknown when nothing else identified them).
+router.delete('/categories/:id', requireAdmin, (req, res) => {
+  const db  = getDb();
+  const id  = Number(req.params.id);
+  const cur = Number.isInteger(id) ? db.prepare(`SELECT name FROM inv_categories WHERE id = ?`).get(id) : null;
+  if (!cur) return res.status(404).json({ error: 'No such category' });
+
+  const released = db.prepare(`UPDATE vlan_names SET category = NULL, force = 0 WHERE category = ?`).run(customKey(id)).changes;
+  db.prepare(`DELETE FROM vlan_names WHERE (name IS NULL OR name = '') AND category IS NULL`).run();
+  db.prepare(`DELETE FROM inv_categories WHERE id = ?`).run(id);
+
+  logAudit('info', 'admin', 'inv_category_deleted', { name: cur.name, vlans: released }, { username: req.user && req.user.username, ip: req.ip });
+  res.json({ deleted: id, vlans_released: released });
 });
 
 // ---- GET /api/inventory/vlans — detected VLANs with their user-given names ----
@@ -397,11 +518,12 @@ router.get('/vlans', requireAuth, (req, res) => {
   for (const vlan of names.keys()) statOf(vlan);
 
   const vlans = [...stats.entries()].map(([vlan_id, s]) => {
-    const n = names.get(vlan_id) || { name: '', category: '' };
+    const n = names.get(vlan_id) || { name: '', category: '', force: 0 };
     return {
       vlan_id,
       name:      n.name,
       category:  n.category,
+      force:     n.force,
       endpoints: s.endpoints,
       unknown:   s.unknown,
       ports:     s.ports,
@@ -409,22 +531,28 @@ router.get('/vlans', requireAuth, (req, res) => {
     };
   }).sort((a, b) => b.endpoints - a.endpoints || b.ports - a.ports || a.vlan_id - b.vlan_id);
 
-  res.json({ vlans, categories: VLAN_CATEGORIES });
+  const categories = [
+    ...VLAN_CATEGORIES.map(key => ({ key, custom: false })),
+    ...loadCustomCategories(db),
+  ];
+  res.json({ vlans, categories, icons: CUSTOM_ICONS });
 });
 
-// ---- PUT /api/inventory/vlans/:id  { name, category } — admin only ----
+// ---- PUT /api/inventory/vlans/:id  { name, category, force } — admin only ----
 
 router.put('/vlans/:id', requireAdmin, (req, res) => {
   const vlan = validVlan(Number(req.params.id));
   if (!vlan) return res.status(400).json({ error: 'VLAN must be 1-4094' });
 
+  const db       = getDb();
   const name     = String((req.body && req.body.name) || '').trim().slice(0, 64);
   const category = String((req.body && req.body.category) || '').trim();
-  if (category && !VLAN_CATEGORIES.includes(category)) {
+  if (!isAssignableCategory(db, category)) {
     return res.status(400).json({ error: `Unknown category: ${category}` });
   }
+  // "Force" only means something when there is a category to force.
+  const force = category && req.body && req.body.force ? 1 : 0;
 
-  const db    = getDb();
   const audit = { username: req.user && req.user.username, ip: req.ip };
 
   if (!name && !category) {
@@ -432,15 +560,16 @@ router.put('/vlans/:id', requireAdmin, (req, res) => {
     logAudit('info', 'admin', 'vlan_name_cleared', { vlan }, audit);
   } else {
     db.prepare(`
-      INSERT INTO vlan_names (vlan_id, name, category, updated_at)
-      VALUES (?, ?, ?, unixepoch())
+      INSERT INTO vlan_names (vlan_id, name, category, force, updated_at)
+      VALUES (?, ?, ?, ?, unixepoch())
       ON CONFLICT(vlan_id) DO UPDATE SET
-        name = excluded.name, category = excluded.category, updated_at = excluded.updated_at
-    `).run(vlan, name, category || null);
-    logAudit('info', 'admin', 'vlan_name_updated', { vlan, name, category }, audit);
+        name = excluded.name, category = excluded.category,
+        force = excluded.force, updated_at = excluded.updated_at
+    `).run(vlan, name, category || null, force);
+    logAudit('info', 'admin', 'vlan_name_updated', { vlan, name, category, force }, audit);
   }
 
-  res.json({ vlan_id: vlan, name, category });
+  res.json({ vlan_id: vlan, name, category, force });
 });
 
 // ---- GET /api/inventory/entries?category=&vlan=&search=&page=1&limit=100 ----

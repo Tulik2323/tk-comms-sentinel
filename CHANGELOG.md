@@ -2,6 +2,32 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.3.12] — 2026-09-18
+
+### Added
+- **Custom Inventory categories** — besides the built-in ones (Computers, Printers,
+  Cameras, ...), an administrator can now create categories of their own, for example
+  "Radiology & Cardiology" for VLANs 441/442. Open a VLAN's category dropdown on the VLANs
+  tab and choose **➕ New category...**: type a name and pick an icon from a list (the
+  colour is assigned automatically). The new category is selected on that VLAN straight
+  away, gets its own summary card at the top of the page, and works in the filter and the
+  table like any built-in one. A "Your categories" strip on the VLANs tab lets an admin
+  rename a category, change its icon, or delete it. Deleting releases every VLAN that used
+  it, and those devices return to their own automatic classification. The name is a single
+  text shown the same way in Hebrew and English. Categories are validated server-side
+  (unique name, up to 32 characters, up to 30 categories, icon from the list), changing
+  them is admin-only, and every create / rename / delete is written to the audit log.
+- **Per-VLAN "Incl. identified" checkbox** — until now a VLAN's category applied only to
+  devices still classed as Unknown, which left the already-identified devices out of a
+  medical-equipment VLAN (VLAN 441 holds 13 devices the vendor lookup calls "Computers").
+  Ticking the box makes the VLAN's category apply to every device on it. It is off by
+  default, so a general VLAN such as 60 keeps its cameras and printers in their own
+  categories.
+
+### Changed
+- The summary cards now come from the server's category list, so user-defined categories
+  appear in it; the order is built-in categories, then custom ones, then Unknown last.
+
 ## [1.3.11] — 2026-09-18
 
 ### Added
