@@ -1,7 +1,7 @@
 ﻿{
-    "date":  "2026-09-17",
-    "sha256":  "a50cee430fad94ddf66edf2f18209099b011201576cea3cf43e734dcd717c447",
-    "version":  "1.3.9",
+    "date":  "2026-09-18",
+    "sha256":  "c528400ec21fcf06cda7b6edb2f38c49cc2165250bb91d04a579030d18ad2287",
+    "version":  "1.3.10",
     "downloadUrl":  "https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe",
     "notes":  "See CHANGELOG for details"
 }
