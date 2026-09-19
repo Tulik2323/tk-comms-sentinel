@@ -131,6 +131,8 @@ async function initDb() {
     'ALTER TABLE devices          ADD COLUMN model         TEXT',
     'ALTER TABLE devices          ADD COLUMN hw_status     TEXT',
     'ALTER TABLE alert_thresholds ADD COLUMN port_if_index INTEGER',
+    // כמה דקות הערך חייב להישאר מעל הסף לפני התראה. שורות קיימות מקבלות 5 — ההתנהגות שהייתה קודם.
+    'ALTER TABLE alert_thresholds ADD COLUMN duration_min  INTEGER DEFAULT 5',
     'ALTER TABLE alert_events     ADD COLUMN port_if_index INTEGER',
     'ALTER TABLE audit_log        ADD COLUMN msg_key       TEXT',
     'ALTER TABLE audit_log        ADD COLUMN msg_params    TEXT',
@@ -163,6 +165,23 @@ async function initDb() {
       'ON alert_thresholds(metric) WHERE device_id IS NULL'
     );
   } catch (_) {}
+
+  // ספי התראה ייעודיים לפורט. טבלה נפרדת ולא alert_thresholds: שם יש UNIQUE(device_id, metric)
+  // ברמת הטבלה, שחוסם סף פורט לצד סף המכשיר ושני פורטים על אותו מכשיר, והוא לא ניתן להסרה
+  // בלי לבנות את הטבלה מחדש. ה-UNIQUE כאן הוא לא-חלקי, כך ש-ON CONFLICT מתאים לו.
+  // duration_min = NULL: המשך עובר בירושה מסף המכשיר/הגלובלי.
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS alert_port_thresholds (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id     INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+      if_index      INTEGER NOT NULL,
+      metric        TEXT    NOT NULL,
+      threshold_pct REAL    NOT NULL,
+      duration_min  INTEGER,
+      enabled       INTEGER DEFAULT 1,
+      UNIQUE(device_id, if_index, metric)
+    )
+  `);
 
   // הגדרות ברירת מחדל שנוספו בגרסאות מאוחרות
   _sqlDb.exec("INSERT OR IGNORE INTO system_settings VALUES ('app_base_url', '')");

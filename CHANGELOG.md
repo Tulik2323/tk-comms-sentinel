@@ -2,6 +2,50 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.4.1] — 2026-09-19
+
+### Added
+- **A duration for every alert threshold** — until now an alert was sent after two polls in a
+  row above the threshold, a fixed ~5 minutes that could not be changed. Every threshold
+  (global, per device, or per port) now has its own **"Must stay above the threshold for
+  (minutes)"** value, set in the Add / Edit Threshold window (0 to 1,440). The default is 5,
+  which is the previous behaviour, so every existing threshold acts exactly as it did. Use
+  it, for example, for a switch that should only be reported after it has stayed at a high
+  load for 10 minutes: give that switch its own row with 10. The time is measured on the
+  clock between polls rather than counted in polls, so it holds for any polling interval.
+  A dip below the threshold restarts the count, and so does a gap of more than two and a
+  half polling intervals with no reading. Values are checked at every poll, so an alert
+  arrives at the first poll after the time has passed; 0 alerts at the first poll above the
+  threshold. The alert e-mail now states how long the value stayed above the threshold.
+- **Edit button on the Threshold Settings table** — opens the same window pre-filled.
+  Choosing a device and metric that already have a threshold now loads that threshold's
+  values, so changing one no longer means re-adding it blind. The table also gained a
+  **Duration** column and lists per-port thresholds as "device · port".
+
+### Fixed
+- **A threshold for a single port could not be saved.** In a port's detail window, "Alert
+  threshold for this port" failed silently on Save (the server rejected it with `ON CONFLICT
+  clause does not match any PRIMARY KEY or UNIQUE constraint`), so no per-port threshold had
+  ever been stored. Per-port thresholds now live in a new table, `alert_port_thresholds`:
+  the old table carries a table-level `UNIQUE(device_id, metric)` that would also have
+  blocked a port threshold next to a device one, and a second port on the same device, and
+  SQLite cannot drop it without rebuilding the table. The old table is left as it was apart
+  from the new `duration_min` column, so nothing is rewritten and a downgrade stays safe.
+  Save now shows the server's error instead of failing silently, Reset refreshes the shown
+  "Current" value at once (it used to keep showing the removed override), and a port
+  threshold's duration is optional: left empty it inherits the device or global one.
+- A port threshold now also takes effect on a device that has no bandwidth threshold of its
+  own and no global one.
+
+### Changed
+- The Add Threshold window now lists only the four metrics the alert engine evaluates:
+  Total Inbound Traffic, Total Outbound Traffic, CPU and Memory. "Inbound Traffic",
+  "Outbound Traffic", "Status (DOWN)" and "Path Down" were offered as well, but a threshold
+  saved with any of them never did anything. The server now rejects them, and any such row
+  already in the table stays visible so it can be deleted. The server also validates the
+  rest of the input: a threshold between 1 and 100, a duration that is a whole number from
+  0 to 1,440, and a device that exists.
+
 ## [1.4.0] — 2026-09-19
 
 ### Added

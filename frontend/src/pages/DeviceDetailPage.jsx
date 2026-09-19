@@ -49,6 +49,7 @@ export default function DeviceDetailPage() {
   const [selectedPort,   setSelectedPort]   = useState(null);
   const [portThresh,     setPortThresh]     = useState(null);
   const [threshEdit,     setThreshEdit]     = useState({});
+  const [durEdit,        setDurEdit]        = useState({}); // metric -> משך בדקות (ריק = ירושה)
   const [threshSaving,   setThreshSaving]   = useState(false);
   const [portEndpoints,  setPortEndpoints]  = useState(null);
   const [portHistory,    setPortHistory]    = useState(null); // [{ts,in_bps,out_bps}]
@@ -64,6 +65,7 @@ export default function DeviceDetailPage() {
     setSelectedPort(port);
     setPortThresh(null);
     setThreshEdit({});
+    setDurEdit({});
     setPortEndpoints(null);
     setPortHistory(null);
     const [threshRes, endpRes, histRes] = await Promise.allSettled([
@@ -78,6 +80,11 @@ export default function DeviceDetailPage() {
         init[m] = String(v);
       }
       setThreshEdit(init);
+      const initDur = {};
+      for (const [m, v] of Object.entries(threshRes.value.data.portOverrideDurations || {})) {
+        if (v != null) initDur[m] = String(v);
+      }
+      setDurEdit(initDur);
     } else {
       setPortThresh({ effective: {}, portOverrides: {} });
     }
@@ -103,17 +110,29 @@ export default function DeviceDetailPage() {
     return null;
   }
 
+  // טוען מחדש את הסף בפועל מהשרת: המשך יכול לעבור בירושה מסף המכשיר/הגלובלי,
+  // ורק השרת יודע מה הערך שנכנס לתוקף.
+  async function reloadPortThreshold() {
+    const r = await api.get(`/devices/${id}/port-threshold/${selectedPort.if_index}`);
+    setPortThresh(r.data);
+  }
+
   async function savePortThreshold(metric) {
     const val = Number(threshEdit[metric]);
     if (!val || val < 1 || val > 100) return;
+    // משך ריק = ירושה
+    const durRaw = durEdit[metric];
+    const dur    = durRaw === undefined || durRaw === '' ? null : Number(durRaw);
+    if (dur !== null && (!Number.isInteger(dur) || dur < 0 || dur > 1440)) {
+      alert(t('duration_invalid'));
+      return;
+    }
     setThreshSaving(true);
     try {
-      await api.put(`/devices/${id}/port-threshold/${selectedPort.if_index}`, { metric, threshold_pct: val });
-      setPortThresh(prev => ({
-        ...prev,
-        portOverrides: { ...prev.portOverrides, [metric]: val },
-        effective: { ...prev.effective, [metric]: { threshold_pct: val, source: 'port' } },
-      }));
+      await api.put(`/devices/${id}/port-threshold/${selectedPort.if_index}`, { metric, threshold_pct: val, duration_min: dur });
+      await reloadPortThreshold();
+    } catch (err) {
+      alert(err.response?.data?.error || t('error'));
     } finally { setThreshSaving(false); }
   }
 
@@ -121,10 +140,11 @@ export default function DeviceDetailPage() {
     setThreshSaving(true);
     try {
       await api.delete(`/devices/${id}/port-threshold/${selectedPort.if_index}/${metric}`);
-      const overrides = { ...(portThresh?.portOverrides || {}) };
-      delete overrides[metric];
-      setPortThresh(prev => ({ ...prev, portOverrides: overrides }));
+      await reloadPortThreshold();
       setThreshEdit(prev => { const n = { ...prev }; delete n[metric]; return n; });
+      setDurEdit(prev => { const n = { ...prev }; delete n[metric]; return n; });
+    } catch (err) {
+      alert(err.response?.data?.error || t('error'));
     } finally { setThreshSaving(false); }
   }
 
@@ -712,23 +732,37 @@ export default function DeviceDetailPage() {
                       </span>
                       {eff && (
                         <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {t('now_label')}: {eff.threshold_pct}% ({sourceLabel[eff.source] || eff.source})
+                          {t('now_label')}: {eff.threshold_pct}% · {eff.duration_min} {t('minutes_short')} ({sourceLabel[eff.source] || eff.source})
                         </span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                       <input
                         type="number" min="1" max="100"
                         value={editVal}
                         onChange={e => setThreshEdit(prev => ({ ...prev, [metric]: e.target.value }))}
                         placeholder={eff ? String(eff.threshold_pct) : '80'}
                         style={{
-                          flex: 1, padding: '5px 9px', borderRadius: 6,
+                          flex: 1, minWidth: 60, padding: '5px 9px', borderRadius: 6,
                           border: '1px solid var(--border)', background: 'var(--bg-card)',
                           color: 'var(--text-primary)', fontSize: 13,
                         }}
                       />
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>%</span>
+                      <input
+                        type="number" min="0" max="1440" step="1"
+                        value={durEdit[metric] ?? ''}
+                        onChange={e => setDurEdit(prev => ({ ...prev, [metric]: e.target.value }))}
+                        placeholder={eff ? String(eff.duration_min) : '5'}
+                        title={t('port_duration_label')}
+                        aria-label={t('port_duration_label')}
+                        style={{
+                          width: 64, padding: '5px 9px', borderRadius: 6,
+                          border: '1px solid var(--border)', background: 'var(--bg-card)',
+                          color: 'var(--text-primary)', fontSize: 13,
+                        }}
+                      />
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('minutes_short')}</span>
                       <button
                         onClick={() => savePortThreshold(metric)}
                         disabled={threshSaving || !editVal}

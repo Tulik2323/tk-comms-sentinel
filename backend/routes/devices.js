@@ -7,6 +7,7 @@ const { pingSnmp }      = require('../services/snmp');
 const { forcePoll }     = require('../services/poller');
 const { logAudit }      = require('../db/audit');
 const { attachHostnames } = require('../services/hostnames');
+const { PORT_METRICS, DEFAULT_DURATION_MIN, parsePct, parseDuration, savePortThreshold } = require('../services/thresholds');
 
 // ייצוא כל המכשירים כ-CSV (לפני /:id כדי לא להתנגש)
 router.get('/export', requireAuth, (req, res) => {
@@ -205,36 +206,46 @@ router.get('/:id/port-threshold/:ifIndex', requireAuth, (req, res) => {
 
   // סף ספציפי לפורט
   const portRow = db.prepare(`
-    SELECT metric, threshold_pct, enabled, 'port' AS source
-    FROM alert_thresholds
-    WHERE device_id = ? AND port_if_index = ? AND enabled = 1
+    SELECT metric, threshold_pct, duration_min, enabled, 'port' AS source
+    FROM alert_port_thresholds
+    WHERE device_id = ? AND if_index = ? AND enabled = 1
   `).all(devId, ifIndex);
 
   // סף ברמת מכשיר (ללא port_if_index)
   const devRows = db.prepare(`
-    SELECT metric, threshold_pct, enabled, 'device' AS source
+    SELECT metric, threshold_pct, duration_min, enabled, 'device' AS source
     FROM alert_thresholds
     WHERE device_id = ? AND port_if_index IS NULL AND enabled = 1
   `).all(devId);
 
   // גלובלי
   const globalRows = db.prepare(`
-    SELECT metric, threshold_pct, enabled, 'global' AS source
+    SELECT metric, threshold_pct, duration_min, enabled, 'global' AS source
     FROM alert_thresholds
     WHERE device_id IS NULL AND port_if_index IS NULL AND enabled = 1
   `).all();
 
-  // בנה map של metric -> { threshold_pct, source }
+  // בנה map של metric -> { threshold_pct, duration_min, source }.
+  // סף פורט בלי משך משלו יורש את המשך של הסף שהוא דורס — כמו במנוע ההתראות.
   const map = {};
   for (const r of [...globalRows, ...devRows, ...portRow]) {
-    map[r.metric] = { threshold_pct: r.threshold_pct, source: r.source };
+    const inherited = r.source === 'port' && map[r.metric] ? map[r.metric].duration_min : DEFAULT_DURATION_MIN;
+    map[r.metric] = {
+      threshold_pct: r.threshold_pct,
+      duration_min:  r.duration_min ?? inherited,
+      source:        r.source,
+    };
   }
 
-  // האם יש override ספציפי לפורט זה?
+  // האם יש override ספציפי לפורט זה? (אחוז, ובנפרד המשך — null = ירושה)
   const portOverrides = {};
-  for (const r of portRow) portOverrides[r.metric] = r.threshold_pct;
+  const portOverrideDurations = {};
+  for (const r of portRow) {
+    portOverrides[r.metric] = r.threshold_pct;
+    portOverrideDurations[r.metric] = r.duration_min;
+  }
 
-  res.json({ effective: map, portOverrides });
+  res.json({ effective: map, portOverrides, portOverrideDurations });
 });
 
 // PUT /api/devices/:id/port-threshold/:ifIndex — קבע סף ספציפי לפורט
@@ -242,18 +253,22 @@ router.put('/:id/port-threshold/:ifIndex', requireAdmin, (req, res) => {
   const db      = getDb();
   const devId   = Number(req.params.id);
   const ifIndex = Number(req.params.ifIndex);
-  const { metric, threshold_pct } = req.body;
+  const { metric, threshold_pct, duration_min } = req.body;
 
-  if (!metric || threshold_pct == null) {
-    return res.status(400).json({ error: 'metric ו-threshold_pct נדרשים' });
+  if (!PORT_METRICS.includes(metric)) {
+    return res.status(400).json({ error: `metric לא נתמך (${PORT_METRICS.join(' / ')})` });
+  }
+  const pct = parsePct(threshold_pct);
+  if (pct == null) return res.status(400).json({ error: 'threshold_pct חייב להיות בין 1 ל-100' });
+  const dur = parseDuration(duration_min);
+  if (!dur.ok) return res.status(400).json({ error: 'duration_min חייב להיות מספר שלם בין 0 ל-1440' });
+
+  if (!db.prepare('SELECT id FROM devices WHERE id = ?').get(devId)) {
+    return res.status(404).json({ error: 'מכשיר לא נמצא' });
   }
 
-  db.prepare(`
-    INSERT INTO alert_thresholds (device_id, port_if_index, metric, threshold_pct, enabled)
-    VALUES (?, ?, ?, ?, 1)
-    ON CONFLICT(device_id, port_if_index, metric) DO UPDATE
-      SET threshold_pct = excluded.threshold_pct, enabled = 1
-  `).run(devId, ifIndex, metric, Number(threshold_pct));
+  // משך ריק = ירושה מסף המכשיר/הגלובלי
+  savePortThreshold(db, { deviceId: devId, ifIndex, metric, pct, duration: dur.value ?? null });
 
   res.json({ ok: true });
 });
@@ -266,8 +281,8 @@ router.delete('/:id/port-threshold/:ifIndex/:metric', requireAdmin, (req, res) =
   const { metric } = req.params;
 
   db.prepare(`
-    DELETE FROM alert_thresholds
-    WHERE device_id = ? AND port_if_index = ? AND metric = ?
+    DELETE FROM alert_port_thresholds
+    WHERE device_id = ? AND if_index = ? AND metric = ?
   `).run(devId, ifIndex, metric);
 
   res.json({ ok: true });

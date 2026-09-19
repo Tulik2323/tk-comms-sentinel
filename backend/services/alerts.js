@@ -2,16 +2,39 @@
 const nodemailer = require('nodemailer');
 const { getDb, getSetting } = require('../db/database');
 const { decrypt }           = require('./secrets');
+const { DEFAULT_DURATION_MIN } = require('./thresholds');
 
 // Map של מכשירים שנשלחה להם התראה (למניעת spam)
 // deviceId_metric -> unixtime of last alert
 const lastAlertSent = new Map();
 const ALERT_COOLDOWN_SEC = 3600; // לא לשלוח יותר מפעם בשעה
 
-// דורש N pollים עוקבים שהסף חצוי לפני שליחת התראה
-// (כדי לסנן ספייקים חולפים)
-const SUSTAINED_POLLS_REQUIRED = 2;
-const breachCount = new Map(); // key -> מספר pollים עוקבים שחצו את הסף
+// הערך חייב להישאר מעל הסף לפחות duration_min דקות לפני שליחת התראה
+// (כדי לסנן ספייקים חולפים). המשך נקבע לכל סף בנפרד, ולכן הזמן נמדד בשעון
+// ולא בספירת pollים.
+// breachRun: key -> { since, last } — תחילת הרצף הנוכחי מעל הסף והדגימה האחרונה בו (unixtime)
+const breachRun = new Map();
+
+// האם הרצף מעל הסף נמשך מספיק זמן? רושם את הדגימה הנוכחית ברצף.
+function sustainedLongEnough(key, now, durationMin, intervalSec) {
+  let run = breachRun.get(key);
+  // חלפו יותר משני מרווחי poll וחצי מהדגימה הקודמת: לא ראינו מה קרה בינתיים,
+  // ולכן הרצף מתחיל מחדש ולא נחשב כאילו נמשך ברציפות.
+  if (!run || now - run.last > intervalSec * 2.5) {
+    run = { since: now, last: now };
+    breachRun.set(key, run);
+  } else {
+    run.last = now;
+  }
+  if (durationMin <= 0) return true;
+
+  // המרווח בין שני pollים של אותו מכשיר סוטה בכמה שניות מ-poll_interval_sec (ה-SNMP walk
+  // לא נמשך אותו זמן בכל סבב). הסטייה לא צריכה לדחות את ההתראה סבב שלם, אבל הרצף
+  // חייב להשתרע על לפחות שתי דגימות.
+  const slack   = Math.min(60, Math.floor(intervalSec * 0.2));
+  const elapsed = now - run.since;
+  return elapsed > 0 && elapsed + slack >= durationMin * 60;
+}
 
 // ערכי placeholder שהגיעו עם הפרויקט. אם הם נשארו — SMTP לא הוגדר באמת,
 // וניסיון לשלוח אליהם רק תולה את התהליך על פתרון DNS שלעולם לא יצליח.
@@ -115,19 +138,22 @@ async function checkThresholds(device, metrics) {
 
   // טען pragim לכל מכשיר ואת ברירת המחדל הגלובלית
   const thresholds = db.prepare(`
-    SELECT metric, threshold_pct, enabled
+    SELECT metric, threshold_pct, duration_min
     FROM alert_thresholds
-    WHERE (device_id = ? OR device_id IS NULL) AND enabled = 1
+    WHERE (device_id = ? OR device_id IS NULL) AND port_if_index IS NULL AND enabled = 1
     ORDER BY device_id DESC  -- מכשיר ספציפי מנצח גלובלי
   `).all(device.id);
 
-  // בנה map של metric -> threshold_pct (הראשון שנמצא הוא הספציפי ביותר)
+  // בנה map של metric -> { pct, durationMin } (הראשון שנמצא הוא הספציפי ביותר)
   const threshMap = {};
   for (const t of thresholds) {
     if (!(t.metric in threshMap)) {
-      threshMap[t.metric] = t.threshold_pct;
+      threshMap[t.metric] = { pct: t.threshold_pct, durationMin: t.duration_min ?? DEFAULT_DURATION_MIN };
     }
   }
+
+  // כמה זמן עובר בין שני pollים של המכשיר — הבסיס לחישוב משך הרצף מעל הסף
+  const intervalSec = device.poll_interval_sec > 0 ? device.poll_interval_sec : 300;
 
   const maxBps = getMaxBps(device);
   const checks = [
@@ -144,18 +170,16 @@ async function checkThresholds(device, metrics) {
       ? (check.value / (check.maxBps || 1)) * 100
       : check.value;
 
-    const threshold = threshMap[check.metric];
+    const { pct: threshold, durationMin } = threshMap[check.metric];
     const key = `${device.id}_${check.metric}`;
 
     if (pct < threshold) {
-      breachCount.delete(key); // ספייק נעלם — אפס מונה
+      breachRun.delete(key); // ספייק נעלם — אפס את הרצף
       continue;
     }
 
-    // ספור pollים עוקבים מעל הסף
-    const consecutive = (breachCount.get(key) || 0) + 1;
-    breachCount.set(key, consecutive);
-    if (consecutive < SUSTAINED_POLLS_REQUIRED) continue; // עדיין לא מספיק
+    // הרצף מעל הסף עדיין לא נמשך מספיק זמן
+    if (!sustainedLongEnough(key, now, durationMin, intervalSec)) continue;
 
     const lastSent = lastAlertSent.get(key) || 0;
     if (now - lastSent < ALERT_COOLDOWN_SEC) continue;
@@ -193,6 +217,7 @@ async function checkThresholds(device, metrics) {
       `מטריקה: ${check.label}\n` +
       `ערך: ${Math.round(pct)}%\n` +
       `סף: ${threshold}%\n` +
+      (durationMin > 0 ? `מעל הסף לפחות: ${durationMin} דקות\n` : '') +
       (topPortDetail ? `פורט הכי עמוס:${topPortDetail.replace(' | פורט: ', ' ')}\n` : '') +
       `זמן: ${new Date().toLocaleString('he-IL')}` +
       deviceLink(device.id)
@@ -200,12 +225,34 @@ async function checkThresholds(device, metrics) {
   }
 
   // התראות per-port — כל פורט פעיל עם מהירות ידועה נבדק בנפרד
-  await checkPortThresholds(device, threshMap, now);
+  await checkPortThresholds(device, threshMap, now, intervalSec);
 }
 
-async function checkPortThresholds(device, threshMap, now) {
+// סף פורט ייעודי מנצח את סף המכשיר/הגלובלי. סף פורט בלי משך משלו יורש את המשך של הסף שהוא דורס.
+function effectivePortRule(portRule, baseRule) {
+  if (!portRule) return baseRule || null;
+  return {
+    pct:         portRule.pct,
+    durationMin: portRule.durationMin ?? (baseRule ? baseRule.durationMin : DEFAULT_DURATION_MIN),
+  };
+}
+
+async function checkPortThresholds(device, threshMap, now, intervalSec) {
   const db = getDb();
-  if (threshMap['bandwidth_in'] == null && threshMap['bandwidth_out'] == null) return;
+
+  // טען כל ה-overrides הייעודיים לפורטים של מכשיר זה בבת אחת
+  const portOverrideRows = db.prepare(`
+    SELECT if_index, metric, threshold_pct, duration_min
+    FROM alert_port_thresholds
+    WHERE device_id = ? AND enabled = 1
+  `).all(device.id);
+  if (!threshMap['bandwidth_in'] && !threshMap['bandwidth_out'] && portOverrideRows.length === 0) return;
+
+  const portOverrides = {};
+  for (const r of portOverrideRows) {
+    if (!portOverrides[r.if_index]) portOverrides[r.if_index] = {};
+    portOverrides[r.if_index][r.metric] = { pct: r.threshold_pct, durationMin: r.duration_min };
+  }
 
   const ports = db.prepare(`
     SELECT if_index, if_name, if_descr, if_alias, if_speed, in_bps, out_bps
@@ -213,56 +260,42 @@ async function checkPortThresholds(device, threshMap, now) {
     WHERE device_id = ? AND oper_status = 'up' AND if_speed > 0
   `).all(device.id);
 
-  // טען כל ה-overrides הייעודיים לפורטים של מכשיר זה בבת אחת
-  const portOverrideRows = db.prepare(`
-    SELECT port_if_index, metric, threshold_pct
-    FROM alert_thresholds
-    WHERE device_id = ? AND port_if_index IS NOT NULL AND enabled = 1
-  `).all(device.id);
-  const portOverrides = {};
-  for (const r of portOverrideRows) {
-    if (!portOverrides[r.port_if_index]) portOverrides[r.port_if_index] = {};
-    portOverrides[r.port_if_index][r.metric] = r.threshold_pct;
-  }
-
   const devLabel = device.name || device.ip;
 
   for (const port of ports) {
     const portLabel = port.if_alias || port.if_name || port.if_descr || `Port ${port.if_index}`;
     const po = portOverrides[port.if_index] || {};
 
-    // סף ייעודי לפורט מנצח את סף המכשיר/גלובלי
-    const inThresh  = po['bandwidth_in']  ?? threshMap['bandwidth_in'];
-    const outThresh = po['bandwidth_out'] ?? threshMap['bandwidth_out'];
+    const inRule  = effectivePortRule(po['bandwidth_in'],  threshMap['bandwidth_in']);
+    const outRule = effectivePortRule(po['bandwidth_out'], threshMap['bandwidth_out']);
 
     const portChecks = [
-      { dir: 'out', bps: port.out_bps, threshold: outThresh, label: 'תעבורה יוצאת',  metric: 'port_bandwidth_out' },
-      { dir: 'in',  bps: port.in_bps,  threshold: inThresh,  label: 'תעבורה נכנסת', metric: 'port_bandwidth_in'  },
+      { dir: 'out', bps: port.out_bps, rule: outRule, label: 'תעבורה יוצאת',  metric: 'port_bandwidth_out' },
+      { dir: 'in',  bps: port.in_bps,  rule: inRule,  label: 'תעבורה נכנסת', metric: 'port_bandwidth_in'  },
     ];
 
     for (const pc of portChecks) {
-      if (pc.threshold == null || pc.bps == null) continue;
+      if (!pc.rule || pc.bps == null) continue;
+      const { pct: threshold, durationMin } = pc.rule;
       const pct = (pc.bps / port.if_speed) * 100;
       const key = `${device.id}_port_${port.if_index}_${pc.dir}`;
 
-      if (pct < pc.threshold) {
-        breachCount.delete(key); // ספייק נעלם — אפס מונה
+      if (pct < threshold) {
+        breachRun.delete(key); // ספייק נעלם — אפס את הרצף
         continue;
       }
 
-      // ספור pollים עוקבים מעל הסף
-      const consecutive = (breachCount.get(key) || 0) + 1;
-      breachCount.set(key, consecutive);
-      if (consecutive < SUSTAINED_POLLS_REQUIRED) continue;
+      // הרצף מעל הסף עדיין לא נמשך מספיק זמן
+      if (!sustainedLongEnough(key, now, durationMin, intervalSec)) continue;
 
       const lastSent = lastAlertSent.get(key) || 0;
       if (now - lastSent < ALERT_COOLDOWN_SEC) continue;
 
-      const msg = `${devLabel} — פורט ${portLabel} [${port.if_index}]: ${pc.label} ${Math.round(pct)}% (סף: ${pc.threshold}%)`;
+      const msg = `${devLabel} — פורט ${portLabel} [${port.if_index}]: ${pc.label} ${Math.round(pct)}% (סף: ${threshold}%)`;
       db.prepare(`
         INSERT INTO alert_events (device_id, metric, value, threshold, message, port_if_index)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(device.id, pc.metric, Math.round(pct * 10) / 10, pc.threshold, msg, port.if_index);
+      `).run(device.id, pc.metric, Math.round(pct * 10) / 10, threshold, msg, port.if_index);
 
       lastAlertSent.set(key, now);
 
@@ -272,7 +305,8 @@ async function checkPortThresholds(device, threshMap, now) {
         `פורט: ${portLabel} [if_index: ${port.if_index}]\n` +
         `מטריקה: ${pc.label}\n` +
         `ערך: ${Math.round(pct)}%\n` +
-        `סף: ${pc.threshold}%\n` +
+        `סף: ${threshold}%\n` +
+        (durationMin > 0 ? `מעל הסף לפחות: ${durationMin} דקות\n` : '') +
         `זמן: ${new Date().toLocaleString('he-IL')}` +
         portLink(device.id, port.if_index)
       );
