@@ -2,7 +2,7 @@
 // פועל ברקע, בודק כל מכשיר לפי poll_interval_sec שלו
 const cron = require('node-cron');
 const { getDb } = require('../db/database');
-const { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getHardwareStatus, getPortVlans, getArpTable, getMacBridgeTable, explainSnmpError, parseVendorModel } = require('./snmp');
+const { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getHardwareStatus, getStackMembers, getPortVlans, getArpTable, getMacBridgeTable, explainSnmpError, parseVendorModel } = require('./snmp');
 const { saveMetrics, pruneOldMetrics } = require('./history');
 const { checkThresholds, checkDeviceDown, resolveDeviceDown } = require('./alerts');
 const { logAudit } = require('../db/audit');
@@ -22,6 +22,12 @@ const FAIL_THRESHOLD = 3;
 // MAC/ARP polling: כל כמה סבבים לסרוק ARP (לא כל poll — לחסוך SNMP load)
 const macPollCount  = new Map();
 const MAC_POLL_EVERY = 5;
+
+// מספר הסוויצ'ים הפיזיים במחסנית משתנה רק כשמישהו מוסיף או מסיר חבר, ולכן די לבדוק אותו
+// אחת לשעה (12 סבבים בברירת המחדל של 5 דקות). הבדיקה הראשונה רצה בסבב הראשון אחרי
+// הפעלת ה-poller, כך שהמספר מתמלא מיד אחרי עדכון גרסה.
+const stackPollCount  = new Map();
+const STACK_POLL_EVERY = 12;
 
 // פולל מכשיר אחד — מחזיר { ok: true/false }
 //
@@ -226,6 +232,18 @@ async function pollDevice(device, opts = {}) {
           n.remote_chassis_id, n.remote_port_id, n.remote_sys_name,
           now
         );
+      }
+    } catch (_) {}
+
+    // --- מספר סוויצ'ים פיזיים מאחורי הכתובת (מחסנית) ---
+    try {
+      const n = (stackPollCount.get(device.id) || 0) + 1;
+      stackPollCount.set(device.id, n);
+      if (n % STACK_POLL_EVERY === 1) {
+        const members = await getStackMembers(device);
+        if (members !== null) {
+          db.prepare('UPDATE devices SET stack_members = ? WHERE id = ?').run(members, device.id);
+        }
       }
     } catch (_) {}
 

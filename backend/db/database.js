@@ -214,6 +214,9 @@ async function initDb() {
     )
   `);
 
+  // כמה סוויצ'ים פיזיים מאחורי כתובת ה-IP של המכשיר (מחסנית). NULL = עדיין לא נמדד.
+  try { _sqlDb.exec('ALTER TABLE devices ADD COLUMN stack_members INTEGER'); } catch (_) {}
+
   // force=1: הקטגוריה של ה-VLAN גוברת גם על מכשירים שסווגו אוטומטית (ולא רק על Unknown).
   try { _sqlDb.exec('ALTER TABLE vlan_names ADD COLUMN force INTEGER DEFAULT 0'); } catch (_) {}
 

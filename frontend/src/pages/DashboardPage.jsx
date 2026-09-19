@@ -440,6 +440,12 @@ export default function DashboardPage() {
   const down    = devices.filter(d => d.status === 'down').length;
   const unknown = devices.filter(d => d.status === 'unknown').length;
 
+  // כל כתובת IP יכולה להיות מחסנית של כמה סוויצ'ים. stack_members מגיע מה-poller
+  // (ENTITY-MIB); null = עדיין לא נמדד או שהמכשיר לא מדווח, ולכן לא נספר.
+  const measured       = devices.filter(d => d.stack_members != null);
+  const physicalSwitches = measured.reduce((n, d) => n + d.stack_members, 0);
+  const unmeasured     = devices.length - measured.length;
+
   useEffect(() => {
     api.get('/alerts/events?limit=10')
       .then(r => setAlerts(r.data.events || []))
@@ -500,6 +506,15 @@ export default function DashboardPage() {
       {/* Stat Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginBottom: 24 }}>
         <StatCard label={t('total_devices')} value={devices.length} color="var(--accent)" icon="🖧" to="/devices" />
+        <StatCard
+          label={t('physical_switches')}
+          value={measured.length ? physicalSwitches : '—'}
+          color="var(--accent)"
+          icon="🔀"
+          sub={measured.length
+            ? (unmeasured > 0 ? t('switches_unmeasured', { count: unmeasured }) : t('switches_in_addresses', { count: devices.length }))
+            : t('switches_pending')}
+          to="/devices" />
         <StatCard label={t('devices_up')} value={up} color="var(--status-up)" icon="✅"
           sub={devices.length ? `${Math.round(up / devices.length * 100)}%` : ''} to="/devices?status=up" />
         <StatCard label={t('devices_down')} value={down} color="var(--status-down)" icon="❌" to="/devices?status=down" />

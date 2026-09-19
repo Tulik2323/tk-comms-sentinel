@@ -660,6 +660,30 @@ async function getHardwareStatus(device) {
   return null;
 }
 
+// כמה סוויצ'ים פיזיים מסתתרים מאחורי כתובת IP אחת.
+//
+// מחסנית (IRF של HPE Comware, Aruba VSF/stacking) מדווחת כמכשיר בודד עם כתובת אחת, אבל
+// ב-ENTITY-MIB כל חבר במחסנית מופיע כרשומה נפרדת מסוג chassis (entPhysicalClass = 3).
+// סופרים אותן: 1 = סוויץ' בודד, 5 = מחסנית של חמישה. אומת על HPE 5130, Aruba 2930F/2930M
+// ו-Aruba CX 6300M.
+//
+// מחזיר null כשהמכשיר לא ענה או שאין לו רשומות chassis, כדי שהקורא ישאיר את הערך
+// הקודם ולא ימחק אותו בגלל timeout חולף.
+const ENT_CLASS_CHASSIS = 3;
+
+async function getStackMembers(device) {
+  const session = createSession(device);
+  try {
+    const rows = await snmpWalk(session, OID.entPhysicalClass);
+    const chassis = rows.filter(r => toNum(r.value) === ENT_CLASS_CHASSIS).length;
+    return chassis > 0 ? chassis : null;
+  } catch (_) {
+    return null;
+  } finally {
+    safeClose(session);
+  }
+}
+
 // קבל PVID (VLAN ברירת מחדל) לכל פורט — מחזיר { ifIndex: pvid }
 // משתמש ב-Q-Bridge MIB (נתמך ברוב הסוויצ'ים המנוהלים)
 async function getPortVlans(device) {
@@ -758,4 +782,4 @@ async function getArpTable(device) {
   }
 }
 
-module.exports = { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getPortStatuses, getHardwareStatus, getPortVlans, getArpTable, getMacBridgeTable, pingSnmp, explainSnmpError, parseVendorModel, OID };
+module.exports = { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getPortStatuses, getHardwareStatus, getStackMembers, getPortVlans, getArpTable, getMacBridgeTable, pingSnmp, explainSnmpError, parseVendorModel, OID };

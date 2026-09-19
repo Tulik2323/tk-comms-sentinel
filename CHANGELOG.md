@@ -2,6 +2,31 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.4.0] — 2026-09-19
+
+### Added
+- **Physical switch count on the Dashboard** — a new **Physical Switches** card next to
+  "Total Devices". The 99 in "Total Devices" is the number of monitored IP addresses, but a
+  single address is often a whole stack of 2–10 switches, so it understated the real
+  equipment. The card now shows the number of physical switches (213 on the live system,
+  behind 99 addresses), with a note under it — "across 99 IP addresses", or "N addresses
+  without data" when some cannot be measured. The count comes from the device itself: in the
+  ENTITY-MIB every member of a stack appears as its own `chassis` entry
+  (`entPhysicalClass = 3`), so the poller counts those and stores the result in the new
+  `devices.stack_members` column. It is re-measured once an hour (the first reading is taken
+  in the first poll after an update, so the card fills in within minutes) and a failed or
+  empty reading never overwrites a known value. Verified on HPE Comware (IRF), Aruba
+  ProCurve 2930F/2930M and Aruba CX 6300M. Two gateway addresses that return no ENTITY-MIB
+  data are left out of the total and shown as "without data" rather than guessed as switches.
+
+### Fixed
+- **HPE switches were classified as Computers in Inventory** — HPE registers its switches
+  and its servers/PCs under the same `Hewlett Packard Enterprise` vendor name, so the vendor
+  lookup put every HPE switch address in Computers. An endpoint whose IP address belongs to
+  a device this system monitors is now Network infrastructure. On the live data 190 rows
+  moved from Computers to Network (Network 58 → 247). A VLAN's "Incl. identified" override
+  still takes precedence.
+
 ## [1.3.12] — 2026-09-18
 
 ### Added

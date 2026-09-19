@@ -69,6 +69,10 @@ const he = {
 
     // dashboard
     total_devices: 'סה"כ מכשירים',
+    physical_switches:      'סוויצ\'ים פיזיים',
+    switches_in_addresses:  'ב-{{count}} כתובות IP',
+    switches_unmeasured:    '{{count}} כתובות ללא נתון',
+    switches_pending:       'ממתין למדידה',
     devices_up:    'פעילים',
     devices_down:  'לא זמינים',
     top_bandwidth: 'עומס תעבורה גבוה',
@@ -711,6 +715,10 @@ const en = {
     scan_qr:     'Scan QR with Google Authenticator',
     enter_confirm_code: 'Enter code to confirm',
     total_devices: 'Total Devices',
+    physical_switches:      'Physical Switches',
+    switches_in_addresses:  'across {{count}} IP addresses',
+    switches_unmeasured:    '{{count}} addresses without data',
+    switches_pending:       'Waiting for first measurement',
     devices_up:    'Active',
     devices_down:  'Down',
     top_bandwidth: 'High Bandwidth Usage',

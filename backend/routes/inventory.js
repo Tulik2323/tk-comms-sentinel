@@ -392,9 +392,16 @@ function loadInventory(db) {
   const custom    = new Map(loadCustomCategories(db).map(c => [c.key, c]));
   const validCat  = c => VLAN_CATEGORIES.includes(c) || custom.has(c);
 
+  // A device this system itself monitors is network infrastructure by definition. The OUI
+  // alone cannot say so: HPE switches carry the same "Hewlett Packard Enterprise" name as
+  // its servers and PCs, so they were landing in Computers.
+  const monitoredIps = new Set(db.prepare(`SELECT ip FROM devices`).all().map(d => d.ip));
+
   const apSubnets = findApSubnets(resolved);
   for (const r of resolved) {
-    const auto = classify(r.vendor, r.hostname, r.mac_address, r.ip_address, apSubnets);
+    const auto = r.ip_address && monitoredIps.has(r.ip_address)
+      ? 'Network'
+      : classify(r.vendor, r.hostname, r.mac_address, r.ip_address, apSubnets);
     const rec  = r.vlan ? vlanNames.get(r.vlan) : null;
 
     // A VLAN's category fills in devices that OUI/hostname left as Unknown. With the
