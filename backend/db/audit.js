@@ -12,7 +12,27 @@ const EN_TEMPLATES = {
   login_failed:        p => `Login failed: ${p.username} — ${p.error}`,
   login_2fa_required:  p => `Login: ${p.username} (${p.role}) — 2FA setup required`,
   login_2fa_success:   p => `Login with 2FA: ${p.username} (${p.role})`,
+  login_2fa_failed:    p => `2FA code rejected: ${p.username}`,
+  login_locked:        p => `Sign-in temporarily blocked after repeated failures: ${p.username}`,
+  logout:              p => `Logout: ${p.username}`,
   twofa_setup_done:    p => `2FA set up and verified: ${p.username}`,
+  twofa_reset:         p => `2FA reset for ${p.username}`,
+  user_created:        p => `User created: ${p.username} (${p.role})`,
+  user_updated:        p => `User updated: ${p.username} — ${p.changes}`,
+  user_deleted:        p => `User deleted: ${p.username}`,
+  device_added:        p => `Device added: ${p.device} (${p.ip})`,
+  device_updated:      p => `Device updated: ${p.device} — ${p.fields}`,
+  device_deleted:      p => `Device deleted: ${p.device} (${p.ip})`,
+  threshold_saved:     p => `Alert threshold saved (${p.scope}): ${p.metric} ≥ ${p.pct}% for ${p.duration} min`,
+  threshold_saved_nodur: p => `Alert threshold saved (${p.scope}): ${p.metric} ≥ ${p.pct}%, duration inherited`,
+  threshold_disabled:  p => `Alert threshold disabled (${p.scope}): ${p.metric}`,
+  threshold_deleted:   p => `Alert threshold deleted (${p.scope}): ${p.metric}`,
+  map_image_uploaded:  p => `Map image uploaded (${p.mime}, ${p.size} bytes)`,
+  map_image_deleted:   () => 'Map image deleted',
+  license_activated:   p => `License activated${p.customer ? ` for ${p.customer}` : ''}${p.expiry ? `, valid until ${p.expiry}` : ''}`,
+  report_schedule_created: p => `Report schedule created: ${p.name} (${p.report_type}, ${p.cron_expr})`,
+  report_schedule_updated: p => `Report schedule updated: ${p.name}`,
+  report_schedule_deleted: p => `Report schedule deleted: ${p.name}`,
   scan_started:        p => `Scan started: ${p.target} (${p.count} IPs)`,
   scan_found:          p => `Scan found new SNMP device: ${p.ip}`,
   scan_error:          p => `Scan error for ${p.ip}: ${p.error}`,
@@ -45,6 +65,13 @@ const EN_TEMPLATES = {
  * @param {object} params  - פרמטרים להצבה בתרגום
  * @param {object} extra   - { device_id, ip, username } אופציונלי
  */
+// ::ffff:10.1.2.3 היא אותה כתובת כמו 10.1.2.3. Node מדווח על לקוח IPv4 בצורה הראשונה כשהשרת מאזין על IPv6,
+// ובלי הנרמול אותו לקוח נראה בלוג ובמגבלת הניסיונות כשתי כתובות שונות.
+function normalizeIp(ip) {
+  const m = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(String(ip || ''));
+  return m ? m[1] : (ip || null);
+}
+
 function logAudit(level, source, key, params = {}, extra = {}) {
   try {
     const message = (EN_TEMPLATES[key] ? EN_TEMPLATES[key](params) : key);
@@ -53,7 +80,7 @@ function logAudit(level, source, key, params = {}, extra = {}) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(level, source, message, key, JSON.stringify(params),
       extra.device_id || null,
-      extra.ip        || null,
+      normalizeIp(extra.ip),
       extra.username  || null
     );
   } catch (_) {
@@ -61,4 +88,4 @@ function logAudit(level, source, key, params = {}, extra = {}) {
   }
 }
 
-module.exports = { logAudit };
+module.exports = { logAudit, normalizeIp };

@@ -3,7 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const { getDb }                    = require('../db/database');
 const { requireAuth, requireAdmin }= require('../middleware/auth');
-const { DEVICE_METRICS, parsePct, parseDuration, saveThreshold } = require('../services/thresholds');
+const { DEVICE_METRICS, DEFAULT_DURATION_MIN, parsePct, parseDuration, saveThreshold } = require('../services/thresholds');
 const { logAudit }                 = require('../db/audit');
 
 // רשימת אירועי התראה (50 אחרונים). status=open: רק הפתוחים.
@@ -114,7 +114,7 @@ router.get('/thresholds', requireAuth, (req, res) => {
 
 // עדכון/יצירת סף להתראה (גלובלי, או למכשיר אם נשלח device_id)
 router.put('/thresholds', requireAdmin, (req, res) => {
-  const { device_id, metric, threshold_pct, enabled, duration_min } = req.body;
+  const { device_id, metric, threshold_pct, enabled, duration_min } = req.body || {};
   const db = getDb();
 
   if (!DEVICE_METRICS.includes(metric)) {
@@ -125,7 +125,8 @@ router.put('/thresholds', requireAdmin, (req, res) => {
   const dur = parseDuration(duration_min);
   if (!dur.ok) return res.status(400).json({ error: 'duration_min חייב להיות מספר שלם בין 0 ל-1440' });
 
-  if (device_id && !db.prepare('SELECT id FROM devices WHERE id = ?').get(device_id)) {
+  const device = device_id ? db.prepare('SELECT id, name, ip FROM devices WHERE id = ?').get(device_id) : null;
+  if (device_id && !device) {
     return res.status(404).json({ error: 'מכשיר לא נמצא' });
   }
 
@@ -137,13 +138,31 @@ router.put('/thresholds', requireAdmin, (req, res) => {
     enabled:  enabled !== false,
   });
 
+  // המשך האפקטיבי נקרא מהשורה שנשמרה: אם לא נשלח, נשאר הקיים או ברירת המחדל
+  const saved = db.prepare('SELECT duration_min FROM alert_thresholds WHERE device_id IS ? AND port_if_index IS NULL AND metric = ?')
+    .get(device_id || null, metric);
+  const scope = device ? (device.name || device.ip) : '*';
+  const who   = { username: req.user.username, ip: req.ip, device_id: device ? device.id : null };
+  if (enabled === false) logAudit('info', 'admin', 'threshold_disabled', { scope, metric }, who);
+  else                   logAudit('info', 'admin', 'threshold_saved', { scope, metric, pct, duration: saved ? saved.duration_min : DEFAULT_DURATION_MIN }, who);
+
   res.json({ ok: true });
 });
 
 // מחק סף
 router.delete('/thresholds/:id', requireAdmin, (req, res) => {
   const db = getDb();
-  db.prepare('DELETE FROM alert_thresholds WHERE id = ?').run(req.params.id);
+  const row = db.prepare(`
+    SELECT t.device_id, t.metric, d.name, d.ip
+    FROM alert_thresholds t LEFT JOIN devices d ON d.id = t.device_id
+    WHERE t.id = ?
+  `).get(req.params.id);
+  const removed = db.prepare('DELETE FROM alert_thresholds WHERE id = ?').run(req.params.id).changes;
+  if (removed > 0 && row) {
+    logAudit('info', 'admin', 'threshold_deleted', {
+      scope: row.device_id ? (row.name || row.ip) : '*', metric: row.metric,
+    }, { username: req.user.username, ip: req.ip, device_id: row.device_id || null });
+  }
   res.json({ ok: true });
 });
 

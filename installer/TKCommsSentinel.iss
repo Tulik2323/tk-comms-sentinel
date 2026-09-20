@@ -87,7 +87,8 @@ procedure InitializeWizard;
 begin
   ConfigPage := CreateInputQueryPage(wpSelectDir,
     'Initial Configuration', 'Set the HTTPS port and the first admin account',
-    'These can be changed later from Admin > Settings, or by editing data\.env after install.');
+    'These can be changed later from Admin > Settings, or by editing data\.env after install.' + #13#10 +
+    'Password: at least 12 characters, mixing upper/lower case, digits and symbols (or 16+ characters).');
   ConfigPage.Add('HTTPS port:', False);
   ConfigPage.Add('Admin username:', False);
   ConfigPage.Add('Admin password:', True);
@@ -96,9 +97,97 @@ begin
   ConfigPage.Values[1] := 'admin';
 end;
 
+// The same rules as backend\services\passwords.js (the backend checks again when it creates the
+// account, so a mismatch fails the "Create admin account" step instead of leaving a weak password).
+// Returns '' when the password is acceptable, otherwise the message to show.
+function PasswordProblem(const Pw, User: string): string;
+var
+  I, Classes, DistinctCount: Integer;
+  Code: Integer;
+  HasLower, HasUpper, HasDigit, HasOther: Boolean;
+  Seen, LowerPw, LowerUser: string;
+begin
+  Result := '';
+  if Length(Pw) < 12 then begin Result := 'Choose a password of at least 12 characters.'; Exit; end;
+  if Length(Pw) > 64 then begin Result := 'Choose a password of at most 64 characters.'; Exit; end;
+  // The password travels to the account-creation step on a command line: a double quote would split it,
+  // and a trailing backslash would swallow the closing quote.
+  if (Pos('"', Pw) > 0) or (Pw[Length(Pw)] = '\') then
+  begin
+    Result := 'The password cannot contain a double quote (") or end with a backslash.';
+    Exit;
+  end;
+
+  HasLower := False; HasUpper := False; HasDigit := False; HasOther := False;
+  Seen := ''; DistinctCount := 0;
+  for I := 1 to Length(Pw) do
+  begin
+    Code := Ord(Pw[I]);
+    if (Code >= 97) and (Code <= 122) then HasLower := True
+    else if (Code >= 65) and (Code <= 90) then HasUpper := True
+    else if (Code >= 48) and (Code <= 57) then HasDigit := True
+    else HasOther := True;
+    if Pos(Copy(Pw, I, 1), Seen) = 0 then
+    begin
+      Seen := Seen + Copy(Pw, I, 1);
+      DistinctCount := DistinctCount + 1;
+    end;
+  end;
+  if DistinctCount < 5 then begin Result := 'The password repeats itself too much.'; Exit; end;
+
+  LowerPw := Lowercase(Pw);
+  LowerUser := Lowercase(Trim(User));
+  if (Length(LowerUser) >= 3) and (Pos(LowerUser, LowerPw) > 0) then
+  begin
+    Result := 'The password cannot contain the username.';
+    Exit;
+  end;
+  if Pos(',' + LowerPw + ',', ',password1234,password12345,passw0rd1234,administrator,administrator1,qwertyuiop12,' +
+         'qwerty123456,123456789012,1234567890ab,letmein12345,welcome12345,changeme1234,admin1234567,' +
+         'iloveyou1234,abcdefghijkl,aaaaaaaaaaaa,111111111111,') > 0 then
+  begin
+    Result := 'That password is too common.';
+    Exit;
+  end;
+
+  Classes := 0;
+  if HasLower then Classes := Classes + 1;
+  if HasUpper then Classes := Classes + 1;
+  if HasDigit then Classes := Classes + 1;
+  if HasOther then Classes := Classes + 1;
+  if (Length(Pw) < 16) and (Classes < 3) then
+    Result := 'A password shorter than 16 characters must mix at least three of: lower case, upper case, digits, symbols.';
+end;
+
+// Same rule as USERNAME_RE in backend\services\passwords.js: letters, digits and . _ @ -
+function UserNameProblem(const User: string): string;
+var
+  I, Code: Integer;
+  Ok: Boolean;
+begin
+  Result := '';
+  if (Length(User) < 1) or (Length(User) > 64) then
+  begin
+    Result := 'The admin username must be 1 to 64 characters.';
+    Exit;
+  end;
+  for I := 1 to Length(User) do
+  begin
+    Code := Ord(User[I]);
+    Ok := ((Code >= 97) and (Code <= 122)) or ((Code >= 65) and (Code <= 90)) or
+          ((Code >= 48) and (Code <= 57)) or (Code = 46) or (Code = 95) or (Code = 64) or (Code = 45);
+    if not Ok then
+    begin
+      Result := 'The admin username can contain only English letters, digits and the characters . _ @ -';
+      Exit;
+    end;
+  end;
+end;
+
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   PortNum: Longint;
+  Problem: string;
 begin
   Result := True;
   if CurPageID = ConfigPage.ID then
@@ -116,9 +205,17 @@ begin
       Result := False;
       Exit;
     end;
-    if Length(ConfigPage.Values[2]) < 4 then
+    Problem := UserNameProblem(ConfigPage.Values[1]);
+    if Problem <> '' then
     begin
-      MsgBox('Choose a password of at least 4 characters.', mbError, MB_OK);
+      MsgBox(Problem, mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+    Problem := PasswordProblem(ConfigPage.Values[2], ConfigPage.Values[1]);
+    if Problem <> '' then
+    begin
+      MsgBox(Problem, mbError, MB_OK);
       Result := False;
       Exit;
     end;

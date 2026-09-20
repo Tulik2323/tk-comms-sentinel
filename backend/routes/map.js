@@ -4,6 +4,7 @@ const router  = express.Router();
 const multer  = require('multer');
 const { getDb }                    = require('../db/database');
 const { requireAuth, requireAdmin }= require('../middleware/auth');
+const { logAudit }                 = require('../db/audit');
 
 // שמור תמונה בזיכרון (מועבר ל-DB כ-BLOB)
 const upload = multer({
@@ -54,13 +55,16 @@ router.post('/image', requireAdmin, upload.single('image'), (req, res) => {
     VALUES (1, ?, ?, unixepoch())
   `).run(req.file.buffer, req.file.mimetype);
 
+  logAudit('info', 'admin', 'map_image_uploaded', { mime: req.file.mimetype, size: req.file.size },
+    { username: req.user.username, ip: req.ip });
   res.json({ ok: true, size: req.file.size, mime: req.file.mimetype });
 });
 
 // מחק תמונת מפה
 router.delete('/image', requireAdmin, (req, res) => {
   const db = getDb();
-  db.prepare('DELETE FROM floor_map WHERE id = 1').run();
+  const removed = db.prepare('DELETE FROM floor_map WHERE id = 1').run().changes;
+  if (removed > 0) logAudit('info', 'admin', 'map_image_deleted', {}, { username: req.user.username, ip: req.ip });
   res.json({ ok: true });
 });
 

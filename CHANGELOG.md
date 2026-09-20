@@ -2,6 +2,86 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.4.4] — 2026-09-20
+
+Security hardening, second part: sign-in, sessions, the audit trail and the dependencies (the first
+part, 1.4.3, closed the exposed source code, the SNMP secrets and the update installer).
+
+### Fixed
+- **A login was valid for 8 hours whatever happened to the account.** The server trusted the token
+  alone, so a deleted user, an administrator who was demoted, a changed password or a reset 2FA kept
+  working until the token expired, and the role came from the token rather than the database. Every
+  request now checks that the user still exists and reads the role from the database. Tokens are
+  revoked when the password or the role changes, when 2FA is reset or replaced, and when the user is
+  deleted. **Logout now really logs out**: it revokes that token on the server (a second session of the
+  same user, for example a screen in the control room, keeps working). Sessions that are already open
+  when this version is installed are not cut off.
+- **Brute-force protection could be reset by the attacker, and it did not know who was calling.**
+  Every attempt was counted and a successful login cleared the counter, so anyone holding one valid
+  account could wipe the count between guesses at another one; and behind IIS every client looked like
+  the same address, so the limit was shared by everybody and the audit log had no address at all. Now
+  only failures are counted, per user name and per address (10 wrong passwords in 15 minutes), 2FA codes
+  have their own limit (5 wrong codes per user, 20 per address), a successful login clears only that
+  user's counter, and a 2FA code that was already used is refused for 90 seconds. The real client
+  address is taken from IIS (`enableXFF`, set in 1.4.3) and is written to the audit log for logins,
+  failed logins, lockouts, logouts and every administrator action. Rows written before this version
+  have no address.
+- **Anyone with a valid session could replace an account's 2FA without knowing the current code.**
+  `setup-2fa` overwrote the stored secret straight away. A user who already has 2FA must now enter the
+  current code to start a replacement, the new secret waits in a separate field until its first code is
+  confirmed, and confirming it signs out every other session of that account.
+- **Active Directory group membership was matched by "contains".** A member of a group named
+  `NetMonitor_Admins_Old`, or of any group with the configured name inside its own, became an
+  administrator. The group name must now equal the group's name exactly (or its full DN). **After
+  updating, check that the group names in Admin > Settings are the exact AD group names**; an account
+  whose group does not match is refused with a message that names the groups it needs.
+- **The sign-in reply revealed which accounts exist.** A wrong password and an unknown name took
+  different times and, on a system without Active Directory, gave different messages. Both now answer
+  and take alike, and the "authentication service unavailable" reply no longer carries server names or
+  distinguished names (they are in the audit log for administrators).
+- **Weak passwords were accepted everywhere.** The installer took 4 characters, and the Users page any
+  length. Local passwords now need at least 12 characters (a mix of lower case, upper case, digits and
+  symbols unless they are 16 or longer), at most 72 bytes, and cannot be a common password or contain
+  the user name. The installer, `seed-admin.js`, `set-local-password.js` and the Users page all enforce
+  the same rule. User names are limited to English letters, digits and `. _ @ -`, and the role must be
+  `admin` or `viewer`.
+- **User management had no safety rails.** An administrator could delete their own account, demote
+  themselves, or create `Admin` next to `admin`; ids and roles were not checked at all. The server now
+  refuses those, and the Users page shows the reason instead of doing nothing.
+- **The mail server's TLS certificate was never verified**, so the SMTP password and every alert could
+  be read by anyone on the path. There is a new setting, **Mail server TLS certificate check**:
+  *Automatic* (the default) verifies the certificate whenever a user name and password are configured,
+  *Always* and *Do not verify* (for an internal server with a self-signed certificate). A server
+  that needs no user name (the usual internal relay) behaves exactly as before.
+- **The Uptime report has never worked.** It asked the database for a column that does not exist
+  (`opened_at`), so the report and any schedule based on it failed with a server error. It now reports
+  the real downtime.
+- **Report requests were not validated.** The number of days and the port count go straight into the
+  calculation, and a schedule accepted any text as a name, recipient list or parameter. Values are now
+  checked (days 1-365, ports 1-1,000), recipients must be up to ten valid addresses, and a schedule that
+  does not exist answers 404.
+- **Dependencies.** Backend: `nodemailer` 6.10.1 to 10.0.10 (twelve advisories, the worst rated high:
+  address parsing, header and SMTP command injection), `multer` 1.4 to 2.4 (the 1.x line is deprecated because of
+  vulnerabilities fixed in 2.x), `express` and its `qs` / `body-parser`, and `uuid` inside `node-cron`.
+  `npm audit` reports nothing left. Frontend: `react-router-dom` 6 to 7.18 (open redirect), `nanoid` and
+  `postcss`. The only advisories that remain are the `vite` / `esbuild` development server, which is not
+  part of what is installed.
+- Two small display bugs: the "Audit log purged" entry was shown in English in the Hebrew interface,
+  and the Users page drew a stray "0" beside the Delete button of every user without 2FA.
+
+### Added
+- **The audit log now records the state-changing actions that were missing**, each with the user and the
+  client address: creating, changing and deleting users, resetting 2FA, adding, changing and deleting
+  devices, saving, disabling and deleting alert thresholds (global, device and port), report schedules,
+  the floor map image, license activation, temporary sign-in blocks, rejected 2FA codes and logouts.
+  Device changes list the names of the fields that changed and never their values, so SNMP secrets do
+  not reach the log. Saving the settings lists only the fields that really changed.
+
+### Notes
+- Not changed on purpose: the SNMP credentials and the 2FA secrets are still stored as they were.
+  Encrypting them needs two releases (one that can read both forms, then one that writes the new form)
+  so that going back to an older version never leaves the system unable to poll or to sign anyone in.
+
 ## [1.4.3] — 2026-09-20
 
 Security hardening, from an OWASP Top 10 (2021) review of the code, the dependencies, the install

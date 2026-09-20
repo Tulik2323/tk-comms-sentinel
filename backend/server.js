@@ -62,6 +62,16 @@ const PORT = process.env.PORT || 3001;
 
 app.disable('x-powered-by');   // לא מפרסמים באיזו מסגרת השרת בנוי
 
+// כתובת הלקוח האמיתית. מאחורי IIS (iisnode) השרת רואה רק את IIS, ובלי זה כל הלקוחות נראים כאחד:
+// מגבלת הניסיונות משותפת לכולם ולוג הביקורת לא יודע מי ניסה להתחבר. iisnode מעביר את הכתובת ב-
+// X-Forwarded-For (enableXFF ב-web.config) וקובע את IISNODE_VERSION. בהתקנה עצמאית (בלי IIS)
+// אין proxy, ולכן לא סומכים על הכותרת: לקוח יכול לשלוח אותה בעצמו ולזייף כתובת.
+// אפשר לקבוע ידנית מספר proxies אמינים ב-TRUST_PROXY_HOPS.
+const trustHops = process.env.TRUST_PROXY_HOPS !== undefined
+  ? parseInt(process.env.TRUST_PROXY_HOPS, 10)
+  : (process.env.IISNODE_VERSION ? 1 : 0);
+if (Number.isInteger(trustHops) && trustHops > 0) app.set('trust proxy', trustHops);
+
 // --- כותרות אבטחה ---
 // ה-frontend נבנה בלי סקריפטים inline ובלי משאבים חיצוניים, ולכן default-src 'self' מספיק.
 // style-src צריך 'unsafe-inline' כי React וגרפים כותבים style בתוך האלמנטים.

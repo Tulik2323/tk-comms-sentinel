@@ -6,6 +6,11 @@ const { getDb, getSetting, setSetting } = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../services/secrets');
 const { logAudit }     = require('../db/audit');
+const { passwordProblem, USERNAME_RE } = require('../services/passwords');
+const { tlsOptions }   = require('../services/smtp');
+
+const ROLES = new Set(['admin', 'viewer']);
+const validId = (v) => /^\d{1,9}$/.test(String(v));
 
 // קבל כל הגדרות המערכת (SMTP, LDAP, polling)
 router.get('/settings', requireAdmin, (req, res) => {
@@ -32,22 +37,43 @@ router.put('/settings', requireAdmin, (req, res) => {
     'default_poll_interval','retention_days',
     'alert_quiet_from','alert_quiet_to',
     'app_base_url',
-    'update_feed_url'
+    'update_feed_url',
+    'smtp_tls_verify'
   ];
 
   const SENSITIVE = new Set(['smtp_pass', 'ldap_bind_password']);
 
+  const body = (req.body && typeof req.body === 'object') ? req.body : {};
+
+  // smtp_tls_verify: '' (אוטומטי) | '1' (תמיד) | '0' (אף פעם). ערך אחר לא נשמר, כדי שטעות לא תכבה את האימות בשקט
+  if (Object.prototype.hasOwnProperty.call(body, 'smtp_tls_verify') && !['', '0', '1'].includes(String(body.smtp_tls_verify))) {
+    return res.status(400).json({ error: 'ערך לא תקין עבור אימות תעודת SMTP' });
+  }
+
+  // ערכים: טקסט/מספר/בוליאני קצר. אובייקט או מערך נדחים לפני שנכתב משהו, כדי שבקשה לא תישמר חצי
+  for (const key of allowed) {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    const v = body[key];
+    if (v !== null && typeof v === 'object') return res.status(400).json({ error: `ערך לא תקין עבור ${key}` });
+    if (String(v == null ? '' : v).length > 1000) return res.status(400).json({ error: `הערך של ${key} ארוך מדי` });
+  }
+
+  // ב-Audit נרשמים רק שדות שערכם באמת השתנה. הטופס שולח את כל השדות בכל שמירה, וריכוז של כולם בכל
+  // פעם מטשטש מי שינה את שרת הדואר או את ה-AD.
   const changed = [];
-  for (const [key, value] of Object.entries(req.body)) {
-    if (!allowed.includes(key)) continue;
+  for (const key of allowed) {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    const value = body[key] == null ? '' : body[key];
     // *** = לא שונה — המשתמש לא הקליד סיסמה חדשה
-    if (SENSITIVE.has(key) && value === '***') { changed.push(key); continue; }
-    setSetting(key, SENSITIVE.has(key) ? encrypt(value) : value);
+    if (SENSITIVE.has(key) && value === '***') continue;
+    const current = SENSITIVE.has(key) ? decrypt(getSetting(key) || '') : getSetting(key);
+    if (String(current == null ? '' : current) === String(value)) continue;
+    setSetting(key, SENSITIVE.has(key) ? encrypt(String(value)) : value);
     changed.push(key);
   }
 
   if (changed.length > 0) {
-    logAudit('info', 'admin', 'settings_updated', { fields: changed.join(', ') }, { username: req.user?.username });
+    logAudit('info', 'admin', 'settings_updated', { fields: changed.join(', ') }, { username: req.user?.username, ip: req.ip });
   }
 
   res.json({ ok: true });
@@ -62,59 +88,124 @@ router.get('/users', requireAdmin, (req, res) => {
   res.json(users);
 });
 
-// הוסף משתמש (demo mode — local accounts)
+const adminCount = (db) => db.prepare("SELECT COUNT(*) AS n FROM user_accounts WHERE role = 'admin'").get().n;
+
+// הוסף משתמש מקומי
 router.post('/users', requireAdmin, async (req, res) => {
-  const { username, password, role = 'viewer' } = req.body;
+  const body = (req.body && typeof req.body === 'object') ? req.body : {};
+  const { username, password } = body;
+  const role = body.role === undefined ? 'viewer' : body.role;
+
   if (!username || !password) {
     return res.status(400).json({ error: 'username ו-password נדרשים' });
   }
+  if (typeof username !== 'string' || !USERNAME_RE.test(username)) {
+    return res.status(400).json({ error: 'שם משתמש יכול להכיל אותיות באנגלית, ספרות ואת הסימנים . _ @ - בלבד (עד 64 תווים)' });
+  }
+  if (!ROLES.has(role)) {
+    return res.status(400).json({ error: 'תפקיד לא תקין' });
+  }
+  const problem = passwordProblem(password, username);
+  if (problem) return res.status(400).json({ error: problem });
 
-  const db   = getDb();
+  const db = getDb();
+  // שמות שנבדלים רק באותיות גדולות/קטנות נראים אותו דבר למי שקורא לוג, ומשתמשים באותו חשבון AD
+  if (db.prepare('SELECT 1 FROM user_accounts WHERE lower(username) = lower(?)').get(username)) {
+    return res.status(409).json({ error: `משתמש ${username} כבר קיים` });
+  }
+
   const hash = await bcrypt.hash(password, 12);
-
   try {
     const result = db.prepare(`
       INSERT INTO user_accounts (username, password_hash, role)
       VALUES (?, ?, ?)
     `).run(username, hash, role);
 
-    res.status(201).json({ id: result.lastInsertRowid, username, role });
+    logAudit('info', 'admin', 'user_created', { username, role }, { username: req.user.username, ip: req.ip });
+    res.status(201).json({ id: Number(result.lastInsertRowid), username, role });
   } catch (err) {
-    if (err.message.includes('UNIQUE')) {
+    if (String(err.message).includes('UNIQUE')) {
       return res.status(409).json({ error: `משתמש ${username} כבר קיים` });
     }
     throw err;
   }
 });
 
-// שנה role / password משתמש
+// שנה role / password משתמש. שינוי של אחד מהם מבטל את כל ההתחברויות הפתוחות של אותו משתמש.
 router.put('/users/:id', requireAdmin, async (req, res) => {
+  if (!validId(req.params.id)) return res.status(400).json({ error: 'מזהה משתמש לא תקין' });
   const db = getDb();
-  const { role, password } = req.body;
+  const target = db.prepare('SELECT id, username, role FROM user_accounts WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'המשתמש לא נמצא' });
 
-  if (role) {
-    db.prepare('UPDATE user_accounts SET role = ? WHERE id = ?').run(role, req.params.id);
+  const body = (req.body && typeof req.body === 'object') ? req.body : {};
+  const { role, password } = body;
+  const changes = [];
+
+  if (role !== undefined && role !== null && role !== '') {
+    if (!ROLES.has(role)) return res.status(400).json({ error: 'תפקיד לא תקין' });
+    if (role !== target.role) {
+      if (target.username === req.user.username) {
+        return res.status(400).json({ error: 'לא ניתן לשנות את התפקיד של החשבון שאיתו אתה מחובר' });
+      }
+      if (target.role === 'admin' && adminCount(db) <= 1) {
+        return res.status(400).json({ error: 'לא ניתן להוריד את האדמין האחרון' });
+      }
+    }
+  }
+  if (password !== undefined && password !== null && password !== '') {
+    const problem = passwordProblem(password, target.username);
+    if (problem) return res.status(400).json({ error: problem });
+  }
+
+  if (role && role !== target.role) {
+    db.prepare('UPDATE user_accounts SET role = ?, token_valid_after = unixepoch() WHERE id = ?').run(role, target.id);
+    changes.push('role');
   }
   if (password) {
     const hash = await bcrypt.hash(password, 12);
-    db.prepare('UPDATE user_accounts SET password_hash = ? WHERE id = ?').run(hash, req.params.id);
+    db.prepare('UPDATE user_accounts SET password_hash = ?, token_valid_after = unixepoch() WHERE id = ?').run(hash, target.id);
+    changes.push('password');
   }
 
+  if (changes.length === 0) return res.status(400).json({ error: 'לא צוין שינוי' });
+
+  logAudit('info', 'admin', 'user_updated', { username: target.username, changes: changes.join(', ') }, { username: req.user.username, ip: req.ip });
   res.json({ ok: true });
 });
 
 // מחק משתמש
 router.delete('/users/:id', requireAdmin, (req, res) => {
+  if (!validId(req.params.id)) return res.status(400).json({ error: 'מזהה משתמש לא תקין' });
   const db = getDb();
-  db.prepare('DELETE FROM user_accounts WHERE id = ?').run(req.params.id);
+  const target = db.prepare('SELECT id, username, role FROM user_accounts WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'המשתמש לא נמצא' });
+
+  if (target.username === req.user.username) {
+    return res.status(400).json({ error: 'לא ניתן למחוק את החשבון שאיתו אתה מחובר' });
+  }
+  if (target.role === 'admin' && adminCount(db) <= 1) {
+    return res.status(400).json({ error: 'לא ניתן למחוק את האדמין האחרון' });
+  }
+
+  db.prepare('DELETE FROM user_accounts WHERE id = ?').run(target.id);
+  logAudit('info', 'admin', 'user_deleted', { username: target.username }, { username: req.user.username, ip: req.ip });
   res.json({ ok: true });
 });
 
-// איפוס 2FA למשתמש
+// איפוס 2FA למשתמש. המשתמש יידרש להגדיר 2FA מחדש בכניסה הבאה, וההתחברויות הפתוחות שלו מתבטלות.
 router.post('/users/:id/reset-2fa', requireAdmin, (req, res) => {
+  if (!validId(req.params.id)) return res.status(400).json({ error: 'מזהה משתמש לא תקין' });
   const db = getDb();
-  db.prepare('UPDATE user_accounts SET totp_enabled = 0, totp_secret = NULL WHERE id = ?')
-    .run(req.params.id);
+  const target = db.prepare('SELECT id, username FROM user_accounts WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'המשתמש לא נמצא' });
+
+  db.prepare(`
+    UPDATE user_accounts
+    SET totp_enabled = 0, totp_secret = NULL, totp_pending_secret = NULL, token_valid_after = unixepoch()
+    WHERE id = ?
+  `).run(target.id);
+  logAudit('warn', 'admin', 'twofa_reset', { username: target.username }, { username: req.user.username, ip: req.ip });
   res.json({ ok: true });
 });
 
@@ -143,7 +234,7 @@ router.post('/test-smtp', requireAdmin, async (req, res) => {
     host, port,
     secure: port === 465,
     auth: user ? { user, pass } : undefined,
-    tls: { rejectUnauthorized: false },
+    tls: tlsOptions(),
     connectionTimeout: 6000,
     greetingTimeout:   6000,
     socketTimeout:     8000,
@@ -182,7 +273,10 @@ router.post('/test-smtp', requireAdmin, async (req, res) => {
     else if (/ETIMEDOUT|timeout/i.test(err.message)) hint = `אין תגובה מ-${host}:${port} תוך ${ms}ms. בדוק חומת אש או כתובת שגויה.`;
     else if (/ENOTFOUND|EAI_AGAIN/.test(err.message)) hint = `לא ניתן לפתור את השם "${host}". השתמש בכתובת IP או בדוק DNS.`;
     else if (/EAUTH|535|534/.test(err.message))      hint = `שם המשתמש או הסיסמה נדחו על ידי השרת.`;
-    else if (/self.signed|certificate/i.test(err.message)) hint = `בעיית תעודת TLS מול ${host}.`;
+    else if (/self.signed|certificate|altnames|hostname/i.test(err.message)) {
+      hint = `תעודת ה-TLS של ${host} לא עברה אימות (${err.message}). ` +
+             `אם זה שרת דואר פנימי עם תעודה עצמית, אפשר לכבות את אימות התעודה בהגדרות הדואר.`;
+    }
 
     logAudit('warn', 'admin', 'smtp_test_failed', { error: err.message }, { username: req.user.username, ip: req.ip });
     res.status(200).json({ ok: false, stage: 'connect', host, port, ms, error: hint, raw: err.message });

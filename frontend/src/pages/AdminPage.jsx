@@ -154,15 +154,25 @@ export default function AdminPage() {
     }
   }
 
+  // השרת מסרב למחוק את החשבון שאיתו מחוברים ואת האדמין האחרון, ומחזיר הסבר. בלי try/catch
+  // הלחיצה נראתה כאילו לא קרה כלום.
   async function deleteUser(id) {
     if (!window.confirm(t('delete_user_confirm'))) return;
-    await api.delete(`/admin/users/${id}`);
+    try {
+      await api.delete(`/admin/users/${id}`);
+    } catch (err) {
+      alert(err.response?.data?.error || t('error'));
+    }
     loadUsers();
   }
 
   async function resetUserTotp(id) {
-    await api.post(`/admin/users/${id}/reset-2fa`);
-    alert(t('twofa_reset_ok'));
+    try {
+      await api.post(`/admin/users/${id}/reset-2fa`);
+      alert(t('twofa_reset_ok'));
+    } catch (err) {
+      alert(err.response?.data?.error || t('error'));
+    }
     loadUsers();
   }
 
@@ -291,6 +301,18 @@ export default function AdminPage() {
               <SettingField label="SMTP Password" name="smtp_pass" type="password"
                 value={settings.smtp_pass === '***' ? '' : settings.smtp_pass}
                 onChange={handleSettingChange} placeholder={t('keep_existing_ph')} />
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                  {t('smtp_tls_label')}
+                </label>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{t('smtp_tls_desc')}</div>
+                <select className="nm-input" name="smtp_tls_verify"
+                  value={settings.smtp_tls_verify || ''} onChange={handleSettingChange}>
+                  <option value="">{t('smtp_tls_auto')}</option>
+                  <option value="1">{t('smtp_tls_on')}</option>
+                  <option value="0">{t('smtp_tls_off')}</option>
+                </select>
+              </div>
             </div>
 
             {/* בדיקה מול השרת. שני מצבים: חיבור בלבד, או שליחה אמיתית. */}
@@ -441,13 +463,14 @@ export default function AdminPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        {u.totp_enabled && (
+                        {/* בלי ?: — totp_enabled=0 הוא מספר ש-React מצייר כ-"0" ליד כפתור המחיקה */}
+                        {u.totp_enabled ? (
                           <button
                             className="nm-btn nm-btn-ghost"
                             style={{ padding: '4px 8px', fontSize: 11 }}
                             onClick={() => resetUserTotp(u.id)}
                           >↺ {t('reset_2fa')}</button>
-                        )}
+                        ) : null}
                         <button
                           className="nm-btn nm-btn-danger"
                           style={{ padding: '4px 8px', fontSize: 11 }}
@@ -470,8 +493,9 @@ export default function AdminPage() {
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('password')}</label>
-                <input className="nm-input" type="password" value={newUser.password}
+                <input className="nm-input" type="password" value={newUser.password} autoComplete="new-password"
                   onChange={e => setNewUser(u => ({ ...u, password: e.target.value }))} required />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('password_policy_hint')}</div>
               </div>
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('col_role')}</label>

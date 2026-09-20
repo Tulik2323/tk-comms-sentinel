@@ -136,6 +136,10 @@ async function initDb() {
     'ALTER TABLE alert_events     ADD COLUMN port_if_index INTEGER',
     // מתי התגלה שהמכשיר של האירוע נמחק — האירוע נסגר אוטומטית 14 ימים אחרי (ראה maintainAlertEvents)
     'ALTER TABLE alert_events     ADD COLUMN orphaned_at   INTEGER',
+    // ביטול טוקנים: כל טוקן שהונפק לפני הרגע הזה נדחה (יציאה, החלפת סיסמה/תפקיד, איפוס 2FA)
+    'ALTER TABLE user_accounts    ADD COLUMN token_valid_after INTEGER DEFAULT 0',
+    // סוד 2FA חדש שממתין לאישור בקוד. הסוד הפעיל (totp_secret) לא נדרס עד שהקוד אושר.
+    'ALTER TABLE user_accounts    ADD COLUMN totp_pending_secret TEXT',
     'ALTER TABLE audit_log        ADD COLUMN msg_key       TEXT',
     'ALTER TABLE audit_log        ADD COLUMN msg_params    TEXT',
   ]) {
@@ -185,6 +189,14 @@ async function initDb() {
       duration_min  INTEGER,
       enabled       INTEGER DEFAULT 1,
       UNIQUE(device_id, if_index, metric)
+    )
+  `);
+
+  // טוקנים (לפי jti) שבוטלו ביציאה מהמערכת. שורה שהטוקן שלה פג ממילא נמחקת בניקוי.
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS revoked_tokens (
+      jti        TEXT PRIMARY KEY,
+      expires_at INTEGER NOT NULL
     )
   `);
 

@@ -11,8 +11,8 @@ require('dotenv').config({ path: path.join(process.env.TKCS_DATA_DIR || path.joi
 
 const bcrypt     = require('bcryptjs');
 const { initDb } = require('../db/database');
+const { passwordProblem } = require('../services/passwords');
 
-const MIN_LENGTH = 12;
 const username   = process.argv[2];
 
 function fail(msg) {
@@ -107,13 +107,15 @@ function askHidden(prompt) {
   if (!user) fail(`המשתמש "${username}" לא קיים ב-user_accounts.`);
 
   const pw1 = await askHidden(`סיסמה חדשה עבור ${username} (${user.role}): `);
-  if (pw1.length < MIN_LENGTH) fail(`הסיסמה קצרה מ-${MIN_LENGTH} תווים. לא בוצע שינוי.`);
+  const problem = passwordProblem(pw1, username);
+  if (problem) fail(`${problem}. לא בוצע שינוי.`);
 
   const pw2 = await askHidden('הקלד שוב לאימות: ');
   if (pw1 !== pw2) fail('הסיסמאות אינן תואמות. לא בוצע שינוי.');
 
   const hash = await bcrypt.hash(pw1, 12);
-  const res  = db.prepare('UPDATE user_accounts SET password_hash = ? WHERE username = ?')
+  // token_valid_after: החלפת סיסמה מבטלת כל התחברות פתוחה של החשבון (גם של מי שהשתמש בסיסמה הישנה)
+  const res  = db.prepare('UPDATE user_accounts SET password_hash = ?, token_valid_after = unixepoch() WHERE username = ?')
                  .run(hash, username);
   if (res.changes !== 1) fail(`העדכון לא בוצע (changes=${res.changes}).`);
 

@@ -27,6 +27,12 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
+    // מבטל את הטוקן גם בשרת: טוקן שנגנב לא ממשיך לעבוד אחרי היציאה. לא ממתינים לתשובה, כדי שיציאה
+    // תעבוד גם כשהשרת לא זמין. ה-header נשלח במפורש כי המפתח נמחק מיד אחרי.
+    const token = localStorage.getItem('nm_token');
+    if (token) {
+      api.post('/auth/logout', null, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    }
     localStorage.removeItem('nm_token');
     localStorage.removeItem('nm_user');
     setUser(null);

@@ -287,7 +287,7 @@ router.post('/install', requireAdmin, async (req, res) => {
         child.unref();
       } catch (e) {
         logAudit('error', 'admin', 'update_ps1_failed', { error: e.message },
-          { username: req.user?.username });
+          { username: req.user?.username, ip: req.ip });
       }
     });
   } catch (err) {

@@ -274,7 +274,7 @@ router.put('/:id/port-threshold/:ifIndex', requireAdmin, (req, res) => {
   const db      = getDb();
   const devId   = Number(req.params.id);
   const ifIndex = Number(req.params.ifIndex);
-  const { metric, threshold_pct, duration_min } = req.body;
+  const { metric, threshold_pct, duration_min } = req.body || {};
 
   if (!PORT_METRICS.includes(metric)) {
     return res.status(400).json({ error: `metric לא נתמך (${PORT_METRICS.join(' / ')})` });
@@ -284,12 +284,18 @@ router.put('/:id/port-threshold/:ifIndex', requireAdmin, (req, res) => {
   const dur = parseDuration(duration_min);
   if (!dur.ok) return res.status(400).json({ error: 'duration_min חייב להיות מספר שלם בין 0 ל-1440' });
 
-  if (!db.prepare('SELECT id FROM devices WHERE id = ?').get(devId)) {
+  const device = db.prepare('SELECT id, name, ip FROM devices WHERE id = ?').get(devId);
+  if (!device) {
     return res.status(404).json({ error: 'מכשיר לא נמצא' });
   }
 
   // משך ריק = ירושה מסף המכשיר/הגלובלי
   savePortThreshold(db, { deviceId: devId, ifIndex, metric, pct, duration: dur.value ?? null });
+
+  const scope = `${device.name || device.ip} / ifIndex ${ifIndex}`;
+  const who   = { username: req.user.username, ip: req.ip, device_id: device.id };
+  if (dur.value == null) logAudit('info', 'admin', 'threshold_saved_nodur', { scope, metric, pct }, who);
+  else                   logAudit('info', 'admin', 'threshold_saved', { scope, metric, pct, duration: dur.value }, who);
 
   res.json({ ok: true });
 });
@@ -301,10 +307,17 @@ router.delete('/:id/port-threshold/:ifIndex/:metric', requireAdmin, (req, res) =
   const ifIndex = Number(req.params.ifIndex);
   const { metric } = req.params;
 
-  db.prepare(`
+  const removed = db.prepare(`
     DELETE FROM alert_port_thresholds
     WHERE device_id = ? AND if_index = ? AND metric = ?
-  `).run(devId, ifIndex, metric);
+  `).run(devId, ifIndex, metric).changes;
+
+  if (removed > 0) {
+    const device = db.prepare('SELECT id, name, ip FROM devices WHERE id = ?').get(devId);
+    logAudit('info', 'admin', 'threshold_deleted', {
+      scope: `${device ? (device.name || device.ip) : devId} / ifIndex ${ifIndex}`, metric,
+    }, { username: req.user.username, ip: req.ip, device_id: device ? device.id : null });
+  }
 
   res.json({ ok: true });
 });
@@ -372,6 +385,9 @@ router.post('/', requireAdmin, async (req, res) => {
 
     const deviceId = result.lastInsertRowid;
 
+    logAudit('info', 'admin', 'device_added', { device: name || ip, ip },
+      { username: req.user.username, ip: req.ip, device_id: Number(deviceId) });
+
     // poll מיידי
     forcePoll(deviceId).catch(() => {});
 
@@ -428,14 +444,29 @@ router.put('/:id', requireAdmin, (req, res) => {
     throw err;
   }
 
+  // רושמים רק שמות שדות, לא ערכים: community וסיסמאות SNMPv3 לא נכנסים ללוג. מיקום על המפה לא נספר (גרירה)
+  const fields = Object.entries({
+    name, ip, snmp_version, community, snmp_v3_user, snmp_v3_auth, snmp_v3_priv, poll_interval_sec, location, notes,
+  }).filter(([, v]) => v !== undefined).map(([k]) => k);
+  if (fields.length > 0) {
+    logAudit('info', 'admin', 'device_updated', { device: name || device.name || device.ip, fields: fields.join(', ') },
+      { username: req.user.username, ip: req.ip, device_id: device.id });
+  }
+
   res.json(publicDevice(db.prepare('SELECT * FROM devices WHERE id = ?').get(req.params.id), true));
 });
 
 // מחק מכשיר
 router.delete('/:id', requireAdmin, (req, res) => {
   const db = getDb();
+  const device = db.prepare('SELECT id, name, ip FROM devices WHERE id = ?').get(req.params.id);
   const result = db.prepare('DELETE FROM devices WHERE id = ?').run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'מכשיר לא נמצא' });
+  // device_id לא נשמר בשורה: המכשיר כבר נמחק, ושם וכתובת נשארים בפרמטרים
+  if (device) {
+    logAudit('warn', 'admin', 'device_deleted', { device: device.name || device.ip, ip: device.ip },
+      { username: req.user.username, ip: req.ip });
+  }
   res.json({ ok: true });
 });
 
@@ -474,7 +505,7 @@ router.post('/scan', requireAdmin, async (req, res) => {
 
   // מחרוזת ה-community לא נרשמת ב-Audit: הלוג נקרא גם על ידי מי שלא אמור לדעת אותה
   const scanTarget = cidr || `${start_ip}–${end_ip}`;
-  logAudit('info', 'admin', 'scan_started', { target: scanTarget, count: ips.length }, { username: req.user?.username });
+  logAudit('info', 'admin', 'scan_started', { target: scanTarget, count: ips.length }, { username: req.user?.username, ip: req.ip });
 
   const db = getDb();
   const BATCH = 20;
@@ -495,17 +526,17 @@ router.post('/scan', requireAdmin, async (req, res) => {
 
           if (result.changes > 0) {
             newDevices.push(ip);
-            logAudit('info', 'admin', 'scan_found', { ip }, { username: req.user?.username });
+            logAudit('info', 'admin', 'scan_found', { ip }, { username: req.user?.username, ip: req.ip });
             forcePoll(result.lastInsertRowid).catch(() => {});
           }
         }
       } catch (e) {
-        logAudit('warn', 'admin', 'scan_error', { ip, error: e.message }, { username: req.user?.username });
+        logAudit('warn', 'admin', 'scan_error', { ip, error: e.message }, { username: req.user?.username, ip: req.ip });
       }
     }));
   }
 
-  logAudit('info', 'admin', 'scan_complete', { target: scanTarget, found: found.length, added: newDevices.length }, { username: req.user?.username });
+  logAudit('info', 'admin', 'scan_complete', { target: scanTarget, found: found.length, added: newDevices.length }, { username: req.user?.username, ip: req.ip });
   res.json({ message: `סריקה הושלמה`, total: ips.length, found: found.length, added: newDevices.length, devices: found });
 });
 
@@ -554,7 +585,7 @@ router.post('/import-csv', requireAdmin, (req, res) => {
     }
   }
 
-  logAudit('info', 'admin', 'csv_import', { added: added.length, skipped: skipped.length, errors: errors.length }, { username: req.user?.username });
+  logAudit('info', 'admin', 'csv_import', { added: added.length, skipped: skipped.length, errors: errors.length }, { username: req.user?.username, ip: req.ip });
   res.json({ added, skipped, errors });
 });
 

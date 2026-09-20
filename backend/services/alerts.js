@@ -3,6 +3,7 @@ const nodemailer = require('nodemailer');
 const { getDb, getSetting } = require('../db/database');
 const { decrypt }           = require('./secrets');
 const { DEFAULT_DURATION_MIN } = require('./thresholds');
+const { tlsOptions }           = require('./smtp');
 
 // Map של מכשירים שנשלחה להם התראה (למניעת spam)
 // deviceId_metric -> unixtime of last alert
@@ -55,7 +56,7 @@ function createTransporter() {
     port,
     secure: port === 465,
     auth: user ? { user, pass } : undefined,
-    tls: { rejectUnauthorized: false }, // סביבות ארגוניות עם self-signed certs
+    tls: tlsOptions(), // ראה services/smtp.js: מאמתים תעודה כשנשלחות סיסמאות (smtp_tls_verify לשליטה ידנית)
     // תקרות זמן מפורשות. ברירות המחדל של nodemailer הן דקתיים לחיבור
     // ועשר דקות ל-socket — נצח מבחינת לולאת ניטור.
     connectionTimeout: 5000,

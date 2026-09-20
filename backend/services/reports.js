@@ -11,10 +11,10 @@ function generateUptime({ period_days = 7 } = {}) {
   // זמן DOWN לפי אירועי התראה
   const downTimes = db.prepare(`
     SELECT device_id,
-           SUM(COALESCE(resolved_at, unixepoch()) - opened_at) AS down_sec
+           SUM(COALESCE(resolved_at, unixepoch()) - sent_at) AS down_sec
     FROM alert_events
     WHERE metric = 'status'
-      AND opened_at >= ?
+      AND sent_at >= ?
     GROUP BY device_id
   `).all(fromTs);
 

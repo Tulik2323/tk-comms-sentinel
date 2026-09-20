@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 const { getDb, getSetting } = require('../db/database');
 const { decrypt }           = require('./secrets');
 const { generateReport, toCSV } = require('./reports');
+const { tlsOptions }            = require('./smtp');
 const { logAudit }             = require('../db/audit');
 
 const _tasks = new Map();   // id -> cron.ScheduledTask
@@ -26,7 +27,7 @@ async function sendScheduledReport(schedule) {
     const transporter = nodemailer.createTransport({
       host, port, secure: port === 465,
       auth: getSetting('smtp_user') ? { user: getSetting('smtp_user'), pass: decrypt(getSetting('smtp_pass') || '') } : undefined,
-      tls: { rejectUnauthorized: false },
+      tls: tlsOptions(),
       connectionTimeout: 8000, greetingTimeout: 8000, socketTimeout: 10000,
     });
 

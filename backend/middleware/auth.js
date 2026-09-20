@@ -1,7 +1,38 @@
 // middleware/auth.js — בדיקת JWT בכל בקשה מוגנת
-const jwt = require('jsonwebtoken');
+//
+// טוקן תקף לא מספיק: בכל בקשה בודקים גם שהמשתמש עדיין קיים ב-user_accounts, ואת התפקיד לוקחים
+// משם ולא מהטוקן. כך משתמש שנמחק או שהורד מ-admin מאבד את ההרשאות מיד ולא בעוד 8 שעות.
+// token_valid_after מאפשר ביטול של כל הטוקנים שהונפקו לפני רגע מסוים (יציאה מהמערכת, החלפת סיסמה,
+// איפוס 2FA, שינוי תפקיד).
+const { getDb } = require('../db/database');
+const { verifyMain, verifyTemp } = require('../services/tokens');
 
-const TEMP_SECRET = () => process.env.JWT_TEMP_SECRET || process.env.JWT_SECRET + '_temp';
+function loadUser(username) {
+  try {
+    return getDb().prepare('SELECT username, role, token_valid_after FROM user_accounts WHERE username = ?').get(username);
+  } catch (_) {
+    return null;
+  }
+}
+
+function isRevoked(jti) {
+  if (!jti) return false;   // טוקן שהונפק לפני 1.4.4 אין לו jti; אותו מבטלים רק דרך token_valid_after
+  try {
+    return Boolean(getDb().prepare('SELECT 1 FROM revoked_tokens WHERE jti = ?').get(jti));
+  } catch (_) {
+    return false;
+  }
+}
+
+// מחזיר { user } אם הטוקן עדיין בתוקף מול ה-DB, אחרת { error }.
+// token_valid_after נספר בשניות שלמות, ולכן טוקן שהונפק באותה שנייה שבה בוטלו הטוקנים עדיין נחשב תקף.
+function checkAgainstDb(payload) {
+  const u = loadUser(payload.username);
+  if (!u) return { error: 'המשתמש אינו קיים במערכת, התחבר שוב' };
+  if ((payload.iat || 0) < (u.token_valid_after || 0)) return { error: 'ההתחברות בוטלה, התחבר שוב' };
+  if (isRevoked(payload.jti)) return { error: 'ההתחברות בוטלה, התחבר שוב' };
+  return { user: { username: u.username, role: u.role, iat: payload.iat, exp: payload.exp, jti: payload.jti } };
+}
 
 // מחלץ JWT מה-header ומוודא שהוא תקף.
 // דוחה בפירוש setupOnly tokens — אלה מותרים רק ל-setup-2fa / confirm-2fa.
@@ -13,11 +44,13 @@ function requireAuth(req, res, next) {
 
   const token = authHeader.slice(7);
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = verifyMain(token);
     if (payload.setupOnly) {
       return res.status(403).json({ error: 'נדרשת הגדרת 2FA לפני כניסה למערכת', setupRequired: true });
     }
-    req.user = payload; // { username, role, iat, exp }
+    const checked = checkAgainstDb(payload);
+    if (checked.error) return res.status(401).json({ error: checked.error });
+    req.user = checked.user; // { username, role, iat }
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
@@ -37,16 +70,20 @@ function requireSetupOrAuth(req, res, next) {
 
   // נסה JWT מלא קודם
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = payload;
+    const payload = verifyMain(token);
+    const checked = checkAgainstDb(payload);
+    if (checked.error) return res.status(401).json({ error: checked.error });
+    req.user = checked.user;
     return next();
   } catch {}
 
   // נסה setupOnly token
   try {
-    const payload = jwt.verify(token, TEMP_SECRET());
+    const payload = verifyTemp(token);
     if (!payload.setupOnly) return res.status(401).json({ error: 'Token לא תקף' });
-    req.user = payload;
+    const checked = checkAgainstDb(payload);
+    if (checked.error) return res.status(401).json({ error: checked.error });
+    req.user = { ...checked.user, setupOnly: true };
     return next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

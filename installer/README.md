@@ -110,8 +110,11 @@ $Root = 'C:\TKCS\package'   # = the extracted package folder (the install root)
 # 4. Open the firewall port
 & "$Root\installer\scripts\open-firewall.ps1" -Port 9443
 
-# 5. Seed the first admin (interactive)
-& "$Root\node\node.exe" "$Root\current\backend\scripts\seed-admin.js"
+# 5. Seed the first admin. The password needs at least 12 characters (mixing lower
+#    case, upper case, digits and symbols unless it is 16 or longer), at most 72
+#    bytes, and must not contain the user name; the script refuses a weaker one.
+#    The user name may contain English letters, digits and . _ @ -
+& "$Root\node\node.exe" "$Root\current\backend\scripts\seed-admin.js" <username> <password> admin
 ```
 
 Step 2 reads `PFX_PATH`/`PFX_PASSWORD` from `data\certs\pfx-info.env` by
