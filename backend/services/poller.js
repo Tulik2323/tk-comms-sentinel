@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const { getDb } = require('../db/database');
 const { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getHardwareStatus, getStackMembers, getPortVlans, getArpTable, getMacBridgeTable, explainSnmpError, parseVendorModel } = require('./snmp');
 const { saveMetrics, pruneOldMetrics } = require('./history');
-const { checkThresholds, checkDeviceDown, resolveDeviceDown } = require('./alerts');
+const { checkThresholds, checkDeviceDown, resolveDeviceDown, maintainAlertEvents } = require('./alerts');
 const { logAudit } = require('../db/audit');
 const { refreshStaleHostnames } = require('./hostnames');
 
@@ -457,6 +457,13 @@ function startPoller() {
   cron.schedule('0 0 * * *', () => {
     pruneOldMetrics();
   });
+
+  // אירועי התראה של מכשירים שנמחקו — סגירה אוטומטית אחרי 14 ימים. פעם בשעה, ופעם בהפעלה.
+  const maintainAlerts = () => {
+    try { maintainAlertEvents(); } catch (err) { console.error('[Poller] תחזוקת אירועי התראה נכשלה:', err.message); }
+  };
+  cron.schedule('7 * * * *', maintainAlerts);
+  maintainAlerts();
 
   // רענון hostname (reverse DNS) לכתובות IP שנצפו ב-mac_entries — כל 5 דקות
   cron.schedule('*/5 * * * *', () => {

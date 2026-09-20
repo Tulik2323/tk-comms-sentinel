@@ -2,6 +2,38 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.4.2] — 2026-09-20
+
+### Added
+- **Closing alerts.** Until now there was no way to close an open alert. In the Event Log an
+  administrator can now tick the alerts to close and press **Close selected**. **Shift+click**
+  selects a whole range of rows, the checkbox in the table header selects every open alert on
+  the page, and **Close all open** closes them all. A confirmation is asked first, nothing is
+  deleted (an alert is only marked as resolved), and each action is written to the audit log
+  with the number of alerts closed. A new **Open only** filter lists just the open alerts.
+- **Alerts now close themselves when the problem is over.** A traffic, CPU or memory alert,
+  for a device or for a single port, is closed automatically when the value is back under its
+  threshold, when its threshold was removed or disabled, or when the port is no longer up. It
+  stays open for as long as the value stays above the threshold (also while no new e-mail is
+  sent because of the one-hour pause) and when a poll returns no reading. Before this, none of
+  these alerts had ever been closed: 2,004 of the 2,778 alerts on the live system were open.
+  DOWN and path alerts keep closing the way they did.
+- **Alerts of a deleted device close after 14 days.** They used to stay open for ever, because
+  no device was left to recover. The database does not record when a device was deleted, so
+  the first hourly check that finds such an alert stamps the time (`alert_events.orphaned_at`)
+  and the alert is closed 14 days after that. It stays visible for two weeks first.
+- **A "Needs review" panel for alerts that keep coming back.** A device or port that raised
+  alerts on at least 3 different days in the last 7 is listed at the top of the Event Log, with
+  the number of days and events and a link to the device (to the port, for a port alert).
+  Closed alerts count as well, so automatic closing does not hide a repeating problem. If the
+  behaviour turns out to be normal for that switch or port, raise its threshold in Threshold
+  Settings or in the port window on the device page. The Dashboard's Open Alerts card shows how
+  many need review.
+
+### Fixed
+- **The Dashboard's "Open Alerts" number counted only the 10 latest alerts**, so it could show
+  0 while thousands were open. It now shows the real total (the Admin page already did).
+
 ## [1.4.1] — 2026-09-19
 
 ### Added

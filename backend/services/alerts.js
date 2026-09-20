@@ -155,6 +155,10 @@ async function checkThresholds(device, metrics) {
   // כמה זמן עובר בין שני pollים של המכשיר — הבסיס לחישוב משך הרצף מעל הסף
   const intervalSec = device.poll_interval_sec > 0 ? device.poll_interval_sec : 300;
 
+  // מפתחות של אירועים שחייבים להישאר פתוחים: התנאי עדיין מתקיים, או שאין קריאה
+  // ולכן לא ידוע אם הוא חלף. כל אירוע פתוח אחר של המכשיר נסגר בסוף הבדיקה.
+  const keepOpen = new Set();
+
   const maxBps = getMaxBps(device);
   const checks = [
     { metric: 'bandwidth_in',  value: metrics.total_in_bps,  maxBps, label: 'תעבורה נכנסת כוללת' },
@@ -164,7 +168,8 @@ async function checkThresholds(device, metrics) {
   ];
 
   for (const check of checks) {
-    if (check.value == null || !(check.metric in threshMap)) continue;
+    if (check.value == null) { keepOpen.add(check.metric); continue; }  // אין קריאה — לא ידוע אם התנאי חלף
+    if (!(check.metric in threshMap)) continue;
 
     const pct = check.metric.startsWith('bandwidth')
       ? (check.value / (check.maxBps || 1)) * 100
@@ -177,6 +182,8 @@ async function checkThresholds(device, metrics) {
       breachRun.delete(key); // ספייק נעלם — אפס את הרצף
       continue;
     }
+
+    keepOpen.add(check.metric);  // הערך מעל הסף: אירוע פתוח נשאר פתוח, גם בזמן ה-cooldown
 
     // הרצף מעל הסף עדיין לא נמשך מספיק זמן
     if (!sustainedLongEnough(key, now, durationMin, intervalSec)) continue;
@@ -225,7 +232,61 @@ async function checkThresholds(device, metrics) {
   }
 
   // התראות per-port — כל פורט פעיל עם מהירות ידועה נבדק בנפרד
-  await checkPortThresholds(device, threshMap, now, intervalSec);
+  await checkPortThresholds(device, threshMap, now, intervalSec, keepOpen);
+
+  closeClearedEvents(device.id, keepOpen);
+}
+
+const THRESHOLD_EVENT_METRICS_SQL =
+  "'bandwidth_in','bandwidth_out','cpu','mem','port_bandwidth_in','port_bandwidth_out'";
+
+// מפתח של אירוע פתוח: המטריקה, ובאירוע פורט גם ה-if_index
+function eventKey(metric, ifIndex) {
+  return ifIndex == null ? metric : `${metric}:${ifIndex}`;
+}
+
+// אירוע תעבורה/CPU/זיכרון נסגר מעצמו כשהתנאי חלף: הערך חזר מתחת לסף, הסף הוסר או כובה,
+// או שהפורט כבר לא פעיל. כל עוד התנאי מתקיים האירוע נשאר פתוח, גם כשלא נשלחת התראה
+// חדשה בגלל ה-cooldown. אירועי DOWN ונפילת נתיב נסגרים במסלולים שלהם.
+function closeClearedEvents(deviceId, keepOpen) {
+  try {
+    const db = getDb();
+    const open = db.prepare(`
+      SELECT id, metric, port_if_index FROM alert_events
+      WHERE device_id = ? AND resolved_at IS NULL AND metric IN (${THRESHOLD_EVENT_METRICS_SQL})
+    `).all(deviceId);
+    const cleared = open.filter(e => !keepOpen.has(eventKey(e.metric, e.port_if_index)));
+    if (cleared.length === 0) return;
+
+    const close = db.prepare('UPDATE alert_events SET resolved_at = unixepoch() WHERE id = ? AND resolved_at IS NULL');
+    db.transaction(() => { for (const e of cleared) close.run(e.id); })();
+  } catch (err) {
+    // כשל בסגירת אירועים לא יכול להפיל את סבב ה-polling: חריגה מ-checkThresholds
+    // נתפסת ב-pollDevice ומסמנת את המכשיר כ-DOWN.
+    console.error(`[Alerts] סגירת אירועים שחלפו נכשלה: ${err.message}`);
+  }
+}
+
+// אירועים של מכשיר שנמחק (device_id = NULL) נסגרים רק 14 ימים אחרי שהמכשיר נמחק,
+// כדי שיישארו גלויים לזמן מה. ה-DB לא שומר מתי המכשיר נמחק, ולכן הריצה הראשונה שרואה
+// אירוע יתום רושמת את הזמן (orphaned_at), והסגירה נספרת ממנו. נקרא פעם בשעה מה-poller.
+const ORPHAN_CLOSE_AFTER_DAYS = 14;
+
+function maintainAlertEvents() {
+  const db = getDb();
+  // אירוע 'path' הוא של המערכת כולה ולכן device_id שלו NULL מלכתחילה — הוא נסגר בהתאוששות הנתיב
+  db.prepare(`
+    UPDATE alert_events SET orphaned_at = unixepoch()
+    WHERE device_id IS NULL AND orphaned_at IS NULL AND resolved_at IS NULL AND metric != 'path'
+  `).run();
+  const closed = db.prepare(`
+    UPDATE alert_events SET resolved_at = unixepoch()
+    WHERE orphaned_at IS NOT NULL AND resolved_at IS NULL AND orphaned_at < unixepoch() - ?
+  `).run(ORPHAN_CLOSE_AFTER_DAYS * 86400).changes;
+  if (closed > 0) {
+    console.log(`[Alerts] נסגרו ${closed} אירועים של מכשירים שנמחקו לפני יותר מ-${ORPHAN_CLOSE_AFTER_DAYS} ימים`);
+  }
+  return closed;
 }
 
 // סף פורט ייעודי מנצח את סף המכשיר/הגלובלי. סף פורט בלי משך משלו יורש את המשך של הסף שהוא דורס.
@@ -237,7 +298,7 @@ function effectivePortRule(portRule, baseRule) {
   };
 }
 
-async function checkPortThresholds(device, threshMap, now, intervalSec) {
+async function checkPortThresholds(device, threshMap, now, intervalSec, keepOpen) {
   const db = getDb();
 
   // טען כל ה-overrides הייעודיים לפורטים של מכשיר זה בבת אחת
@@ -275,7 +336,8 @@ async function checkPortThresholds(device, threshMap, now, intervalSec) {
     ];
 
     for (const pc of portChecks) {
-      if (!pc.rule || pc.bps == null) continue;
+      if (pc.bps == null) { keepOpen.add(eventKey(pc.metric, port.if_index)); continue; }  // אין קריאה
+      if (!pc.rule) continue;
       const { pct: threshold, durationMin } = pc.rule;
       const pct = (pc.bps / port.if_speed) * 100;
       const key = `${device.id}_port_${port.if_index}_${pc.dir}`;
@@ -284,6 +346,8 @@ async function checkPortThresholds(device, threshMap, now, intervalSec) {
         breachRun.delete(key); // ספייק נעלם — אפס את הרצף
         continue;
       }
+
+      keepOpen.add(eventKey(pc.metric, port.if_index));  // הפורט מעל הסף: אירוע פתוח נשאר פתוח
 
       // הרצף מעל הסף עדיין לא נמשך מספיק זמן
       if (!sustainedLongEnough(key, now, durationMin, intervalSec)) continue;
@@ -384,4 +448,4 @@ function resolveDeviceDown(device) {
   lastAlertSent.delete(`${device.id}_status`);
 }
 
-module.exports = { checkThresholds, checkDeviceDown, resolveDeviceDown, sendAlertEmail };
+module.exports = { checkThresholds, checkDeviceDown, resolveDeviceDown, sendAlertEmail, maintainAlertEvents };

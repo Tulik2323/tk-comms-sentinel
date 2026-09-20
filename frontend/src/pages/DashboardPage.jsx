@@ -432,6 +432,8 @@ export default function DashboardPage() {
   const { t }               = useTranslation();
   const { devices, loading } = useDevices(30);
   const [alerts, setAlerts]  = useState([]);
+  const [openAlerts, setOpenAlerts] = useState(0);   // כל האירועים הפתוחים, לא רק מבין 10 האחרונים
+  const [needReview, setNeedReview] = useState(0);   // התראות שחוזרות ודורשות בדיקה
   const [order,  setOrder]   = useState(loadOrder);
   const dragFrom = useRef(null);
   const [dragTarget, setDragTarget] = useState(null);
@@ -448,7 +450,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     api.get('/alerts/events?limit=10')
-      .then(r => setAlerts(r.data.events || []))
+      .then(r => { setAlerts(r.data.events || []); setOpenAlerts(r.data.open_total ?? 0); })
+      .catch(() => {});
+    api.get('/alerts/recurring')
+      .then(r => setNeedReview((r.data.items || []).length))
       .catch(() => {});
   }, []);
 
@@ -521,9 +526,11 @@ export default function DashboardPage() {
         <StatCard label={t('unknown')} value={unknown} color="var(--status-unknown)" icon="❓" to="/devices?status=unknown" />
         <StatCard
           label={t('open_alerts')}
-          value={alerts.filter(a => !a.resolved_at).length}
-          color={alerts.filter(a => !a.resolved_at).length > 0 ? 'var(--status-warn)' : 'var(--status-up)'}
-          icon="🔔" to="/alerts" />
+          value={openAlerts}
+          color={openAlerts > 0 ? 'var(--status-warn)' : 'var(--status-up)'}
+          icon="🔔"
+          sub={needReview > 0 ? t('needs_review_short', { count: needReview }) : undefined}
+          to="/alerts" />
       </div>
 
       {/* Down Banner */}

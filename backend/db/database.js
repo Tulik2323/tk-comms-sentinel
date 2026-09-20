@@ -134,6 +134,8 @@ async function initDb() {
     // כמה דקות הערך חייב להישאר מעל הסף לפני התראה. שורות קיימות מקבלות 5 — ההתנהגות שהייתה קודם.
     'ALTER TABLE alert_thresholds ADD COLUMN duration_min  INTEGER DEFAULT 5',
     'ALTER TABLE alert_events     ADD COLUMN port_if_index INTEGER',
+    // מתי התגלה שהמכשיר של האירוע נמחק — האירוע נסגר אוטומטית 14 ימים אחרי (ראה maintainAlertEvents)
+    'ALTER TABLE alert_events     ADD COLUMN orphaned_at   INTEGER',
     'ALTER TABLE audit_log        ADD COLUMN msg_key       TEXT',
     'ALTER TABLE audit_log        ADD COLUMN msg_params    TEXT',
   ]) {
@@ -165,6 +167,9 @@ async function initDb() {
       'ON alert_thresholds(metric) WHERE device_id IS NULL'
     );
   } catch (_) {}
+
+  // סגירת אירועים שחלפו בודקת בכל poll את האירועים הפתוחים של המכשיר
+  try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_alert_events_device ON alert_events(device_id, resolved_at)'); } catch (_) {}
 
   // ספי התראה ייעודיים לפורט. טבלה נפרדת ולא alert_thresholds: שם יש UNIQUE(device_id, metric)
   // ברמת הטבלה, שחוסם סף פורט לצד סף המכשיר ושני פורטים על אותו מכשיר, והוא לא ניתן להסרה

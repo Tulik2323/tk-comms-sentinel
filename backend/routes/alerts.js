@@ -4,12 +4,15 @@ const router  = express.Router();
 const { getDb }                    = require('../db/database');
 const { requireAuth, requireAdmin }= require('../middleware/auth');
 const { DEVICE_METRICS, parsePct, parseDuration, saveThreshold } = require('../services/thresholds');
+const { logAudit }                 = require('../db/audit');
 
-// רשימת אירועי התראה (50 אחרונים)
+// רשימת אירועי התראה (50 אחרונים). status=open: רק הפתוחים.
+// total הוא לפי הסינון (לעימוד), ו-open_total הוא מספר כל האירועים הפתוחים.
 router.get('/events', requireAuth, (req, res) => {
   const db     = getDb();
   const limit  = parseInt(req.query.limit  || '50');
   const offset = parseInt(req.query.offset || '0');
+  const where  = req.query.status === 'open' ? 'WHERE e.resolved_at IS NULL' : '';
 
   // port_label מאפשר ל-UI לבנות מחדש את נוסח ההתראה בשפה הנבחרת,
   // במקום להציג את ה-message העברי הקפוא שנשמר ב-DB.
@@ -19,12 +22,65 @@ router.get('/events', requireAuth, (req, res) => {
     FROM alert_events e
     LEFT JOIN devices d ON d.id = e.device_id
     LEFT JOIN ports   p ON p.device_id = e.device_id AND p.if_index = e.port_if_index
+    ${where}
     ORDER BY e.sent_at DESC
     LIMIT ? OFFSET ?
   `).all(limit, offset);
 
-  const total = db.prepare('SELECT COUNT(*) AS n FROM alert_events').get().n;
-  res.json({ events, total });
+  const total     = db.prepare(`SELECT COUNT(*) AS n FROM alert_events e ${where}`).get().n;
+  const openTotal = db.prepare('SELECT COUNT(*) AS n FROM alert_events WHERE resolved_at IS NULL').get().n;
+  res.json({ events, total, open_total: openTotal });
+});
+
+// סגירה ידנית של אירועים פתוחים: ids = הנבחרים, או all=true לכל הפתוחים.
+// האירועים לא נמחקים — הם מסומנים כסגורים.
+const MAX_RESOLVE_IDS = 5000;
+router.post('/events/resolve', requireAdmin, (req, res) => {
+  const db = getDb();
+  const { ids, all } = req.body || {};
+  let closed;
+
+  if (all === true) {
+    closed = db.prepare('UPDATE alert_events SET resolved_at = unixepoch() WHERE resolved_at IS NULL').run().changes;
+  } else if (Array.isArray(ids) && ids.length > 0 && ids.length <= MAX_RESOLVE_IDS && ids.every(Number.isInteger)) {
+    const close = db.prepare('UPDATE alert_events SET resolved_at = unixepoch() WHERE id = ? AND resolved_at IS NULL');
+    closed = db.transaction(() => ids.reduce((n, id) => n + close.run(id).changes, 0))();
+  } else {
+    return res.status(400).json({ error: `נדרש ids (מערך של מספרים שלמים, עד ${MAX_RESOLVE_IDS}) או all=true` });
+  }
+
+  if (closed > 0) {
+    logAudit('info', 'admin', all === true ? 'alerts_resolved_all' : 'alerts_resolved_selected',
+      { count: closed }, { username: req.user?.username, ip: req.ip });
+  }
+  res.json({ ok: true, closed });
+});
+
+// התראות שחוזרות: אותו מכשיר / פורט / מטריקה שהתריע לפחות ב-3 ימים שונים ב-7 הימים
+// האחרונים. חזרה לאורך שבוע אומרת שזה לא ספייק חולף אלא מצב שדורש בדיקה, או סף שצריך
+// להתאים. נספרים גם אירועים סגורים — סגירה אוטומטית לא אמורה להסתיר חזרתיות.
+const RECURRING_WINDOW_DAYS = 7;
+const RECURRING_MIN_DAYS    = 3;
+router.get('/recurring', requireAuth, (req, res) => {
+  const db = getDb();
+  const items = db.prepare(`
+    SELECT e.device_id, e.metric, e.port_if_index,
+           COUNT(*) AS events,
+           COUNT(DISTINCT date(e.sent_at, 'unixepoch', 'localtime')) AS days,
+           MAX(e.sent_at) AS last_at,
+           d.name AS device_name, d.ip AS device_ip,
+           COALESCE(p.if_alias, p.if_name, p.if_descr) AS port_label
+    FROM alert_events e
+    JOIN devices d ON d.id = e.device_id
+    LEFT JOIN ports p ON p.device_id = e.device_id AND p.if_index = e.port_if_index
+    WHERE e.sent_at >= unixepoch() - ?
+      AND e.metric IN ('bandwidth_in','bandwidth_out','cpu','mem','port_bandwidth_in','port_bandwidth_out')
+    GROUP BY e.device_id, e.metric, e.port_if_index
+    HAVING days >= ?
+    ORDER BY days DESC, events DESC
+    LIMIT 100
+  `).all(RECURRING_WINDOW_DAYS * 86400, RECURRING_MIN_DAYS);
+  res.json({ items, windowDays: RECURRING_WINDOW_DAYS, minDays: RECURRING_MIN_DAYS });
 });
 
 // הגדרות סף: גלובלי, למכשיר, ולפורט (כל סף פורט מסומן scope='port' ומכיל את ה-if_index)

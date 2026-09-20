@@ -1,5 +1,5 @@
 // AlertsPage — לוג התראות + הגדרות סף לכל מכשיר
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
@@ -158,12 +158,23 @@ export default function AlertsPage() {
   const [editRow,    setEditRow]    = useState(null); // השורה שעורכים; null = הוספה
   const [page,       setPage]       = useState(0);
   const [total,      setTotal]      = useState(0);
+  const [openOnly,   setOpenOnly]   = useState(false);
+  const [openTotal,  setOpenTotal]  = useState(0);     // כל האירועים הפתוחים, לא רק בעמוד הזה
+  const [selected,   setSelected]   = useState(() => new Set());
+  const [closing,    setClosing]    = useState(false);
+  const [recurring,  setRecurring]  = useState({ items: [], windowDays: 7, minDays: 3 });
+  const [showAllRecurring, setShowAllRecurring] = useState(false);
+  const lastClicked = useRef(null); // אינדקס השורה שסומנה אחרונה — נקודת ההתחלה לבחירת טווח עם Shift
   const PER_PAGE = 25;
+  const RECURRING_PREVIEW = 5;
 
   function loadEvents(p = 0) {
-    api.get(`/alerts/events?limit=${PER_PAGE}&offset=${p * PER_PAGE}`)
-      .then(r => { setEvents(r.data.events); setTotal(r.data.total); })
+    const status = openOnly ? '&status=open' : '';
+    api.get(`/alerts/events?limit=${PER_PAGE}&offset=${p * PER_PAGE}${status}`)
+      .then(r => { setEvents(r.data.events); setTotal(r.data.total); setOpenTotal(r.data.open_total ?? 0); })
       .catch(console.error);
+    setSelected(new Set());
+    lastClicked.current = null;
   }
 
   function loadThresholds() {
@@ -172,12 +183,64 @@ export default function AlertsPage() {
       .catch(console.error);
   }
 
+  function loadRecurring() {
+    api.get('/alerts/recurring')
+      .then(r => setRecurring(r.data))
+      .catch(console.error);
+  }
+
   useEffect(() => {
-    loadEvents();
     loadThresholds();
+    loadRecurring();
   }, []);
 
-  useEffect(() => { loadEvents(page); }, [page]);
+  useEffect(() => { loadEvents(page); }, [page, openOnly]);
+
+  // רק אירועים פתוחים ניתנים לסגירה
+  const openRows    = events.filter(e => !e.resolved_at);
+  const allSelected = openRows.length > 0 && openRows.every(e => selected.has(e.id));
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(openRows.map(e => e.id)));
+  }
+
+  // Shift + לחיצה מסמן (או מבטל) את כל האירועים הפתוחים בין השורה הקודמת שסומנה לשורה הנוכחית
+  function toggleRow(index, shiftKey) {
+    const ev     = events[index];
+    const anchor = lastClicked.current; // נקרא כאן: הפונקציה שמועברת ל-setSelected רצה אחרי שה-ref כבר התעדכן
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (shiftKey && anchor != null && events[anchor]) {
+        const from   = Math.min(anchor, index);
+        const to     = Math.max(anchor, index);
+        const select = !prev.has(ev.id); // כל הטווח עובר למצב שאליו עוברת השורה שנלחצה
+        for (let i = from; i <= to; i++) {
+          if (events[i].resolved_at) continue;
+          if (select) next.add(events[i].id); else next.delete(events[i].id);
+        }
+      } else if (next.has(ev.id)) {
+        next.delete(ev.id);
+      } else {
+        next.add(ev.id);
+      }
+      return next;
+    });
+    lastClicked.current = index;
+  }
+
+  async function closeAlerts(payload, confirmText) {
+    if (!window.confirm(confirmText)) return;
+    setClosing(true);
+    try {
+      await api.post('/alerts/events/resolve', payload);
+    } catch (err) {
+      alert(err.response?.data?.error || t('error'));
+    } finally {
+      setClosing(false);
+    }
+    // בסינון "רק פתוחות" העמוד הנוכחי יכול להתרוקן, ולכן חוזרים לעמוד הראשון
+    if (openOnly && page !== 0) setPage(0); else loadEvents(page);
+  }
 
   function openModal(row) {
     setEditRow(row || null);
@@ -235,10 +298,101 @@ export default function AlertsPage() {
       {/* Events Tab */}
       {tab === 'events' && (
         <div>
+          {/* התראות שחוזרות — לא ספייק חולף, ולכן דורשות בדיקה */}
+          {recurring.items.length > 0 && (
+            <div className="nm-card" style={{ marginBottom: 16, border: '1px solid #f97316' }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>
+                ⚠️ {t('recurring_title')} ({recurring.items.length})
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                {t('recurring_hint', { min: recurring.minDays, window: recurring.windowDays })}
+              </div>
+              <table className="nm-table">
+                <thead>
+                  <tr>
+                    <th>{t('col_device')}</th>
+                    <th>{t('col_metric')}</th>
+                    <th>{t('col_days')}</th>
+                    <th>{t('col_events')}</th>
+                    <th>{t('col_last_seen')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(showAllRecurring ? recurring.items : recurring.items.slice(0, RECURRING_PREVIEW)).map(r => (
+                    <tr key={`${r.device_id}-${r.metric}-${r.port_if_index ?? ''}`}>
+                      <td style={{ fontWeight: 600 }}>
+                        <Link
+                          to={r.port_if_index != null ? `/devices/${r.device_id}?port=${r.port_if_index}` : `/devices/${r.device_id}`}
+                          style={{ color: 'var(--accent)', textDecoration: 'none' }}
+                        >
+                          {r.device_name || r.device_ip}
+                          {r.port_if_index != null && ` · ${r.port_label || `${t('port_label')} ${r.port_if_index}`}`}
+                        </Link>
+                      </td>
+                      <td>{t(`metric_${r.metric}`)}</td>
+                      <td style={{ fontFamily: 'monospace' }}>{t('days_of_window', { days: r.days, window: recurring.windowDays })}</td>
+                      <td style={{ fontFamily: 'monospace' }}>{r.events}</td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                        {new Date(r.last_at * 1000).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {recurring.items.length > RECURRING_PREVIEW && (
+                <button
+                  className="nm-btn nm-btn-ghost"
+                  style={{ marginTop: 10, fontSize: 12 }}
+                  onClick={() => setShowAllRecurring(v => !v)}
+                >
+                  {showAllRecurring ? t('show_less') : t('show_all_n', { count: recurring.items.length })}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* סינון וסגירה */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+              <input
+                type="checkbox" checked={openOnly}
+                onChange={() => { setPage(0); setOpenOnly(v => !v); }}
+              />
+              {t('open_only')} ({openTotal})
+            </label>
+            {isAdmin && (
+              <>
+                <button
+                  className="nm-btn nm-btn-ghost"
+                  disabled={selected.size === 0 || closing}
+                  onClick={() => closeAlerts({ ids: [...selected] }, t('close_selected_confirm', { count: selected.size }))}
+                >
+                  ✓ {t('close_selected', { count: selected.size })}
+                </button>
+                <button
+                  className="nm-btn nm-btn-ghost"
+                  disabled={openTotal === 0 || closing}
+                  onClick={() => closeAlerts({ all: true }, t('close_all_confirm', { count: openTotal }))}
+                >
+                  ✓✓ {t('close_all_open', { count: openTotal })}
+                </button>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('select_hint')}</span>
+              </>
+            )}
+          </div>
+
           <div className="nm-card" style={{ padding: 0, overflow: 'hidden' }}>
             <table className="nm-table">
               <thead>
                 <tr>
+                  {isAdmin && (
+                    <th style={{ width: 32 }}>
+                      <input
+                        type="checkbox" checked={allSelected} disabled={openRows.length === 0}
+                        onChange={toggleAll} title={t('select_all_open')} aria-label={t('select_all_open')}
+                      />
+                    </th>
+                  )}
                   <th>{t('col_time')}</th>
                   <th>{t('col_device')}</th>
                   <th>{t('col_details')}</th>
@@ -250,16 +404,30 @@ export default function AlertsPage() {
               <tbody>
                 {events.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>
+                    <td colSpan={isAdmin ? 7 : 6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32 }}>
                       {t('no_alerts_msg')}
                     </td>
                   </tr>
-                ) : events.map(e => (
+                ) : events.map((e, i) => (
                   <tr
                     key={e.id}
                     onClick={() => e.device_id && navigate(`/devices/${e.device_id}`)}
                     style={{ cursor: e.device_id ? 'pointer' : 'default' }}
                   >
+                    {isAdmin && (
+                      <td
+                        style={{ width: 32 }}
+                        onClick={ev => ev.stopPropagation()}
+                        onMouseDown={ev => { if (ev.shiftKey) ev.preventDefault(); }}  // בלי בחירת טקסט תוך כדי Shift
+                      >
+                        {!e.resolved_at && (
+                          <input
+                            type="checkbox" checked={selected.has(e.id)} readOnly
+                            onClick={ev => toggleRow(i, ev.shiftKey)} aria-label={t('select_alert')}
+                          />
+                        )}
+                      </td>
+                    )}
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                       {new Date(e.sent_at * 1000).toLocaleString()}
                     </td>
