@@ -87,17 +87,16 @@ if (-not (Test-Path $pkgVer)) {
     /XF .env "netmonitor.db*" "*.db" "*.db-shm" "*.db-wal" "*.db.bak*" "*.key" "*.pem" "*.pfx" `
     /NFL /NDL /NJS /NC /NS /NP | Out-Null
 
-# if backend packages changed, reinstall in package
-$pkgJson    = "$pkgVer\backend\package.json"
-$pkgJsonSrc = "$SRC\backend\package.json"
-$pkgNM      = "$pkgVer\backend\node_modules"
-if (-not (Test-Path $pkgNM) -or ((Get-FileHash $pkgJson).Hash -ne (Get-FileHash $pkgJsonSrc).Hash)) {
-    Write-Host "  npm install --omit=dev in package backend..."
-    $savedLoc = Get-Location
-    Set-Location "$pkgVer\backend"
-    & "$SRC\package\node\node.exe" "$SRC\package\node\node_modules\npm\bin\npm-cli.js" install --omit=dev --prefer-offline 2>&1 | Where-Object { $_ -notmatch '^npm (warn|notice)' } | Select-Object -First 3 | ForEach-Object { Write-Host "  $_" }
-    Set-Location $savedLoc
-}
+# Always bring the package's node_modules in line with package.json / package-lock.json. This used
+# to run only when the package's package.json differed from the source's, but the robocopy above has
+# just copied the source over it, so the two were always equal and a dependency change never reached
+# the installer: 1.4.4 first went out with 1.4.3's nodemailer and multer for that reason. `npm install`
+# does nothing when node_modules already matches the lock file, so running it every time is cheap.
+Write-Host "  npm install --omit=dev in package backend..."
+$savedLoc = Get-Location
+Set-Location "$pkgVer\backend"
+& "$SRC\package\node\node.exe" "$SRC\package\node\node_modules\npm\bin\npm-cli.js" install --omit=dev --prefer-offline 2>&1 | Where-Object { $_ -notmatch '^npm (warn|notice)' } | Select-Object -First 3 | ForEach-Object { Write-Host "  $_" }
+Set-Location $savedLoc
 
 # overwrite frontend dist
 if (-not (Test-Path "$pkgVer\frontend")) { New-Item -ItemType Directory -Path "$pkgVer\frontend" | Out-Null }
