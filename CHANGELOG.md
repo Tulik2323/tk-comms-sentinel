@@ -2,6 +2,68 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.4.3] — 2026-09-20
+
+Security hardening, from an OWASP Top 10 (2021) review of the code, the dependencies, the install
+scripts and the live server. Authentication and session hardening follows in 1.4.4.
+
+### Fixed
+- **The server's source code could be downloaded by anyone, without logging in.** The site root is
+  `backend\`, and IIS serves every existing file there that is not explicitly hidden, so
+  `/routes/auth.js`, `/services/*.js`, `/middleware/auth.js`, `/lib/license.js`,
+  `/poller-service.js`, `/package.json` and `/package-lock.json` all answered 200. They are now
+  hidden in `web.config`, together with `.env.example`. The `Server` response header is removed and
+  crashes no longer send a stack trace to the browser (`devErrorsEnabled=false`).
+- **SNMP community strings and SNMPv3 credentials were returned to every logged-in user, viewers
+  included** (device list, device details, and the CSV export). The API no longer returns them to
+  anyone: it returns `has_community`, `has_v3_auth` and `has_v3_priv` flags instead, and the SNMPv3
+  user name only to administrators. The edit form now shows the Community field empty ("leave empty to
+  keep existing") and only sends a new value when one is typed, so saving a device no longer touches
+  the stored community. The CSV export no longer has a community column (the import format is
+  unchanged), and a community used for a scan is no longer written to the audit log.
+- **The update installer took the package address and checksum from the request.** Anyone holding an
+  administrator token could make the server download and run a package of their choosing. It now
+  ignores the request body, reads the configured update feed itself, and installs only when the feed
+  is signed by the vendor (Ed25519, the license key, with its own `tkcs-update-v1` message prefix so a
+  license signature can never pass as an update), carries a sha256 the package must match, is served
+  over HTTPS, is under 500 MB and downloads within ten minutes. Only one installation runs at a time,
+  and every refusal is written to the audit log. `deploy-local.ps1` signs `latest.json`
+  (`tools/keygen/sign-update.js`); an unsigned feed only blocks auto-update on installer-based systems.
+- **The JWT secret written by the installer was guessable.** `write-env.ps1` built it with
+  `Get-Random`, which has about 32 bits of real entropy, so it could be brute-forced from any one
+  token. It now uses the operating system's cryptographic generator. Existing installations keep
+  their secret until `tools/harden-server.ps1 -RotateJwtSecret` is run.
+- **CSV files could carry Excel formulas.** Device names, port descriptions and notes come from the
+  devices over SNMP, so a crafted port description could run a formula on whoever opened an exported
+  report. Cells that start with `=`, `+`, `-` or `@` now get a leading quote (plain numbers are left
+  alone). Applies to the device export and every report, including the scheduled e-mail reports.
+- **A scan of a large range could take the server down.** The range was expanded to a list before the
+  1,024-address limit was checked, so `10.0.0.0/8` tried to build 16 million entries. The size is now
+  checked first, IP addresses and SNMP versions are validated, and CSV import rejects bad rows with a
+  reason and stops at 5,000 lines.
+- **Floor map upload.** The file type came only from the label the browser sent. The content must now
+  match it (PNG, JPEG, GIF or SVG), and the image is served with a sandboxing policy so an SVG can
+  never run a script, even if its address is opened directly.
+- **The audit log could be read by every user and erased without a trace.** `GET /api/audit` and the
+  Audit page are now for administrators only. Purging refuses anything under 7 days (a limit of `-1`
+  used to mean "everything" too), and the purge itself is written to the log.
+
+### Added
+- **Security headers on every response:** Content-Security-Policy, HSTS, X-Content-Type-Options,
+  X-Frame-Options, Referrer-Policy, Permissions-Policy and Cross-Origin-Opener-Policy; `X-Powered-By`
+  is removed.
+- **A failing route no longer stops the whole service.** An error inside an async route used to become
+  an unhandled rejection that ended the process for every user; it now becomes a normal error reply.
+  Unhandled errors are logged, request bodies are limited to 1 MB (10 MB for CSV import), and the
+  server refuses to start without a `JWT_SECRET`.
+- **`tools/harden-server.ps1`**, for the person who administers the server. Today `Users` and
+  `IIS_IUSRS` can read the JWT secret, the database and the encryption key, and every IIS application
+  on the machine can overwrite code that the poller runs as SYSTEM. The script saves the current
+  permissions, applies least-privilege ones, checks that the site still answers and puts everything
+  back by itself if it does not; `-Restore` undoes it later. Optional switches turn off TLS 1.0/1.1
+  and rotate the JWT secret.
+- `GET /api/health` returns only `status`, `version` and `timestamp`.
+
 ## [1.4.2] — 2026-09-20
 
 ### Added

@@ -219,7 +219,7 @@ function EditDeviceModal({ device, onClose, onSaved }) {
   const [form, setForm] = useState({
     ip:               device.ip           || '',
     name:             device.name         || '',
-    community:        device.community    || 'public',
+    community:        '',   // השרת לא מחזיר את ה-community; ריק = ללא שינוי
     snmp_version:     device.snmp_version || 'v2c',
     snmp_v3_user:     device.snmp_v3_user || '',
     snmp_v3_auth:     '',
@@ -238,6 +238,7 @@ function EditDeviceModal({ device, onClose, onSaved }) {
     try {
       // שלח רק שדות שאינם ריקים (אל תדרוס סיסמאות v3 ריקות)
       const body = { ...form };
+      if (!body.community)    delete body.community;
       if (!body.snmp_v3_auth) delete body.snmp_v3_auth;
       if (!body.snmp_v3_priv) delete body.snmp_v3_priv;
       await api.put(`/devices/${device.id}`, body);
@@ -281,7 +282,7 @@ function EditDeviceModal({ device, onClose, onSaved }) {
           </select>
         </div>
         {form.snmp_version === 'v2c'
-          ? field('Community String', 'community', 'text')
+          ? field(t('keep_existing_community'), 'community', 'password')
           : <>
             {field('SNMPv3 Username', 'snmp_v3_user')}
             {field(t('keep_existing_auth'), 'snmp_v3_auth', 'password')}

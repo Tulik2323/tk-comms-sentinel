@@ -82,8 +82,13 @@ if ($PfxPath -and -not $PfxPassword) {
 }
 
 function New-Secret {
-  # 64 hex chars = 256 bits.
-  -join (1..64 | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) })
+  # 64 hex chars = 256 bits, from the operating system's cryptographic generator.
+  # Do not use Get-Random here: it is a seeded pseudo-random generator with only about 32 bits of
+  # real entropy, so a secret built from it can be found by brute force from any one signed token.
+  $bytes = New-Object byte[] 32
+  $rng   = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+  -join ($bytes | ForEach-Object { $_.ToString('x2') })
 }
 
 $lines = @(

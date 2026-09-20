@@ -8,26 +8,47 @@ const { forcePoll }     = require('../services/poller');
 const { logAudit }      = require('../db/audit');
 const { attachHostnames } = require('../services/hostnames');
 const { PORT_METRICS, DEFAULT_DURATION_MIN, parsePct, parseDuration, savePortThreshold } = require('../services/thresholds');
+const { toCSV }         = require('../services/csv');
+const { isIPv4, cleanText, intInRange, expandRange, expandCIDR } = require('../services/validate');
 
-// ייצוא כל המכשירים כ-CSV (לפני /:id כדי לא להתנגש)
+const SNMP_VERSIONS = ['v2c', 'v3'];
+const MAX_SCAN_IPS  = 1024;
+
+// מחרוזות ה-SNMP (community ופרטי v3) לעולם לא חוזרות ב-API: מי שרואה אותן יכול לשאול את הציוד
+// ולעיתים גם לשנות אותו. במקומן חוזרים דגלים שמראים שהערך קיים; שם משתמש ה-v3 חוזר רק לאדמין.
+function publicDevice(d, isAdmin) {
+  if (!d) return d;
+  const out = {
+    ...d,
+    has_community: Boolean(d.community),
+    has_v3_auth:   Boolean(d.snmp_v3_auth),
+    has_v3_priv:   Boolean(d.snmp_v3_priv),
+  };
+  delete out.community;
+  delete out.snmp_v3_auth;
+  delete out.snmp_v3_priv;
+  if (!isAdmin) delete out.snmp_v3_user;
+  return out;
+}
+
+// ייצוא כל המכשירים כ-CSV (לפני /:id כדי לא להתנגש). בלי community: הקובץ יוצא מהמערכת,
+// ופרטי הגישה לציוד לא אמורים לנדוד איתו. פורמט הייבוא (עם community) לא השתנה.
 router.get('/export', requireAuth, (req, res) => {
   const db = getDb();
   const devices = db.prepare(`
-    SELECT ip, name, community, snmp_version, location, status, sys_name, notes
+    SELECT ip, name, snmp_version, location, status, sys_name, notes
     FROM devices ORDER BY ip
   `).all();
 
   const BOM = '﻿';
-  const headers = 'ip,name,community,snmp_version,location,status,sys_name,notes';
-  const rows = devices.map(d =>
-    [d.ip, d.name, d.community, d.snmp_version, d.location, d.status, d.sys_name, d.notes]
-      .map(v => (v == null ? '' : String(v).includes(',') ? `"${String(v).replace(/"/g, '""')}"` : String(v)))
-      .join(',')
+  const csv = toCSV(
+    ['ip', 'name', 'snmp_version', 'location', 'status', 'sys_name', 'notes'],
+    devices.map(d => [d.ip, d.name, d.snmp_version, d.location, d.status, d.sys_name, d.notes])
   );
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="devices_export.csv"');
-  res.send(BOM + headers + '\n' + rows.join('\n'));
+  res.send(BOM + csv);
 });
 
 // רשימת כל המכשירים עם metrics אחרונות
@@ -44,7 +65,7 @@ router.get('/', requireAuth, (req, res) => {
     ORDER BY d.name, d.ip
   `).all();
 
-  res.json(devices);
+  res.json(devices.map(d => publicDevice(d, req.user.role === 'admin')));
 });
 
 // ===== חיפוש תחנת קצה לפי IP או MAC =====
@@ -145,7 +166,7 @@ router.get('/:id', requireAuth, (req, res) => {
   const db     = getDb();
   const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(req.params.id);
   if (!device) return res.status(404).json({ error: 'מכשיר לא נמצא' });
-  res.json(device);
+  res.json(publicDevice(device, req.user.role === 'admin'));
 });
 
 // ===== היסטוריית תעבורה פר-פורט =====
@@ -289,15 +310,55 @@ router.delete('/:id/port-threshold/:ifIndex/:metric', requireAdmin, (req, res) =
 });
 
 // הוסף מכשיר ידני
+// בדיקת שדות מכשיר מגוף בקשה (הוספה ועדכון). מחזיר { error } או { values }.
+// שדה שלא נשלח נשאר undefined (בעדכון: הערך הקיים נשמר). מחרוזות סודיות ריקות נחשבות "לא שונה",
+// כדי שטופס עריכה שלא הוקלד בו community חדש לא ימחק את הקיים.
+function parseDeviceBody(body, { creating }) {
+  const b = body || {};
+  const v = {};
+
+  v.ip = cleanText(b.ip, 45);
+  if (creating ? !isIPv4(v.ip) : (v.ip !== undefined && !isIPv4(v.ip))) return { error: 'כתובת IP לא תקינה (IPv4)' };
+
+  v.snmp_version = b.snmp_version === undefined && creating ? 'v2c' : b.snmp_version;
+  if (v.snmp_version !== undefined && !SNMP_VERSIONS.includes(v.snmp_version)) {
+    return { error: `גרסת SNMP לא תקינה (${SNMP_VERSIONS.join(' / ')})` };
+  }
+
+  v.poll_interval_sec = intInRange(b.poll_interval_sec, 30, 86400);
+  if (v.poll_interval_sec === null) return { error: 'מרווח poll חייב להיות מספר שלם בין 30 ל-86400 שניות' };
+  if (v.poll_interval_sec === undefined && creating) v.poll_interval_sec = 300;
+
+  for (const [key, max] of [['name', 100], ['location', 200], ['notes', 1000], ['snmp_v3_user', 64]]) {
+    v[key] = cleanText(b[key], max);
+    if (v[key] === null) return { error: `${key} ארוך מדי או לא תקין` };
+  }
+  for (const [key, max] of [['community', 128], ['snmp_v3_auth', 128], ['snmp_v3_priv', 128]]) {
+    v[key] = cleanText(b[key], max);
+    if (v[key] === null) return { error: `${key} ארוך מדי או לא תקין` };
+    if (v[key] === '') v[key] = undefined;
+  }
+  if (creating && v.community === undefined) v.community = 'public';
+
+  // מיקום על המפה: מספרים בלבד
+  for (const key of ['map_x', 'map_y']) {
+    if (b[key] === undefined || b[key] === null) { v[key] = undefined; continue; }
+    const n = Number(b[key]);
+    if (!Number.isFinite(n)) return { error: `${key} חייב להיות מספר` };
+    v[key] = n;
+  }
+  return { values: v };
+}
+
 router.post('/', requireAdmin, async (req, res) => {
   const db = getDb();
+  const parsed = parseDeviceBody(req.body, { creating: true });
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
   const {
-    name, ip, snmp_version = 'v2c', community = 'public',
+    name, ip, snmp_version, community,
     snmp_v3_user, snmp_v3_auth, snmp_v3_priv,
-    poll_interval_sec = 300, location, notes
-  } = req.body;
-
-  if (!ip) return res.status(400).json({ error: 'IP נדרש' });
+    poll_interval_sec, location, notes
+  } = parsed.values;
 
   try {
     const result = db.prepare(`
@@ -315,7 +376,7 @@ router.post('/', requireAdmin, async (req, res) => {
     forcePoll(deviceId).catch(() => {});
 
     const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(deviceId);
-    res.status(201).json(device);
+    res.status(201).json(publicDevice(device, true));
   } catch (err) {
     if ((err?.message || String(err)).includes('UNIQUE')) {
       return res.status(409).json({ error: `IP ${ip} כבר קיים במערכת` });
@@ -330,35 +391,44 @@ router.put('/:id', requireAdmin, (req, res) => {
   const device = db.prepare('SELECT * FROM devices WHERE id = ?').get(req.params.id);
   if (!device) return res.status(404).json({ error: 'מכשיר לא נמצא' });
 
+  const parsed = parseDeviceBody(req.body, { creating: false });
+  if (parsed.error) return res.status(400).json({ error: parsed.error });
   const {
     name, ip, snmp_version, community,
     snmp_v3_user, snmp_v3_auth, snmp_v3_priv,
     poll_interval_sec, location, notes,
     map_x, map_y
-  } = req.body;
+  } = parsed.values;
 
-  db.prepare(`
-    UPDATE devices SET
-      name = COALESCE(?, name),
-      ip   = COALESCE(?, ip),
-      snmp_version = COALESCE(?, snmp_version),
-      community = COALESCE(?, community),
-      snmp_v3_user = COALESCE(?, snmp_v3_user),
-      snmp_v3_auth = COALESCE(?, snmp_v3_auth),
-      snmp_v3_priv = COALESCE(?, snmp_v3_priv),
-      poll_interval_sec = COALESCE(?, poll_interval_sec),
-      location = COALESCE(?, location),
-      notes = COALESCE(?, notes),
-      map_x = COALESCE(?, map_x),
-      map_y = COALESCE(?, map_y)
-    WHERE id = ?
-  `).run(name, ip, snmp_version, community,
-         snmp_v3_user, snmp_v3_auth, snmp_v3_priv,
-         poll_interval_sec, location, notes,
-         map_x, map_y,
-         req.params.id);
+  try {
+    db.prepare(`
+      UPDATE devices SET
+        name = COALESCE(?, name),
+        ip   = COALESCE(?, ip),
+        snmp_version = COALESCE(?, snmp_version),
+        community = COALESCE(?, community),
+        snmp_v3_user = COALESCE(?, snmp_v3_user),
+        snmp_v3_auth = COALESCE(?, snmp_v3_auth),
+        snmp_v3_priv = COALESCE(?, snmp_v3_priv),
+        poll_interval_sec = COALESCE(?, poll_interval_sec),
+        location = COALESCE(?, location),
+        notes = COALESCE(?, notes),
+        map_x = COALESCE(?, map_x),
+        map_y = COALESCE(?, map_y)
+      WHERE id = ?
+    `).run(name, ip, snmp_version, community,
+           snmp_v3_user, snmp_v3_auth, snmp_v3_priv,
+           poll_interval_sec, location, notes,
+           map_x, map_y,
+           req.params.id);
+  } catch (err) {
+    if ((err?.message || String(err)).includes('UNIQUE')) {
+      return res.status(409).json({ error: `IP ${ip} כבר קיים במערכת` });
+    }
+    throw err;
+  }
 
-  res.json(db.prepare('SELECT * FROM devices WHERE id = ?').get(req.params.id));
+  res.json(publicDevice(db.prepare('SELECT * FROM devices WHERE id = ?').get(req.params.id), true));
 });
 
 // מחק מכשיר
@@ -381,23 +451,30 @@ router.post('/:id/poll', requireAdmin, async (req, res) => {
 
 // סריקת טווח IPs — מוצא מכשירי SNMP
 router.post('/scan', requireAdmin, async (req, res) => {
-  const { start_ip, end_ip, cidr, community = 'public', snmp_version = 'v2c' } = req.body;
+  const { start_ip, end_ip, cidr } = req.body || {};
+  const community    = cleanText(req.body && req.body.community, 128) || 'public';
+  const snmp_version = (req.body && req.body.snmp_version) || 'v2c';
+  if (!SNMP_VERSIONS.includes(snmp_version)) {
+    return res.status(400).json({ error: `גרסת SNMP לא תקינה (${SNMP_VERSIONS.join(' / ')})` });
+  }
 
+  // הגודל נבדק לפני שנוצר מערך הכתובות: טווח /8 היה בונה 16 מיליון כתובות ומפיל את התהליך
   let ips = [];
-  if (cidr) {
-    ips = expandCIDR(cidr);
-  } else if (start_ip && end_ip) {
-    ips = expandRange(start_ip, end_ip);
-  } else {
-    return res.status(400).json({ error: 'נדרש cidr או start_ip + end_ip' });
+  try {
+    if (cidr) {
+      ips = expandCIDR(cidr, MAX_SCAN_IPS);
+    } else if (start_ip && end_ip) {
+      ips = expandRange(start_ip, end_ip, MAX_SCAN_IPS);
+    } else {
+      return res.status(400).json({ error: 'נדרש cidr או start_ip + end_ip' });
+    }
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
   }
 
-  if (ips.length > 1024) {
-    return res.status(400).json({ error: 'טווח גדול מדי (מקסימום 1024 IPs בסריקה)' });
-  }
-
+  // מחרוזת ה-community לא נרשמת ב-Audit: הלוג נקרא גם על ידי מי שלא אמור לדעת אותה
   const scanTarget = cidr || `${start_ip}–${end_ip}`;
-  logAudit('info', 'admin', 'scan_started', { target: scanTarget, count: ips.length, community }, { username: req.user?.username });
+  logAudit('info', 'admin', 'scan_started', { target: scanTarget, count: ips.length }, { username: req.user?.username });
 
   const db = getDb();
   const BATCH = 20;
@@ -433,12 +510,17 @@ router.post('/scan', requireAdmin, async (req, res) => {
 });
 
 // ייבוא CSV — פורמט: ip,name,community,snmp_version,location
+const MAX_CSV_LINES = 5000;
+
 router.post('/import-csv', requireAdmin, (req, res) => {
-  const { csv } = req.body;
-  if (!csv) return res.status(400).json({ error: 'csv field נדרש' });
+  const csv = req.body && req.body.csv;
+  if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'csv field נדרש' });
 
   const db    = getDb();
-  const lines = csv.split('\n').filter(l => l.trim());
+  const lines = csv.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
+  if (lines.length > MAX_CSV_LINES) {
+    return res.status(400).json({ error: `יותר מדי שורות (מקסימום ${MAX_CSV_LINES})` });
+  }
   const added = [], skipped = [], errors = [];
 
   for (const line of lines) {
@@ -446,6 +528,14 @@ router.post('/import-csv', requireAdmin, (req, res) => {
 
     const [ip, name, community = 'public', snmp_version = 'v2c', location = ''] = line.split(',').map(s => s.trim());
     if (!ip) continue;
+
+    // שורה לא תקינה נרשמת בדוח השגיאות ולא נכנסת ל-DB
+    if (!isIPv4(ip))                                     { errors.push({ ip, error: 'כתובת IP לא תקינה' }); continue; }
+    if (!SNMP_VERSIONS.includes(snmp_version || 'v2c'))  { errors.push({ ip, error: 'גרסת SNMP לא תקינה' }); continue; }
+    if ((name || '').length > 100 || community.length > 128 || location.length > 200) {
+      errors.push({ ip, error: 'שדה ארוך מדי' });
+      continue;
+    }
 
     try {
       const result = db.prepare(`
@@ -467,33 +557,5 @@ router.post('/import-csv', requireAdmin, (req, res) => {
   logAudit('info', 'admin', 'csv_import', { added: added.length, skipped: skipped.length, errors: errors.length }, { username: req.user?.username });
   res.json({ added, skipped, errors });
 });
-
-// --------- עזרים: חישוב טווח IPs ---------
-
-function ipToLong(ip) {
-  return ip.split('.').reduce((acc, oct) => (acc << 8) + parseInt(oct), 0) >>> 0;
-}
-
-function longToIp(long) {
-  return [(long >>> 24), (long >>> 16 & 255), (long >>> 8 & 255), (long & 255)].join('.');
-}
-
-function expandRange(startIp, endIp) {
-  const start = ipToLong(startIp);
-  const end   = ipToLong(endIp);
-  const ips   = [];
-  for (let i = start; i <= end; i++) ips.push(longToIp(i));
-  return ips;
-}
-
-function expandCIDR(cidr) {
-  const [baseIp, prefixLen] = cidr.split('/');
-  const prefix = parseInt(prefixLen);
-  const base   = ipToLong(baseIp) & (~0 << (32 - prefix)) >>> 0;
-  const count  = Math.pow(2, 32 - prefix);
-  const ips    = [];
-  for (let i = 1; i < count - 1; i++) ips.push(longToIp(base + i)); // skip network & broadcast
-  return ips;
-}
 
 module.exports = router;

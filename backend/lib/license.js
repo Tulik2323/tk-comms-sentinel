@@ -90,6 +90,17 @@ function verifyLicenseKey(licenseKey) {
   }
 }
 
+// Detached Ed25519 signature check with the same vendor key, used for the update feed.
+// The message carries its own domain prefix ("tkcs-update-v1"), so a signature made for one
+// purpose (a license payload) can never be replayed as another (an update).
+function verifyDetached(message, sigB64) {
+  try {
+    return crypto.verify(null, Buffer.from(String(message), 'utf8'), PUBLIC_KEY, Buffer.from(String(sigB64), 'base64url'));
+  } catch {
+    return false;
+  }
+}
+
 // Returns license status object — used by the REST endpoint and middleware.
 // status values: 'trial' | 'trial-expired' | 'invalid' | 'valid' | 'grace' | 'expired'
 function getLicenseStatus() {
@@ -157,4 +168,4 @@ function activateLicense(licenseKey) {
   return { ok: true, status: getLicenseStatus() };
 }
 
-module.exports = { getMachineFingerprint, getLicenseStatus, activateLicense };
+module.exports = { getMachineFingerprint, getLicenseStatus, activateLicense, verifyDetached };

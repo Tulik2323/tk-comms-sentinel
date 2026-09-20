@@ -15,6 +15,15 @@ const upload = multer({
   }
 });
 
+// ה-mimetype מגיע מהלקוח, ולכן בודקים גם שהתוכן באמת מתאים לו: קובץ HTML שהוצג כ-image/png
+// לא אמור להתקבל.
+const LOOKS_LIKE = {
+  'image/png':     b => b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  'image/jpeg':    b => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  'image/gif':     b => b.length > 6 && b.subarray(0, 3).toString('ascii') === 'GIF',
+  'image/svg+xml': b => /<svg[\s>]/i.test(b.subarray(0, 4096).toString('utf8')),
+};
+
 // קבל תמונת המפה
 router.get('/image', requireAuth, (req, res) => {
   const db  = getDb();
@@ -25,13 +34,19 @@ router.get('/image', requireAuth, (req, res) => {
   }
 
   res.set('Content-Type', row.mime_type);
-  res.set('Cache-Control', 'public, max-age=3600');
+  // SVG יכול להכיל סקריפט. גם אם מישהו יפתח את הכתובת ישירות, ה-sandbox וה-CSP מונעים הרצה.
+  res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox");
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Cache-Control', 'private, max-age=300');
   res.send(Buffer.from(row.image_data));
 });
 
 // העלה תמונת מפה חדשה
 router.post('/image', requireAdmin, upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'לא נשלחה תמונה' });
+  if (!LOOKS_LIKE[req.file.mimetype](req.file.buffer)) {
+    return res.status(400).json({ error: 'תוכן הקובץ אינו תואם לסוג התמונה שנבחר' });
+  }
 
   const db = getDb();
   db.prepare(`
@@ -68,9 +83,12 @@ router.put('/positions/:deviceId', requireAdmin, (req, res) => {
   if (map_x == null || map_y == null) {
     return res.status(400).json({ error: 'map_x ו-map_y נדרשים' });
   }
+  if (!Number.isFinite(Number(map_x)) || !Number.isFinite(Number(map_y))) {
+    return res.status(400).json({ error: 'map_x ו-map_y חייבים להיות מספרים' });
+  }
 
   const result = db.prepare('UPDATE devices SET map_x = ?, map_y = ? WHERE id = ?')
-    .run(map_x, map_y, req.params.deviceId);
+    .run(Number(map_x), Number(map_y), req.params.deviceId);
 
   if (result.changes === 0) return res.status(404).json({ error: 'מכשיר לא נמצא' });
   res.json({ ok: true });

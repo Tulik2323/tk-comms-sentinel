@@ -159,12 +159,27 @@ Write-Host "  GitHub Release v$ver published OK" -ForegroundColor Green
 # 7. update docs/latest.json + website + push
 Write-Host "`n[7/7] updating website (docs/latest.json)..." -ForegroundColor Yellow
 $today = (Get-Date -Format "yyyy-MM-dd")
+$downloadUrl = "https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe"
+
+# Sign the feed entry with the vendor key. Installations only install an update whose feed carries
+# a valid signature (backend/routes/updates.js), so a missing signature blocks auto-update for them.
+$signature = ''
+try {
+    $signature = (& node "$SRC\tools\keygen\sign-update.js" $ver $sha256 $downloadUrl 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { throw $signature }
+    Write-Host "  update feed signed" -ForegroundColor Green
+} catch {
+    $signature = ''
+    Write-Host "  WARNING: update feed NOT signed ($_) - installer-based systems will refuse to auto-update to $ver" -ForegroundColor Yellow
+}
+
 $latestJson = @{
     version     = $ver
     date        = $today
     notes       = "See CHANGELOG for details"
-    downloadUrl = "https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe"
+    downloadUrl = $downloadUrl
     sha256      = $sha256
+    signature   = $signature
 } | ConvertTo-Json -Depth 2
 $latestJson | Set-Content "$SRC\docs\latest.json" -Encoding UTF8
 Write-Host "  docs/latest.json updated" -ForegroundColor Green

@@ -83,7 +83,7 @@ function AppRoutes() {
       } />
 
       <Route path="/audit" element={
-        <ProtectedRoute>
+        <ProtectedRoute adminOnly>
           <Layout>
             <AuditPage />
           </Layout>

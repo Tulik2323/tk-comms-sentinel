@@ -17,6 +17,25 @@ const fs      = require('fs');
 const http    = require('http');
 const https   = require('https');
 
+require('./lib/async-errors');   // שגיאה ב-route אסינכרוני לא מפילה את התהליך
+
+// בלי סוד JWT אי אפשר להנפיק או לאמת טוקן, והשרת לא יכול לעבוד. עדיף להיעצר בהודעה ברורה.
+if (!process.env.JWT_SECRET) {
+  console.error('[Server] JWT_SECRET לא מוגדר ב-.env — השרת לא יעלה בלעדיו.');
+  process.exit(1);
+}
+if (process.env.JWT_SECRET.length < 32) {
+  console.warn('[Server] אזהרה: JWT_SECRET קצר מ-32 תווים. מומלץ סוד אקראי באורך 64 תווים.');
+}
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Server] unhandledRejection:', (reason && reason.stack) || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[Server] uncaughtException:', err && err.stack || err);
+  setTimeout(() => process.exit(1), 100);   // IIS/iisnode מרים תהליך חדש בבקשה הבאה
+});
+
 const { initDb }       = require('./db/database');
 
 const authRouter     = require('./routes/auth');
@@ -41,6 +60,36 @@ const inventoryRouter    = require('./routes/inventory');
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
+app.disable('x-powered-by');   // לא מפרסמים באיזו מסגרת השרת בנוי
+
+// --- כותרות אבטחה ---
+// ה-frontend נבנה בלי סקריפטים inline ובלי משאבים חיצוניים, ולכן default-src 'self' מספיק.
+// style-src צריך 'unsafe-inline' כי React וגרפים כותבים style בתוך האלמנטים.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+].join('; ');
+app.use((req, res, next) => {
+  res.set({
+    'Strict-Transport-Security':  'max-age=15552000',   // דפדפן מתעלם ממנה ב-HTTP רגיל
+    'X-Content-Type-Options':     'nosniff',
+    'X-Frame-Options':            'SAMEORIGIN',
+    'Referrer-Policy':            'no-referrer',
+    'Permissions-Policy':         'camera=(), microphone=(), geolocation=(), payment=()',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Content-Security-Policy':    CSP,
+  });
+  next();
+});
+
 // --- Middleware ---
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
@@ -48,8 +97,10 @@ app.use(cors({
     : ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// ייבוא CSV הוא היחיד שצריך גוף גדול; שאר הנתיבים מוגבלים ל-1MB
+app.use('/api/devices/import-csv', express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // תגובות API לעולם לא מקאששות בדפדפן — אחרת חיפוש/סטטוס מחזירים תוצאה
 // ישנה (למשל endpoint-search שהחזיר את התוצאה הראשונה מה-cache גם אחרי תיקון).
@@ -102,12 +153,11 @@ app.use('/api/inventory',    inventoryRouter);
 // אחרי עדכון (update.ps1 בודק את ה-endpoint הזה בדיוק כדי לאמת עדכון).
 const { version: APP_VERSION } = require('./package.json');
 app.get('/api/health', (req, res) => {
+  // פתוח בלי התחברות (update.ps1 ובדיקות זמינות תלויים בו), ולכן רק מה שהם צריכים
   res.json({
     status:    'ok',
     version:   APP_VERSION,
     timestamp: new Date().toISOString(),
-    demoMode:  process.env.DEMO_MODE === 'true',
-    uptime:    process.uptime()
   });
 });
 
@@ -133,8 +183,11 @@ app.get('*', (req, res) => {
 // --- Error Handler ---
 app.use((err, req, res, next) => {
   console.error('[Error]', err.message);
-  if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ error: 'קובץ גדול מדי (מקסימום 10MB)' });
+  if (err.code === 'LIMIT_FILE_SIZE' || err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'הבקשה או הקובץ גדולים מדי' });
+  }
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'גוף הבקשה אינו JSON תקין' });
   }
   res.status(500).json({ error: 'שגיאת שרת פנימית' });
 });
