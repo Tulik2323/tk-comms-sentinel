@@ -7,6 +7,7 @@ const { saveMetrics, pruneOldMetrics } = require('./history');
 const { checkThresholds, checkDeviceDown, resolveDeviceDown, maintainAlertEvents } = require('./alerts');
 const { logAudit } = require('../db/audit');
 const { refreshStaleHostnames } = require('./hostnames');
+const { noteFailure, noteRecovery, noteUptime, markPathOutage, pruneUptimeLog } = require('./uptimeLog');
 
 // Map: deviceId -> last poll timestamp
 const lastPollTime = new Map();
@@ -42,6 +43,10 @@ async function pollDevice(device, opts = {}) {
     // --- מידע בסיסי ---
     const info = await getDeviceInfo(device);
 
+    // ירידה ב-uptime בין שני polls = אתחול. device.uptime_sec הוא הערך מה-poll הקודם.
+    try { noteUptime(device.id, device.uptime_sec, info.uptime_sec, now); }
+    catch (e) { console.warn(`[Poller] רישום אתחול נכשל עבור ${device.ip}: ${e.message}`); }
+
     // עדכן מידע וסטטוס UP (כולל vendor/model מה-sysDescr)
     const { vendor, model } = parseVendorModel(info.sys_descr);
     db.prepare(`
@@ -52,6 +57,8 @@ async function pollDevice(device, opts = {}) {
 
     // אם חזר מ-down — סגור event ורשום audit
     if (device.status === 'down') {
+      try { noteRecovery(device.id, now); }
+      catch (e) { console.warn(`[Poller] סגירת נפילה נכשלה עבור ${device.ip}: ${e.message}`); }
       resolveDeviceDown(device);
       logAudit('info', 'poller', 'device_back_online', { device: device.name || device.ip }, { device_id: device.id, ip: device.ip });
     }
@@ -307,6 +314,8 @@ async function pollDevice(device, opts = {}) {
     // סמן DOWN ב-DB תמיד — אבל שלח התראה רק אחרי FAIL_THRESHOLD כשלונות ברצף.
     // כשל בודד (blip של SNMP) לא מצדיק מייל.
     db.prepare("UPDATE devices SET status = 'down' WHERE id = ?").run(device.id);
+    try { noteFailure(device.id, fails, FAIL_THRESHOLD, now); }
+    catch (e) { console.warn(`[Poller] רישום נפילה נכשל עבור ${device.ip}: ${e.message}`); }
     console.warn(`[Poller] ${device.ip} DOWN (${fails}/${FAIL_THRESHOLD}): ${err.message} | ${why}`);
 
     lastPollTime.set(device.id, now);
@@ -390,6 +399,9 @@ async function runCycle() {
     const allFailed = failed.length === results.length && results.length >= PATH_OUTAGE_MIN_DEVICES;
 
     if (allFailed) {
+      // הנפילות שאושרו בסבב הזה הן נפילת נתיב ולא תקלות של המכשירים עצמם
+      try { markPathOutage(failed.map(r => r.deviceId).filter(Boolean), Math.floor(started / 1000)); }
+      catch (e) { console.warn(`[Poller] סימון נפילת נתיב נכשל: ${e.message}`); }
       // נפילת נתיב: התראה אחת במקום עשרות. סימון המכשירים כ-DOWN כבר
       // בוצע — הם באמת בלתי נגישים מכאן — אבל אין טעם להציף את ההיסטוריה
       // בתקלה נפרדת לכל אחד מהם.
@@ -456,6 +468,7 @@ function startPoller() {
   // ניקוי metrics ישנים — פעם ביום בחצות
   cron.schedule('0 0 * * *', () => {
     pruneOldMetrics();
+    try { pruneUptimeLog(); } catch (err) { console.error('[Poller] ניקוי יומן נפילות נכשל:', err.message); }
   });
 
   // אירועי התראה של מכשירים שנמחקו — סגירה אוטומטית אחרי 14 ימים. פעם בשעה, ופעם בהפעלה.

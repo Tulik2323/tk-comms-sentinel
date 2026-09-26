@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const { getDb }       = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
+const uptimeLog       = require('../services/uptimeLog');
 
 // GET /api/dashboard/top-ports?limit=10
 // 10 הפורטים הכי עמוסים ברגע זה (לפי in_bps + out_bps)
@@ -117,6 +118,40 @@ router.get('/problem-ports', requireAuth, (req, res) => {
     .slice(0, limit);
 
   res.json(scored);
+});
+
+// ---- היסטוריית נפילות, יומן uptime וסוויצ'ים חמים (services/uptimeLog.js) ----
+
+// GET /api/dashboard/outages?range=24h|7d|30d
+// נפילות מכשירים בטווח. נפילת נתיב (כל הסבב נפל יחד) מוצגת כאירוע אחד מסומן.
+router.get('/outages', requireAuth, (req, res) => {
+  const range = String(req.query.range || '7d');
+  if (!Object.prototype.hasOwnProperty.call(uptimeLog.RANGES, range)) {
+    return res.status(400).json({ error: 'range must be 24h, 7d or 30d' });
+  }
+  res.json(uptimeLog.getOutages(range));
+});
+
+// GET /api/dashboard/uptime
+// לכל מכשיר: זמן פעילות מאז האתחול האחרון, זמינות ל-7 ול-30 ימים, ספירת נפילות ואתחולים
+router.get('/uptime', requireAuth, (req, res) => {
+  res.json(uptimeLog.getUptimeOverview());
+});
+
+// GET /api/dashboard/uptime/:id
+// יומן אתחולים ונפילות של מכשיר אחד
+router.get('/uptime/:id', requireAuth, (req, res) => {
+  if (!/^[0-9]+$/.test(req.params.id)) return res.status(400).json({ error: 'invalid device id' });
+  const log = uptimeLog.getDeviceLog(parseInt(req.params.id, 10));
+  if (!log) return res.status(404).json({ error: 'device not found' });
+  res.json(log);
+});
+
+// GET /api/dashboard/hottest?limit=10
+// הסוויצ'ים הכי חמים לפי הטמפרטורה הגבוהה ביותר מבין החיישנים שלהם, ומי שאין לו נתון
+router.get('/hottest', requireAuth, (req, res) => {
+  const limit = Math.max(1, Math.min(parseInt(req.query.limit || '10', 10) || 10, 50));
+  res.json(uptimeLog.getHottest(limit));
 });
 
 module.exports = router;

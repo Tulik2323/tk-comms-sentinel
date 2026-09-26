@@ -7,9 +7,13 @@ import StatusDot from '../components/ui/StatusDot';
 import { formatBps } from '../lib/api';
 import { formatAlert } from '../lib/alertFormat';
 import api from '../lib/api';
+import { OutagesWidget, UptimeWidget, HottestWidget } from '../components/dashboard/UptimeWidgets';
 
 // ---- סדר ברירת מחדל של ה-widgets ----
-const DEFAULT_ORDER = ['top-bandwidth', 'recent-alerts', 'top-ports', 'problem-ports', 'top-cpu', 'duplicate-ips', 'all-devices'];
+const DEFAULT_ORDER = ['outages', 'top-bandwidth', 'recent-alerts', 'top-ports', 'problem-ports', 'top-cpu', 'hottest', 'duplicate-ips', 'uptime', 'all-devices'];
+
+// widgets שתופסים את כל הרוחב של הגריד (טבלה רחבה)
+const WIDE_WIDGETS = ['uptime'];
 
 function loadOrder() {
   try {
@@ -408,7 +412,7 @@ function DuplicateIpWidget() {
 }
 
 // ---- Widget Wrapper עם Drag ----
-function DraggableWidget({ id, onDragStart, onDragOver, onDrop, children, isDragTarget }) {
+function DraggableWidget({ id, onDragStart, onDragOver, onDrop, children, isDragTarget, wide }) {
   return (
     <div
       draggable
@@ -420,6 +424,7 @@ function DraggableWidget({ id, onDragStart, onDragOver, onDrop, children, isDrag
         outline:    isDragTarget ? '2px dashed var(--accent)' : 'none',
         borderRadius: 8,
         transition: 'outline 0.15s',
+        ...(wide ? { gridColumn: '1 / -1' } : null),
       }}
     >
       {children}
@@ -480,6 +485,9 @@ export default function DashboardPage() {
     'problem-ports': <ProblemPortsWidget />,
     'top-cpu':       <TopCpuWidget />,
     'duplicate-ips': <DuplicateIpWidget />,
+    'outages':       <OutagesWidget />,
+    'uptime':        <UptimeWidget />,
+    'hottest':       <HottestWidget />,
     'all-devices':   <AllDevicesWidget devices={devices} />,
   };
 
@@ -553,7 +561,7 @@ export default function DashboardPage() {
         {mainOrder.map(id => (
           <DraggableWidget key={id} id={id}
             onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDrop}
-            isDragTarget={dragTarget === id}>
+            isDragTarget={dragTarget === id} wide={WIDE_WIDGETS.includes(id)}>
             {WIDGETS[id]}
           </DraggableWidget>
         ))}

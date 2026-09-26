@@ -292,6 +292,33 @@ async function initDb() {
   `);
   try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_port_samples ON port_samples(device_id, if_index, ts)'); } catch (_) {}
 
+  // היסטוריית נפילות ואתחולים (ראה services/uptimeLog.js). additive בלבד: גם ה-web וגם ה-poller מריצים initDb.
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS device_outages (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id    INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+      started_at   INTEGER NOT NULL,
+      confirmed_at INTEGER NOT NULL,
+      ended_at     INTEGER,
+      path_outage  INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+  try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_device_outages_device ON device_outages(device_id, started_at DESC)'); } catch (_) {}
+  try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_device_outages_started ON device_outages(started_at)'); } catch (_) {}
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS device_reboots (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id       INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+      detected_at     INTEGER NOT NULL,
+      booted_at       INTEGER NOT NULL,
+      prev_uptime_sec INTEGER,
+      new_uptime_sec  INTEGER
+    )
+  `);
+  try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_device_reboots_device ON device_reboots(device_id, detected_at DESC)'); } catch (_) {}
+  // מאז מתי יש היסטוריה: נקבע פעם אחת (OR IGNORE), ומשמש לחישוב אחוזי זמינות
+  _sqlDb.exec("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('uptime_tracking_since', CAST(unixepoch() AS TEXT))");
+
   // סגירה מסודרת. אין יותר צורך לייצא את ה-DB לדיסק — SQLite כותב
   // בעצמו — ולכן גם אין את מרוץ ה-exit שגרם ל-UV_HANDLE_CLOSING.
   const closeQuietly = () => {

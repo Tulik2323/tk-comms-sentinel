@@ -35,7 +35,7 @@ export default function Modal({ open, onClose, title, children, width = 500 }) {
           maxHeight:    '90vh',
           overflowY:    'auto',
           padding:      24,
-          direction:    'rtl',
+          direction:    'inherit',   // כיוון הדף נקבע ב-Layout לפי השפה (rtl בעברית, ltr באנגלית)
         }}
       >
         {title && (

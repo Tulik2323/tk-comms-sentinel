@@ -48,13 +48,22 @@ const OID = {
   // HPE Comware FAN/PSU/Temp — confirmed on HPE 5130 JH326A
   comwareFan:    '1.3.6.1.4.1.25506.8.35.1.1.1.5',  // 1=abnormal, 2=normal
   comwareAlarm:  '1.3.6.1.4.1.25506.2.6.1.1.1.1.3', // alarmLight: 1=ok, 2=alarm, 3=N/A
-  comwareTemp:   '1.3.6.1.4.1.25506.2.6.1.1.1.1.34',// temperature in Celsius
+  // hh3cEntityExtTemperature (עמודה 12): טמפרטורה במעלות צלזיוס, 65535 = חיישן לא נתמך על הישות.
+  // עמודה 34 שהייתה כאן קודם אינה טמפרטורה: היא ריקה בחלק מהדגמים (5130 בלי חיישנים לפיה) ובדגמים אחרים
+  // מחזירה ערכים של 4 עד 8 מעלות בלבד. אומת ב-SNMP walk על 5130 (JH325A, JH326A) ועל HP 10508.
+  comwareTemp:   '1.3.6.1.4.1.25506.2.6.1.1.1.1.12',
   // Entity MIB (RFC 2737) — Aruba ProCurve + generic
   entPhysicalClass:        '1.3.6.1.2.1.47.1.1.1.1.5',  // 6=PSU, 7=fan
   // Entity Sensor MIB (RFC 3433)
   entPhySensorType:        '1.3.6.1.2.1.99.1.1.1.1',   // 8=celsius
+  entPhySensorScale:       '1.3.6.1.2.1.99.1.1.1.2',   // 9=units, 8=milli (Aruba CX מדווח מילי-מעלות)
+  entPhySensorPrecision:   '1.3.6.1.2.1.99.1.1.1.3',   // מספר ספרות אחרי הנקודה
   entPhySensorValue:       '1.3.6.1.2.1.99.1.1.1.4',   // raw sensor value
   entPhySensorOperStatus:  '1.3.6.1.2.1.99.1.1.1.5',   // 1=ok, 2=unavailable, 3=nonoperational
+  // ARUBAWIRED-TEMPERATURE-MIB (Aruba CX): שם חיישן (5) וטמפרטורה במילי-מעלות (7).
+  // ב-8360 אין חיישן טמפרטורה ב-ENTITY-SENSOR, אבל הטבלה הזו קיימת בכל ה-CX.
+  arubaCXTempName:  '1.3.6.1.4.1.47196.4.1.1.3.11.3.1.1.5',
+  arubaCXTempValue: '1.3.6.1.4.1.47196.4.1.1.3.11.3.1.1.7',
 };
 
 const TIMEOUT  = parseInt(process.env.SNMP_TIMEOUT_MS) || 8000;
@@ -475,7 +484,8 @@ function parseVendorModel(desc) {
   if (/Comware/i.test(desc)) {
     for (const line of lines) {
       // חפש שורת דגם: מתחילה ב-HPE/H3C, לא שורת תוכנה או copyright
-      if (/^(HPE|H3C)\s+/i.test(line) && !/Comware|Copyright|Platform|Software/i.test(line)) {
+      // "HP 10508" (סדרת 10500) מופיע בלי E, ולכן HPE? ולא HPE
+      if (/^(HPE?|H3C)\s+/i.test(line) && !/Comware|Copyright|Platform|Software/i.test(line)) {
         return { vendor: 'HPE Comware', model: line };
       }
     }
@@ -513,6 +523,26 @@ function parseVendorModel(desc) {
   if (procrv) return { vendor: 'HP ProCurve', model: procrv[1].trim() };
 
   return { vendor: null, model: null };
+}
+
+// מקבל קריאות טמפרטורה גולמיות [{ entity, celsius }] ומחזיר עד MAX_TEMPS הגבוהות ביותר, מהחמה לקרה.
+// המיון חשוב: הדשבורד ועמודת הטמפרטורה בדף המכשירים קוראים את temps[0], והוא צריך להיות המקסימום
+// (מחסנית או שלדה מודולרית מדווחות עשרות חיישנים, ובלי מיון הקריאה החמה באמת הייתה נחתכת).
+const MAX_TEMPS = 4;
+function collectTemps(readings) {
+  return readings
+    .filter(r => Number.isFinite(r.celsius) && r.celsius > 0 && r.celsius < 200)
+    .sort((a, b) => b.celsius - a.celsius)
+    .slice(0, MAX_TEMPS)
+    .map((r, i) => ({ idx: i + 1, entity: r.entity, celsius: r.celsius }));
+}
+
+// ערך ENTITY-SENSOR (RFC 3433) לפי scale ו-precision. scale: 9 = יחידות, 8 = מילי, 10 = קילו.
+// precision = מספר ספרות אחרי הנקודה בערך הגולמי.
+function sensorValue(raw, scale, precision) {
+  const sc = Number.isFinite(scale) && scale >= 1 && scale <= 17 ? scale : 9;
+  const pr = Number.isFinite(precision) ? precision : 0;
+  return toNum(raw) * Math.pow(10, (sc - 9) * 3) / Math.pow(10, pr);
 }
 
 // סטטוס חומרה: FAN / PSU / טמפרטורה — HPE Comware בלבד
@@ -569,15 +599,10 @@ async function getHardwareStatusComware(device) {
 
     // ---- Temperature ----
     const tempRows = await snmpWalk(session, OID.comwareTemp).catch(() => []);
-    const temps = [];
-    for (const r of tempRows) {
-      const celsius = toNum(r.value);
-      if (celsius > 0 && celsius < 200) {
-        const eid = parseInt(r.oid.split('.').pop());
-        temps.push({ idx: temps.length + 1, entity: eid, celsius });
-        if (temps.length >= 4) break;
-      }
-    }
+    const temps = collectTemps(tempRows.map(r => ({
+      entity:  parseInt(r.oid.split('.').pop()),
+      celsius: toNum(r.value),
+    })));
 
     return { fans, temps, psus };
   } finally {
@@ -633,18 +658,44 @@ async function getHardwareStatusAruba(device) {
       .filter(r => toNum(r.value) === 8)
       .map(r => r.oid.split('.').pop());
 
-    const temps = [];
+    // הערך גולמי: ב-2930M הוא במעלות (scale=9), ב-CX במילי-מעלות (scale=8, למשל 28000 = 28 מעלות),
+    // ולכן חובה להחיל scale ו-precision. בלי זה כל ה-CX נזרקו כ"מעל 200 מעלות".
+    let readings = [];
     if (celsiusIndices.length > 0) {
-      const valOids = celsiusIndices.map(i => OID.entPhySensorValue + '.' + i);
-      const valData = await snmpGet(session, valOids).catch(() => ({}));
-      for (const idx of celsiusIndices) {
-        const celsius = toNum(valData[OID.entPhySensorValue + '.' + idx]);
-        if (celsius > 0 && celsius < 200) {
-          temps.push({ idx: temps.length + 1, entity: parseInt(idx), celsius });
-          if (temps.length >= 4) break;
-        }
+      const oids = [];
+      for (const i of celsiusIndices) {
+        oids.push(OID.entPhySensorValue + '.' + i, OID.entPhySensorScale + '.' + i, OID.entPhySensorPrecision + '.' + i);
       }
+      const data = await snmpGet(session, oids).catch(() => ({}));
+      readings = celsiusIndices.map(i => ({
+        entity:  parseInt(i),
+        celsius: sensorValue(
+          data[OID.entPhySensorValue + '.' + i],
+          toNum(data[OID.entPhySensorScale + '.' + i]),
+          toNum(data[OID.entPhySensorPrecision + '.' + i]),
+        ),
+      }));
     }
+
+    // Aruba CX 8360: אין חיישן טמפרטורה ב-ENTITY-SENSOR. הטבלה הפרטית של Aruba מחזירה עשרות חיישנים
+    // (שבבים, CPU, ASIC), ולכן לוקחים רק את חיישן כניסת האוויר (Inlet), שהוא הקריאה המקבילה
+    // ל-"Temp Sensor" של ה-6300M ולטמפרטורת השלדה ב-2930M. כך הדירוג אחיד בין הדגמים.
+    if (readings.every(r => !(r.celsius > 0)) && /Aruba CX/i.test(device.vendor || '')) {
+      const [nameRows, valueRows] = await Promise.all([
+        snmpWalk(session, OID.arubaCXTempName).catch(() => []),
+        snmpWalk(session, OID.arubaCXTempValue).catch(() => []),
+      ]);
+      const nameLen  = OID.arubaCXTempName.split('.').length;
+      const valueLen = OID.arubaCXTempValue.split('.').length;
+      const milliBySuffix = new Map(valueRows.map(r => [r.oid.split('.').slice(valueLen).join('.'), toNum(r.value)]));
+      readings = nameRows
+        .filter(r => /inlet/i.test(r.value?.toString() || ''))
+        .map(r => {
+          const suffix = r.oid.split('.').slice(nameLen).join('.');
+          return { entity: parseInt(r.oid.split('.').pop()), celsius: milliBySuffix.has(suffix) ? milliBySuffix.get(suffix) / 1000 : NaN };
+        });
+    }
+    const temps = collectTemps(readings);
 
     if (fans.length === 0 && psus.length === 0 && temps.length === 0) return null;
     return { fans, psus, temps };

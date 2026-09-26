@@ -2,6 +2,49 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.5.0] — 2026-09-26
+
+Three new windows on the Dashboard, and temperature readings for most of the switches that had none.
+
+### Added
+- **Outage history.** A Dashboard widget that lists every time a switch went down: which switch, when it
+  went down, when it came back (or "still down") and for how long. The range is 24 hours, 7 days or
+  30 days. An outage is recorded after 3 consecutive failed polls, like the alert, but its start time is
+  the first failed poll. When every device fails in the same round (a routing or firewall problem, not
+  the switches) it is shown as one marked "path outage" event instead of dozens of rows. History is kept
+  for 180 days and **starts at this release**: the old alert events cannot be used, because they are
+  closed by hand or automatically and their durations are not real outage times.
+- **Uptime log for every device.** A wide Dashboard widget with one row per device: how long it has been
+  running, when it booted, availability for 7 and 30 days, and the number of outages and reboots in the
+  last 30 days. Every column sorts, and there is a search box. Clicking a row opens that device's log of
+  reboots and outages. A reboot is detected when the device's uptime goes down between two polls.
+  Availability is measured from the day this release was installed, and path outages are not counted
+  against a device.
+- **Hottest switches.** A Dashboard widget with the 10 hottest switches by their hottest sensor, coloured
+  by the thresholds the device page already uses (orange above 45, red above 60), with the number of
+  devices that still have no temperature reading (hover to see which).
+
+### Fixed
+- **Temperature was missing for most Aruba CX and HPE 5130 switches.** Aruba CX (6300M, 8360) reports
+  the temperature in thousandths of a degree, and the code threw the reading away as "above 200".
+  The scale and precision of the sensor are now applied, and on the 8360, which has no such sensor, the
+  inlet-air sensor of the vendor MIB is used. On HPE Comware the code read a column that is empty on
+  many 5130 models (and on the 10500 series holds values of 4 to 8 degrees, which are not temperatures);
+  it now reads the documented temperature column. Together, 91 of the 99 monitored devices now report
+  a temperature (it was 37); all 33 of the 5130 switches and all 25 Aruba CX switches are covered. **The five 5130 switches that
+  did report a temperature will show a slightly different number** (for example 27 instead of 23),
+  because they now come from the right column.
+  The temperature list of a device is now sorted from the hottest sensor down, so the Devices page column
+  and the new widget both show the maximum.
+- The HP 10508 core switch (10.221.0.244) was not recognised as a Comware switch, so it had no hardware
+  status at all. The vendor is now detected from its description.
+- **Dialogs opened in English were laid out right to left.** The dialog frame is now always in the
+  direction of the page.
+
+### Not fixed
+- The 6 Aruba 2930F switches (WC.16 firmware) report a temperature sensor whose value is always 0, so
+  they still have no temperature. This is what the switch itself reports over SNMP.
+
 ## [1.4.4] — 2026-09-20
 
 Security hardening, second part: sign-in, sessions, the audit trail and the dependencies (the first
