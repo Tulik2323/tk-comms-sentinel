@@ -109,7 +109,10 @@ export default function AdminPage() {
   async function testTelegram() {
     setTgTesting(true); setTgResult(null);
     try {
-      const res = await api.post('/admin/test-telegram');
+      // הבדיקה רצה על ההגדרות ששמורות בשרת, ולכן קודם שומרים את מה שמוצג על המסך
+      try { await persistSettings(); }
+      catch (err) { setTgResult({ ok: false, error: t('tg_save_failed') }); return; }
+      const res = await api.post('/admin/test-telegram', {});
       setTgResult(res.data);
     } catch (err) {
       setTgResult({ ok: false, error: err.response?.data?.error || t('test_error') });
@@ -119,7 +122,9 @@ export default function AdminPage() {
   async function findTgChats() {
     setTgTesting(true); setTgChats(null); setTgResult(null);
     try {
-      const res = await api.post('/admin/telegram-chats');
+      try { await persistSettings(); }
+      catch (err) { setTgResult({ ok: false, error: t('tg_save_failed') }); return; }
+      const res = await api.post('/admin/telegram-chats', {});
       if (res.data.ok) setTgChats(res.data.chats);
       else setTgResult({ ok: false, error: res.data.error });
     } catch (err) {
@@ -165,15 +170,19 @@ export default function AdminPage() {
     }
   }
 
+  // שומר את הטופס בשרת (בלי שדות *** שלא שונו). משמש את כפתור השמירה ואת בדיקות הטלגרם.
+  async function persistSettings() {
+    const toSave = Object.fromEntries(
+      Object.entries(settings).filter(([, v]) => v !== '***')
+    );
+    await api.put('/admin/settings', toSave);
+  }
+
   async function saveSettings(e) {
     e.preventDefault();
     setSaving(true);
     try {
-      // אל תשלח שדות *** חזרה
-      const toSave = Object.fromEntries(
-        Object.entries(settings).filter(([, v]) => v !== '***')
-      );
-      await api.put('/admin/settings', toSave);
+      await persistSettings();
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {

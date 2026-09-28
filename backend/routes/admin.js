@@ -317,7 +317,8 @@ router.post('/test-smtp', requireAdmin, async (req, res) => {
 router.post('/test-telegram', requireAdmin, async (req, res) => {
   const cfg = telegram.readConfig();
   const bad = telegram.validateConfig(cfg.token, cfg.chatIds);
-  if (bad) return res.status(400).json({ ok: false, error: bad });
+  // 200 ולא 400: IIS מחליף גוף של תשובת 400 ב-"Bad Request", וההסבר לא היה מגיע למסך
+  if (bad) return res.status(200).json({ ok: false, error: bad });
 
   const t0 = Date.now();
   try {
@@ -336,7 +337,7 @@ router.post('/test-telegram', requireAdmin, async (req, res) => {
 router.post('/telegram-chats', requireAdmin, async (req, res) => {
   const cfg = telegram.readConfig();
   if (!cfg.token || !telegram.TOKEN_RE.test(cfg.token)) {
-    return res.status(400).json({ ok: false, error: 'שמור קודם Bot Token תקין ואז לחץ שוב' });
+    return res.status(200).json({ ok: false, error: 'לא נשמר Bot Token תקין. הדבק אותו בשדה ושמור' });
   }
   try {
     const updates = await telegram.callApi(cfg.token, 'getUpdates', { limit: 100, timeout: 0 });

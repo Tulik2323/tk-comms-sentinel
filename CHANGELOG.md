@@ -2,6 +2,16 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.6.1] — 2026-09-28
+
+### Fixed
+- **The Telegram test buttons ("Send test message" and "Find Chat ID") ran on the settings saved in the
+  server, not on what was typed on the screen.** With a token typed but not yet saved, the test failed
+  with a bare "Error running test". The buttons now save the settings on the screen first and then run.
+- **The reason for a failed test never reached the screen.** IIS replaces the body of a 400 reply with
+  "Bad Request", so "no token" or "no Chat ID" showed as a generic error. These answers now come back as
+  200 with the message, like the other results of the test.
+
 ## [1.6.0] — 2026-09-28
 
 Alerts to Telegram, and temperature colours that follow the switch's own limits.
