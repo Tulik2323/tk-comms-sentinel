@@ -15,7 +15,10 @@ function Section({ title, children }) {
   );
 }
 
-function SettingField({ label, desc, name, value, onChange, type = 'text', placeholder }) {
+// סוגי ההתראות שאפשר לבחור לטלגרם (חייב להתאים ל-KINDS ב-backend/services/telegram.js)
+const TG_KINDS = ['device_down', 'device_up', 'path_outage', 'device_bandwidth', 'cpu', 'mem', 'port_bandwidth'];
+
+function SettingField({ label, desc, name, value, onChange, type = 'text', placeholder, ltr }) {
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
@@ -29,6 +32,8 @@ function SettingField({ label, desc, name, value, onChange, type = 'text', place
         value={value || ''}
         onChange={onChange}
         placeholder={placeholder}
+        dir={ltr ? 'ltr' : undefined}
+        style={ltr ? { textAlign: 'left' } : undefined}
       />
     </div>
   );
@@ -43,6 +48,9 @@ export default function AdminPage() {
   const [saved,    setSaved]      = useState(false);
   const [smtpTesting, setSmtpTesting] = useState(false);
   const [smtpTest,    setSmtpTest]    = useState(null);
+  const [tgTesting,   setTgTesting]   = useState(false);
+  const [tgResult,    setTgResult]    = useState(null);
+  const [tgChats,     setTgChats]     = useState(null);   // תוצאת "מצא Chat ID"
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [newUser,  setNewUser]    = useState({ username: '', password: '', role: 'viewer' });
   const [stats,    setStats]      = useState({});
@@ -84,6 +92,39 @@ export default function AdminPage() {
     } finally {
       setSmtpTesting(false);
     }
+  }
+
+  // סוגי ההתראות שמסומנים לטלגרם. ערך שלא נשמר מעולם = כולם (כמו ב-backend).
+  const tgTypes = settings.telegram_types === undefined
+    ? TG_KINDS
+    : String(settings.telegram_types).split(',').map(x => x.trim()).filter(k => TG_KINDS.includes(k));
+
+  function toggleTgType(kind) {
+    const next = tgTypes.includes(kind) ? tgTypes.filter(k => k !== kind) : [...tgTypes, kind];
+    setSettings(s => ({ ...s, telegram_types: TG_KINDS.filter(k => next.includes(k)).join(',') }));
+    setTgResult(null);
+  }
+
+  // בדיקות טלגרם פועלות על ההגדרות ששמורות בשרת, ולכן חובה לשמור קודם
+  async function testTelegram() {
+    setTgTesting(true); setTgResult(null);
+    try {
+      const res = await api.post('/admin/test-telegram');
+      setTgResult(res.data);
+    } catch (err) {
+      setTgResult({ ok: false, error: err.response?.data?.error || t('test_error') });
+    } finally { setTgTesting(false); }
+  }
+
+  async function findTgChats() {
+    setTgTesting(true); setTgChats(null); setTgResult(null);
+    try {
+      const res = await api.post('/admin/telegram-chats');
+      if (res.data.ok) setTgChats(res.data.chats);
+      else setTgResult({ ok: false, error: res.data.error });
+    } catch (err) {
+      setTgResult({ ok: false, error: err.response?.data?.error || t('test_error') });
+    } finally { setTgTesting(false); }
   }
 
   // בדיקת עדכונים — קוראת את הפיד ומשווה לגרסה המותקנת (קריאה בלבד)
@@ -347,6 +388,85 @@ export default function AdminPage() {
                     {smtpTest.raw}
                   </div>
                 )}
+              </div>
+            )}
+          </Section>
+
+          <Section title={`📨 ${t('tg_section')}`}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+              {t('tg_hint')}
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 14, cursor: 'pointer' }}>
+              <input type="checkbox" checked={settings.telegram_enabled === '1'}
+                onChange={e => { setSettings(s => ({ ...s, telegram_enabled: e.target.checked ? '1' : '' })); setTgResult(null); }} />
+              <b>{t('tg_enable')}</b>
+            </label>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+              <SettingField label="Bot Token" name="telegram_bot_token" type="password" ltr
+                value={settings.telegram_bot_token} onChange={handleSettingChange}
+                placeholder="123456789:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+              <SettingField label="Chat ID" name="telegram_chat_id" ltr
+                desc={t('tg_chat_desc')}
+                value={settings.telegram_chat_id} onChange={handleSettingChange}
+                placeholder="123456789" />
+            </div>
+
+            <div style={{ fontSize: 12, fontWeight: 600, margin: '4px 0 6px' }}>{t('tg_types_title')}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{t('tg_types_desc')}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '6px 16px', marginBottom: 14 }}>
+              {TG_KINDS.map(kind => (
+                <label key={kind} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={tgTypes.includes(kind)} onChange={() => toggleTgType(kind)} />
+                  {t(`tg_kind_${kind}`)}
+                </label>
+              ))}
+            </div>
+
+            <div style={{ maxWidth: 320 }}>
+              <SettingField label={t('tg_port_min_label')} desc={t('tg_port_min_desc')} name="telegram_port_min"
+                value={settings.telegram_port_min} onChange={handleSettingChange} placeholder="15" />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" className="nm-btn nm-btn-ghost" onClick={findTgChats} disabled={tgTesting}>
+                🔍 {t('tg_find_chat')}
+              </button>
+              <button type="button" className="nm-btn nm-btn-ghost" onClick={testTelegram} disabled={tgTesting}>
+                {tgTesting ? t('checking_dots') : `📨 ${t('tg_send_test')}`}
+              </button>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('tg_save_first')}</span>
+            </div>
+
+            {tgChats && (
+              <div style={{ marginTop: 10, fontSize: 12 }}>
+                {tgChats.length === 0 ? (
+                  <div style={{ color: '#fbbf24' }}>{t('tg_no_chats')}</div>
+                ) : (
+                  <>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: 6 }}>{t('tg_pick_chat')}</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {tgChats.map(c => (
+                        <button key={c.id} type="button" className="nm-btn nm-btn-ghost" style={{ fontSize: 12 }}
+                          onClick={() => setSettings(s => ({ ...s, telegram_chat_id: c.id }))}>
+                          {c.name || c.type} ({c.id})
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {tgResult && (
+              <div style={{
+                marginTop: 10, padding: '10px 12px', borderRadius: 6, fontSize: 13, border: '1px solid',
+                background:  tgResult.ok ? 'rgba(22,101,52,0.25)' : 'rgba(127,29,29,0.25)',
+                borderColor: tgResult.ok ? '#16a34a' : '#b91c1c',
+                color:       tgResult.ok ? '#bbf7d0' : '#fecaca',
+              }}>
+                {tgResult.ok ? '✅ ' : '❌ '}{tgResult.ok ? tgResult.message : tgResult.error}
               </div>
             )}
           </Section>

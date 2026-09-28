@@ -9,6 +9,7 @@ import {
 import { useMetrics } from '../hooks/useMetrics';
 import StatusDot from '../components/ui/StatusDot';
 import { formatBps, formatUptime } from '../lib/api';
+import { tempLevel, tempLimits } from '../lib/temperature';
 import api from '../lib/api';
 
 // טיפ בגרף
@@ -357,16 +358,20 @@ export default function DeviceDetailPage() {
               </div>
             ))}
             {/* Temperature */}
-            {hw.temps && hw.temps.map(tmp => (
-              <div key={'temp' + tmp.idx} style={{
-                padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                background: tmp.celsius > 60 ? 'rgba(239,68,68,0.15)' : tmp.celsius > 45 ? 'rgba(249,115,22,0.12)' : 'rgba(59,130,246,0.1)',
-                border: `1px solid ${tmp.celsius > 60 ? '#ef4444' : tmp.celsius > 45 ? '#f97316' : '#3b82f6'}`,
-                color: tmp.celsius > 60 ? '#ef4444' : tmp.celsius > 45 ? '#f97316' : '#3b82f6',
-              }}>
-                🌡 {tmp.celsius}°C
-              </div>
-            ))}
+            {hw.temps && hw.temps.map(tmp => {
+              const level = tempLevel(tmp);
+              const color = level === 'crit' ? '#ef4444' : level === 'warn' ? '#f97316' : '#3b82f6';
+              const { warn, crit } = tempLimits(tmp);
+              return (
+                <div key={'temp' + tmp.idx} title={`warn ${warn}° / crit ${crit}°`} style={{
+                  padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  background: level === 'crit' ? 'rgba(239,68,68,0.15)' : level === 'warn' ? 'rgba(249,115,22,0.12)' : 'rgba(59,130,246,0.1)',
+                  border: `1px solid ${color}`, color,
+                }}>
+                  🌡 {tmp.celsius}°C
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ const { saveMetrics, pruneOldMetrics } = require('./history');
 const { checkThresholds, checkDeviceDown, resolveDeviceDown, maintainAlertEvents } = require('./alerts');
 const { logAudit } = require('../db/audit');
 const { refreshStaleHostnames } = require('./hostnames');
+const { sendTelegram, flushDelayedPortAlerts } = require('./telegram');
 const { noteFailure, noteRecovery, noteUptime, markPathOutage, pruneUptimeLog } = require('./uptimeLog');
 
 // Map: deviceId -> last poll timestamp
@@ -411,6 +412,7 @@ async function runCycle() {
                     `Likely a routing or firewall issue, not the devices themselves.`;
         console.error(`[Poller] ${msg}`);
         logAudit('error', 'poller', 'path_outage', { count: results.length }, {});
+        sendTelegram('path_outage', '🌐 נפילת נתיב: כל ' + results.length + ' המכשירים נפלו יחד. כנראה תקלת ניתוב או חומת אש ולא תקלה במכשירים עצמם.');
         try {
           db.prepare(`
             INSERT INTO alert_events (device_id, metric, value, threshold, message)
@@ -430,6 +432,7 @@ async function runCycle() {
         const msg = `Path recovered: ${results.length - failed.length} of ${results.length} devices responding.`;
         console.log(`[Poller] ${msg}`);
         logAudit('info', 'poller', 'path_recovered', { responding: results.length - failed.length, total: results.length }, {});
+        sendTelegram('path_outage', '🟢 הנתיב חזר: ' + (results.length - failed.length) + ' מתוך ' + results.length + ' מכשירים עונים.');
         db.prepare(`
           UPDATE alert_events SET resolved_at = unixepoch()
           WHERE metric = 'path' AND resolved_at IS NULL
@@ -476,6 +479,11 @@ function startPoller() {
     try { maintainAlertEvents(); } catch (err) { console.error('[Poller] תחזוקת אירועי התראה נכשלה:', err.message); }
   };
   cron.schedule('7 * * * *', maintainAlerts);
+
+  // התראות פורט עמוס שממתינות לטלגרם: עולות רק אם העומס נמשך מספיק זמן (ראה services/telegram.js)
+  cron.schedule('* * * * *', () => {
+    flushDelayedPortAlerts().catch(err => console.error('[Poller] שליחת התראות פורט לטלגרם נכשלה:', err.message));
+  });
   maintainAlerts();
 
   // רענון hostname (reverse DNS) לכתובות IP שנצפו ב-mac_entries — כל 5 דקות

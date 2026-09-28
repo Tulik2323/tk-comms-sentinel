@@ -2,6 +2,31 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.6.0] — 2026-09-28
+
+Alerts to Telegram, and temperature colours that follow the switch's own limits.
+
+### Added
+- **Telegram alerts, next to email.** Admin > Settings has a new "Telegram alerts" section: the Bot Token
+  of your own bot, the Chat ID (a person, a group or a channel; several allowed), a "Find Chat ID" button
+  that lists the chats that wrote to the bot, and a "Send test message" button. Email keeps receiving
+  everything exactly as before; Telegram receives only the kinds you tick: device down, device back up,
+  path outage (and its recovery), total traffic load on a device, high CPU, high memory, and a single
+  overloaded port. **A port alert goes to Telegram only if the overload lasts for the delay you set
+  (15 minutes by default, 0 = immediately)**, so a port that fills up for a moment and clears never
+  reaches your phone; email still gets it. There is now a "device back up" message, in Telegram only (email
+  never had one), and it is sent only for a device whose down alert was actually raised. Quiet hours do not
+  apply to Telegram. The token is stored encrypted and is never sent back to the browser.
+  The server must be able to reach api.telegram.org on port 443.
+
+### Fixed
+- **Temperature was coloured orange or red by fixed numbers (orange above 45, red above 60), whatever the
+  switch.** A chip inside a line card of the HP 10508 reads 54 while the switch's own warning limit is 88,
+  so healthy switches looked hot. HPE Comware switches report the warning and critical limits of each
+  sensor over SNMP; they are now read (only sensors that have limits are used), stored, and used for the
+  colour on the Devices page, the device page and the Hottest widget. Switches that report no limits keep
+  45 and 60. The "Hot" filter on the Devices page now means above the switch's warning limit.
+
 ## [1.5.0] — 2026-09-26
 
 Three new windows on the Dashboard, and temperature readings for most of the switches that had none.

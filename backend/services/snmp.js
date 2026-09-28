@@ -52,6 +52,10 @@ const OID = {
   // עמודה 34 שהייתה כאן קודם אינה טמפרטורה: היא ריקה בחלק מהדגמים (5130 בלי חיישנים לפיה) ובדגמים אחרים
   // מחזירה ערכים של 4 עד 8 מעלות בלבד. אומת ב-SNMP walk על 5130 (JH325A, JH326A) ועל HP 10508.
   comwareTemp:   '1.3.6.1.4.1.25506.2.6.1.1.1.1.12',
+  // הספים שהסוויץ' מדווח לכל חיישן: 13 = אזהרה, 17 = קריטי (65535 או 0 = אין סף לישות הזו).
+  // אומת על 5130 (58 ו-63), 5130 EI (98 ו-108) ו-HP 10508 (88 ו-102).
+  comwareTempWarn: '1.3.6.1.4.1.25506.2.6.1.1.1.1.13',
+  comwareTempCrit: '1.3.6.1.4.1.25506.2.6.1.1.1.1.17',
   // Entity MIB (RFC 2737) — Aruba ProCurve + generic
   entPhysicalClass:        '1.3.6.1.2.1.47.1.1.1.1.5',  // 6=PSU, 7=fan
   // Entity Sensor MIB (RFC 3433)
@@ -528,13 +532,27 @@ function parseVendorModel(desc) {
 // מקבל קריאות טמפרטורה גולמיות [{ entity, celsius }] ומחזיר עד MAX_TEMPS הגבוהות ביותר, מהחמה לקרה.
 // המיון חשוב: הדשבורד ועמודת הטמפרטורה בדף המכשירים קוראים את temps[0], והוא צריך להיות המקסימום
 // (מחסנית או שלדה מודולרית מדווחות עשרות חיישנים, ובלי מיון הקריאה החמה באמת הייתה נחתכת).
+//
+// readings יכולים לכלול warn ו-crit: הספים שהסוויץ' עצמו מדווח לחיישן (ראה comwareTempWarn). כשחלק
+// מהחיישנים מדווחים סף, נשארים רק אלה. אלה החיישנים שהסוויץ' באמת עוקב אחריהם, ורק להם אפשר לצבוע
+// לפי הסף הנכון (בלי זה שבב שמגיע ל-55 מעלות, כשהסף שלו 88, היה מוצג כחם).
 const MAX_TEMPS = 4;
+const validLimit = (v) => Number.isFinite(v) && v > 0 && v < 200;
 function collectTemps(readings) {
-  return readings
-    .filter(r => Number.isFinite(r.celsius) && r.celsius > 0 && r.celsius < 200)
+  let valid = readings.filter(r => Number.isFinite(r.celsius) && r.celsius > 0 && r.celsius < 200);
+  const withLimits = valid.filter(r => validLimit(r.warn));
+  if (withLimits.length > 0) valid = withLimits;
+  return valid
     .sort((a, b) => b.celsius - a.celsius)
     .slice(0, MAX_TEMPS)
-    .map((r, i) => ({ idx: i + 1, entity: r.entity, celsius: r.celsius }));
+    .map((r, i) => {
+      const t = { idx: i + 1, entity: r.entity, celsius: r.celsius };
+      if (validLimit(r.warn)) {
+        t.warn = r.warn;
+        if (validLimit(r.crit) && r.crit > r.warn) t.crit = r.crit;
+      }
+      return t;
+    });
 }
 
 // ערך ENTITY-SENSOR (RFC 3433) לפי scale ו-precision. scale: 9 = יחידות, 8 = מילי, 10 = קילו.
@@ -598,11 +616,17 @@ async function getHardwareStatusComware(device) {
     if (psus.length === 0) psus.push({ idx: 1, status: 'unknown' });
 
     // ---- Temperature ----
-    const tempRows = await snmpWalk(session, OID.comwareTemp).catch(() => []);
-    const temps = collectTemps(tempRows.map(r => ({
-      entity:  parseInt(r.oid.split('.').pop()),
-      celsius: toNum(r.value),
-    })));
+    const [tempRows, warnRows, critRows] = await Promise.all([
+      snmpWalk(session, OID.comwareTemp).catch(() => []),
+      snmpWalk(session, OID.comwareTempWarn).catch(() => []),
+      snmpWalk(session, OID.comwareTempCrit).catch(() => []),
+    ]);
+    const byEntity = (rows) => new Map(rows.map(r => [parseInt(r.oid.split('.').pop()), toNum(r.value)]));
+    const warnOf = byEntity(warnRows), critOf = byEntity(critRows);
+    const temps = collectTemps(tempRows.map(r => {
+      const entity = parseInt(r.oid.split('.').pop());
+      return { entity, celsius: toNum(r.value), warn: warnOf.get(entity), crit: critOf.get(entity) };
+    }));
 
     return { fans, temps, psus };
   } finally {

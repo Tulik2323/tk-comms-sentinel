@@ -316,6 +316,12 @@ async function initDb() {
     )
   `);
   try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_device_reboots_device ON device_reboots(device_id, detected_at DESC)'); } catch (_) {}
+  // מתי התראת פורט עמוס עלתה לטלגרם (NULL = עוד לא, למשל כי העומס חלף לפני שעבר זמן ההשהיה)
+  try {
+    _sqlDb.exec('ALTER TABLE alert_events ADD COLUMN tg_sent_at INTEGER');
+    // רק ברגע שהעמודה נוצרת: אירועים קיימים מסומנים כמטופלים, כדי שהפעלת הטלגרם לא תשטוף אותו בהתראות ישנות
+    _sqlDb.exec('UPDATE alert_events SET tg_sent_at = 0 WHERE tg_sent_at IS NULL');
+  } catch (_) {}
   // מאז מתי יש היסטוריה: נקבע פעם אחת (OR IGNORE), ומשמש לחישוב אחוזי זמינות
   _sqlDb.exec("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('uptime_tracking_since', CAST(unixepoch() AS TEXT))");
 

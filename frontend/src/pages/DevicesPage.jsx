@@ -9,6 +9,7 @@ import StatusDot from '../components/ui/StatusDot';
 import Modal from '../components/ui/Modal';
 import { formatBps, formatUptime } from '../lib/api';
 import api from '../lib/api';
+import { tempLevel, TEMP_COLORS } from '../lib/temperature';
 
 function AddDeviceModal({ open, onClose, onAdded }) {
   const { t } = useTranslation();
@@ -472,10 +473,12 @@ export default function DevicesPage() {
     }, 350);
   }
 
-  const getTemp = (d) => {
-    try { const h = JSON.parse(d.hw_status || 'null'); return h?.temps?.[0]?.celsius ?? null; }
+  // החיישן החם ביותר של המכשיר (temps ממוין מהחם לקר), כולל הספים שהסוויץ' מדווח לו
+  const getTempObj = (d) => {
+    try { const h = JSON.parse(d.hw_status || 'null'); return h?.temps?.[0] ?? null; }
     catch { return null; }
   };
+  const getTemp = (d) => getTempObj(d)?.celsius ?? null;
 
   const filtered = devices.filter(d => {
     const matchStatus = filter === 'all' || d.status === filter;
@@ -485,7 +488,7 @@ export default function DevicesPage() {
       d.ip.includes(q) ||
       (d.sys_name || '').toLowerCase().includes(q) ||
       (d.location || '').toLowerCase().includes(q);
-    const matchTemp = !tempFilter || (getTemp(d) != null && getTemp(d) > 50);
+    const matchTemp = !tempFilter || (getTempObj(d) != null && tempLevel(getTempObj(d)) !== 'ok');
     return matchStatus && matchSearch && matchTemp;
   });
 
@@ -730,10 +733,10 @@ export default function DevicesPage() {
                   </td>
                   <td style={{ fontFamily: 'monospace', fontSize: 12 }}>
                     {(() => {
-                      const c = getTemp(d);
-                      if (c == null) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
-                      const color = c > 65 ? '#ef4444' : c > 50 ? '#f97316' : '#22c55e';
-                      return <span style={{ color, fontWeight: c > 50 ? 600 : 400 }}>{c}°C</span>;
+                      const tmp = getTempObj(d);
+                      if (tmp == null) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+                      const level = tempLevel(tmp);
+                      return <span style={{ color: TEMP_COLORS[level], fontWeight: level !== 'ok' ? 600 : 400 }}>{tmp.celsius}°C</span>;
                     })()}
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>

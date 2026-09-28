@@ -8,6 +8,7 @@ const { encrypt, decrypt } = require('../services/secrets');
 const { logAudit }     = require('../db/audit');
 const { passwordProblem, USERNAME_RE } = require('../services/passwords');
 const { tlsOptions }   = require('../services/smtp');
+const telegram         = require('../services/telegram');
 
 const ROLES = new Set(['admin', 'viewer']);
 const validId = (v) => /^\d{1,9}$/.test(String(v));
@@ -19,7 +20,7 @@ router.get('/settings', requireAdmin, (req, res) => {
   const settings = {};
   for (const r of rows) {
     // אל תחשוף סיסמאות
-    settings[r.key] = r.key.includes('password') || r.key.includes('pass')
+    settings[r.key] = r.key.includes('password') || r.key.includes('pass') || r.key.includes('token')
       ? (r.value ? '***' : '')
       : r.value;
   }
@@ -38,16 +39,43 @@ router.put('/settings', requireAdmin, (req, res) => {
     'alert_quiet_from','alert_quiet_to',
     'app_base_url',
     'update_feed_url',
-    'smtp_tls_verify'
+    'smtp_tls_verify',
+    'telegram_enabled','telegram_bot_token','telegram_chat_id','telegram_types','telegram_port_min'
   ];
 
-  const SENSITIVE = new Set(['smtp_pass', 'ldap_bind_password']);
+  const SENSITIVE = new Set(['smtp_pass', 'ldap_bind_password', 'telegram_bot_token']);
 
   const body = (req.body && typeof req.body === 'object') ? req.body : {};
 
   // smtp_tls_verify: '' (אוטומטי) | '1' (תמיד) | '0' (אף פעם). ערך אחר לא נשמר, כדי שטעות לא תכבה את האימות בשקט
   if (Object.prototype.hasOwnProperty.call(body, 'smtp_tls_verify') && !['', '0', '1'].includes(String(body.smtp_tls_verify))) {
     return res.status(400).json({ error: 'ערך לא תקין עבור אימות תעודת SMTP' });
+  }
+
+  // טלגרם: ערך לא תקין לא נשמר, כדי שטעות בהקלדה לא תשתיק את ההתראות בלי שמישהו ישים לב
+  const tgBad = (msg) => res.status(400).json({ error: msg });
+  if (Object.prototype.hasOwnProperty.call(body, 'telegram_enabled') && !['', '0', '1'].includes(String(body.telegram_enabled))) {
+    return tgBad('ערך לא תקין עבור הפעלת טלגרם');
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'telegram_bot_token')) {
+    const tk = String(body.telegram_bot_token == null ? '' : body.telegram_bot_token).trim();
+    if (tk !== '' && tk !== '***' && !telegram.TOKEN_RE.test(tk)) return tgBad('ה-Bot Token לא נראה תקין (צורה: 123456789:AA... כפי שקיבלת מ-BotFather)');
+    body.telegram_bot_token = tk;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'telegram_chat_id')) {
+    const ids = telegram.parseChatIds(body.telegram_chat_id);
+    if (!ids.every(c => telegram.CHAT_RE.test(c))) return tgBad('Chat ID לא תקין (מספר, מספר שלילי לקבוצה, או @שם_ערוץ; כמה מופרדים בפסיק)');
+    body.telegram_chat_id = ids.join(',');
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'telegram_types')) {
+    const list = String(body.telegram_types == null ? '' : body.telegram_types).split(',').map(x => x.trim()).filter(Boolean);
+    if (!list.every(k => telegram.KINDS.includes(k))) return tgBad('סוג התראה לא מוכר בהגדרות הטלגרם');
+    body.telegram_types = list.join(',');
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'telegram_port_min')) {
+    const raw = String(body.telegram_port_min == null ? '' : body.telegram_port_min).trim();
+    if (raw !== '' && !(/^\d{1,4}$/.test(raw) && parseInt(raw, 10) <= 1440)) return tgBad('זמן ההשהיה לפורט חייב להיות מספר דקות בין 0 ל-1440');
+    body.telegram_port_min = raw;
   }
 
   // ערכים: טקסט/מספר/בוליאני קצר. אובייקט או מערך נדחים לפני שנכתב משהו, כדי שבקשה לא תישמר חצי
@@ -282,6 +310,47 @@ router.post('/test-smtp', requireAdmin, async (req, res) => {
     res.status(200).json({ ok: false, stage: 'connect', host, port, ms, error: hint, raw: err.message });
   } finally {
     try { transporter.close(); } catch {}
+  }
+});
+
+// בדיקת טלגרם: שולח הודעת ניסיון לצ'אט המוגדר, עם הסבר שאפשר לפעול לפיו כשזה נכשל
+router.post('/test-telegram', requireAdmin, async (req, res) => {
+  const cfg = telegram.readConfig();
+  const bad = telegram.validateConfig(cfg.token, cfg.chatIds);
+  if (bad) return res.status(400).json({ ok: false, error: bad });
+
+  const t0 = Date.now();
+  try {
+    const sent = await telegram.sendNow(cfg.token, cfg.chatIds,
+      '✅ TK Comms Sentinel: הודעת בדיקה\nאם קיבלת אותה, ההתראות לטלגרם מוגדרות נכון.\nנשלח בידי: ' + req.user.username);
+    logAudit('info', 'admin', 'telegram_test_ok', { chats: sent }, { username: req.user.username, ip: req.ip });
+    res.json({ ok: true, ms: Date.now() - t0, message: sent === 1 ? 'הודעת בדיקה נשלחה לטלגרם' : 'הודעת בדיקה נשלחה ל-' + sent + ' צ\'אטים' });
+  } catch (err) {
+    const why = telegram.explainError(err);
+    logAudit('warn', 'admin', 'telegram_test_failed', { error: why }, { username: req.user.username, ip: req.ip });
+    res.status(200).json({ ok: false, ms: Date.now() - t0, error: why });
+  }
+});
+
+// מציאת Chat ID: מי שכתב לבוט (או קבוצה שהבוט הוסף אליה) מופיע ברשימה. דורש Bot Token שמור.
+router.post('/telegram-chats', requireAdmin, async (req, res) => {
+  const cfg = telegram.readConfig();
+  if (!cfg.token || !telegram.TOKEN_RE.test(cfg.token)) {
+    return res.status(400).json({ ok: false, error: 'שמור קודם Bot Token תקין ואז לחץ שוב' });
+  }
+  try {
+    const updates = await telegram.callApi(cfg.token, 'getUpdates', { limit: 100, timeout: 0 });
+    const chats = new Map();
+    for (const u of updates || []) {
+      const m = u.message || u.channel_post || u.my_chat_member || u.edited_message;
+      const c = m && m.chat;
+      if (c && c.id != null) {
+        chats.set(String(c.id), { id: String(c.id), type: c.type, name: c.title || [c.first_name, c.last_name].filter(Boolean).join(' ') || c.username || '' });
+      }
+    }
+    res.json({ ok: true, chats: [...chats.values()] });
+  } catch (err) {
+    res.status(200).json({ ok: false, error: telegram.explainError(err) });
   }
 });
 

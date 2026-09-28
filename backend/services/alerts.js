@@ -4,6 +4,10 @@ const { getDb, getSetting } = require('../db/database');
 const { decrypt }           = require('./secrets');
 const { DEFAULT_DURATION_MIN } = require('./thresholds');
 const { tlsOptions }           = require('./smtp');
+const { sendTelegram }         = require('./telegram');
+
+// מטריקת סף של מכשיר -> סוג ההתראה שהמשתמש בוחר לטלגרם
+const TELEGRAM_KIND = { bandwidth_in: 'device_bandwidth', bandwidth_out: 'device_bandwidth', cpu: 'cpu', mem: 'mem' };
 
 // Map של מכשירים שנשלחה להם התראה (למניעת spam)
 // deviceId_metric -> unixtime of last alert
@@ -219,6 +223,9 @@ async function checkThresholds(device, metrics) {
 
     lastAlertSent.set(key, now);
 
+    // טלגרם: לא מחכים לתוצאה, והמייל למטה נשלח בכל מקרה
+    sendTelegram(TELEGRAM_KIND[check.metric], `⚠️ ${message}${deviceLink(device.id)}`);
+
     await sendAlertEmail(
       `[NetMonitor] התראה: ${device.name || device.ip} — ${check.label} ${Math.round(pct)}%`,
       `מכשיר: ${device.name || device.ip} (${device.ip})\n` +
@@ -422,6 +429,9 @@ async function checkDeviceDown(device) {
 
   lastAlertSent.set(key, now);
 
+  // טלגרם לא כפוף לשעות שקט: המטרה שלו היא שנפילה לא תיפול בין הכיסאות בערב
+  sendTelegram('device_down', `🔴 ${device.name || device.ip} (${device.ip}) לא מגיב — DOWN${deviceLink(device.id)}`);
+
   if (isQuietHours()) {
     console.log(`[Alerts] שעות שקט — SNMP DOWN לא נשלח: ${device.name || device.ip}`);
     return;
@@ -439,6 +449,16 @@ async function checkDeviceDown(device) {
 // סגור event DOWN כשמכשיר חוזר UP ושלח מייל אישור
 function resolveDeviceDown(device) {
   const db = getDb();
+  // הודעת "חזר" רק אם נפילה באמת נפתחה (3 כשלונות ברצף), כדי שכשל חולף לא ייצור הודעת חזרה בלי הודעת נפילה
+  const open = db.prepare(`
+    SELECT sent_at FROM alert_events
+    WHERE device_id = ? AND metric = 'status' AND resolved_at IS NULL LIMIT 1
+  `).get(device.id);
+  if (open) {
+    const mins = Math.max(1, Math.round((Date.now() / 1000 - open.sent_at) / 60));
+    sendTelegram('device_up', `🟢 ${device.name || device.ip} (${device.ip}) חזר לפעול — היה למטה ${mins} דקות${deviceLink(device.id)}`);
+  }
+
   db.prepare(`
     UPDATE alert_events
     SET resolved_at = unixepoch()

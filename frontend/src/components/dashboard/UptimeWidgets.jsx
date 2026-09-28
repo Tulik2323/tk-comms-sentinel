@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import api from '../../lib/api';
 import StatusDot from '../ui/StatusDot';
 import Modal from '../ui/Modal';
+import { tempLevel, tempLimits, TEMP_COLORS } from '../../lib/temperature';
 
 const REFRESH_MS = 60_000;
 
@@ -295,8 +296,9 @@ export function HottestWidget() {
   const { t } = useTranslation();
   const { data } = useLive('/dashboard/hottest?limit=10');
 
-  const color = (c) => c > data.crit ? '#ef4444' : c > data.warn ? '#f97316' : '#3b82f6';
-  const hottest = data && data.items.length ? Math.max(data.crit, data.items[0].celsius) : 0;
+  // הצבע לפי הספים של כל סוויץ' (כפי שהוא מדווח), ובלעדיהם 45 / 60
+  const color = (d) => tempLevel(d) === 'ok' ? '#3b82f6' : TEMP_COLORS[tempLevel(d)];
+  const hottest = data && data.items.length ? Math.max(...data.items.map(d => Math.max(tempLimits(d).crit, d.celsius))) : 0;
 
   return (
     <div className="nm-card" style={{ height: '100%' }}>
@@ -314,14 +316,14 @@ export function HottestWidget() {
                 <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>
                   {d.name} <span style={{ ...muted, fontSize: 11 }}>{d.ip}</span>
                 </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: color(d.celsius) }}
-                      title={t('hottest_sensors', { count: d.sensors })}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: color(d) }}
+                      title={`${t('hottest_sensors', { count: d.sensors })} · warn ${tempLimits(d).warn}° / crit ${tempLimits(d).crit}°`}>
                   {Number.isInteger(d.celsius) ? d.celsius : d.celsius.toFixed(1)}°C
                 </span>
               </div>
               <div style={{ height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{
-                  width: '100%', height: '100%', background: color(d.celsius), borderRadius: 3,
+                  width: '100%', height: '100%', background: color(d), borderRadius: 3,
                   transform: `scaleX(${Math.min(1, d.celsius / hottest)})`, transformOrigin: 'right center',
                 }} />
               </div>

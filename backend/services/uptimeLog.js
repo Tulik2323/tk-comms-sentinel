@@ -248,11 +248,14 @@ function getHottest(limit) {
     if (r.status === 'down') { down++; continue; }
     let temps = [];
     try { temps = JSON.parse(r.hw_status || 'null')?.temps || []; } catch (_) {}
-    const values = temps.map(t => t.celsius).filter(c => Number.isFinite(c));
-    if (!values.length) { noData.push({ id: r.id, name: r.name || r.ip, ip: r.ip, model: r.model }); continue; }
+    const usable = temps.filter(t => Number.isFinite(t.celsius));
+    if (!usable.length) { noData.push({ id: r.id, name: r.name || r.ip, ip: r.ip, model: r.model }); continue; }
+    const hottest = usable.reduce((a, b) => (b.celsius > a.celsius ? b : a));
     ranked.push({
       id: r.id, name: r.name || r.ip, ip: r.ip, model: r.model,
-      celsius: Math.max(...values), sensors: values.length,
+      celsius: hottest.celsius, sensors: usable.length,
+      // הספים שהסוויץ' מדווח לחיישן החם (אם יש); בלעדיהם הממשק משתמש בברירת המחדל warn / crit
+      warn: hottest.warn ?? null, crit: hottest.crit ?? null,
     });
   }
   ranked.sort((a, b) => b.celsius - a.celsius);
