@@ -54,6 +54,19 @@ const OID = {
   comwareTemp:   '1.3.6.1.4.1.25506.2.6.1.1.1.1.12',
   // הספים שהסוויץ' מדווח לכל חיישן: 13 = אזהרה, 17 = קריטי (65535 או 0 = אין סף לישות הזו).
   // אומת על 5130 (58 ו-63), 5130 EI (98 ו-108) ו-HP 10508 (88 ו-102).
+  // hh3cEntityExtErrorStatus (עמודה 19): מצב תקלה של ישות (PSU / FAN). 2 = תקין, 51 = חריץ ריק
+  // (אומת על 5130: PSU 2 בלי ספק מדווח 51). נקרא לפי ישויות ששמן "PSU n" / "FAN n" (class 6 / 7).
+  comwareErrStatus: '1.3.6.1.4.1.25506.2.6.1.1.1.1.19',
+  entPhysicalContainedIn: '1.3.6.1.2.1.47.1.1.1.1.4',
+  entPhysicalName:        '1.3.6.1.2.1.47.1.1.1.1.7',
+  // ARUBAWIRED-POWER-SUPPLY / FAN (Aruba CX): לכל חבר במחסנית. מצב: ok / fault_output / fault_absent ...
+  arubaCXPsuName:  '1.3.6.1.4.1.47196.4.1.1.3.11.2.1.1.3',   // "member/slot"
+  arubaCXPsuState: '1.3.6.1.4.1.47196.4.1.1.3.11.2.1.1.4',
+  arubaCXPsuWatts: '1.3.6.1.4.1.47196.4.1.1.3.11.2.1.1.7',   // הספק נוכחי
+  arubaCXPsuMax:   '1.3.6.1.4.1.47196.4.1.1.3.11.2.1.1.8',   // הספק מקסימלי
+  arubaCXFanName:  '1.3.6.1.4.1.47196.4.1.1.3.11.5.1.1.4',   // "Tray-member/tray/fan"
+  arubaCXFanState: '1.3.6.1.4.1.47196.4.1.1.3.11.5.1.1.5',
+  arubaCXFanRpm:   '1.3.6.1.4.1.47196.4.1.1.3.11.5.1.1.8',
   comwareTempWarn: '1.3.6.1.4.1.25506.2.6.1.1.1.1.13',
   comwareTempCrit: '1.3.6.1.4.1.25506.2.6.1.1.1.1.17',
   // Entity MIB (RFC 2737) — Aruba ProCurve + generic
@@ -536,6 +549,107 @@ function parseVendorModel(desc) {
 // readings יכולים לכלול warn ו-crit: הספים שהסוויץ' עצמו מדווח לחיישן (ראה comwareTempWarn). כשחלק
 // מהחיישנים מדווחים סף, נשארים רק אלה. אלה החיישנים שהסוויץ' באמת עוקב אחריהם, ורק להם אפשר לצבוע
 // לפי הסף הנכון (בלי זה שבב שמגיע ל-55 מעלות, כשהסף שלו 88, היה מוצג כחם).
+// מצב ספק כוח / מאוורר לפי מה שהסוויץ' מדווח, לשפה אחידה: ok / fail / absent / unknown.
+// ערך שלא הכרתי מסומן unknown ולא fail, כדי שלא תיווצר תקלת שווא.
+function comwareHwState(v) {
+  const n = toNum(v);
+  if (n === 2) return 'ok';
+  if (n === 51) return 'absent';
+  if ([12, 13, 14, 15, 16, 17, 18].includes(n)) return 'fail';
+  return 'unknown';
+}
+function arubaCXHwState(v) {
+  const t = String(v || '').toLowerCase();
+  if (t === 'ok' || t === 'normal') return 'ok';
+  if (/absent|empty|not.?present/.test(t)) return 'absent';
+  if (/fault|fail|alarm|critical/.test(t)) return 'fail';
+  return 'unknown';
+}
+const suffixAfter = (oid, base) => oid.slice(base.length + 1);   // האינדקס שאחרי ה-OID הבסיסי
+
+// ספקי כוח ומאווררים של Comware לכל חבר IRF. מבנה (אילו ישויות הן PSU/FAN ולאיזה חבר) משתנה רק כשמחליפים חומרה,
+// ולכן נבנה פעם בשעה ונשמר בזיכרון; בכל poll נקרא רק מצב הישויות.
+const _comwareHw = new Map();   // device.id -> { polls, psus:[{e,member,slot}], fans:[...] }
+const COMWARE_HW_REFRESH = 12;
+
+async function comwareHwMembers(session, device) {
+  let c = _comwareHw.get(device.id);
+  if (!c || c.polls % COMWARE_HW_REFRESH === 0) {
+    const [classRows, parentRows, nameRows] = await Promise.all([
+      snmpWalk(session, OID.entPhysicalClass),
+      snmpWalk(session, OID.entPhysicalContainedIn),
+      snmpWalk(session, OID.entPhysicalName),
+    ]);
+    const idOf = r => parseInt(r.oid.split('.').pop());
+    const cls = new Map(classRows.map(r => [idOf(r), toNum(r.value)]));
+    const parent = new Map(parentRows.map(r => [idOf(r), toNum(r.value)]));
+    const name = new Map(nameRows.map(r => [idOf(r), r.value ? r.value.toString() : '']));
+    // חבר במחסנית = שלדה (class 3). הסדר לפי מספר הישות הוא סדר החברים (אומת: 5130 עם 5 חברים = ישויות 2..6)
+    const chassis = [...cls].filter(([, v]) => v === 3).map(([e]) => e).sort((a, b) => a - b);
+    const memberOf = (e) => {
+      let cur = e, hops = 0;
+      while (cur && hops++ < 12) {
+        const i = chassis.indexOf(cur);
+        if (i >= 0) return i + 1;
+        cur = parent.get(cur);
+      }
+      return 1;
+    };
+    const pick = (clazz, label) => [...cls].filter(([, v]) => v === clazz)
+      .map(([e]) => ({ e, member: memberOf(e), slot: parseInt(((name.get(e) || '').match(/\d+/) || ['0'])[0], 10), label: name.get(e) || label }))
+      .sort((a, b) => a.member - b.member || a.slot - b.slot);
+    // ב-10508 הספקים נקראים "PW 0..5" והמאוורר "Fan 0": מספור מ-0. מזיזים ל-1 כדי שכל המשפחות יציגו אותו דבר.
+    const base1 = (list) => {
+      for (const m of new Set(list.map(x => x.member))) {
+        const grp = list.filter(x => x.member === m);
+        if (Math.min(...grp.map(x => x.slot)) === 0) grp.forEach(x => { x.slot += 1; });
+      }
+      return list;
+    };
+    c = { polls: c ? c.polls : 0, psus: base1(pick(6, 'PSU')), fans: base1(pick(7, 'FAN')) };
+    _comwareHw.set(device.id, c);
+  }
+  c.polls++;
+  const ents = [...c.psus, ...c.fans];
+  if (ents.length === 0) return { psus: [], fans: [] };
+  const data = await snmpGet(session, ents.map(x => OID.comwareErrStatus + '.' + x.e)).catch(() => ({}));
+  const withState = (x) => ({ member: x.member, slot: x.slot, entity: x.e, status: comwareHwState(data[OID.comwareErrStatus + '.' + x.e]) });
+  return { psus: c.psus.map(withState), fans: c.fans.map(withState) };
+}
+
+// הופך רשימות ספקים/מאווררים (עם שדה member) למבנה לפי חבר: { "1": { psus:[], fans:[] }, ... }
+function groupByMember(psus, fans) {
+  const members = {};
+  const slot = (m) => (members[m] || (members[m] = { psus: [], fans: [] }));
+  for (const p of psus) slot(p.member).psus.push(p);
+  for (const f of fans) slot(f.member).fans.push(f);
+  return members;
+}
+
+// ספקים ומאווררים של Aruba CX, לכל חבר: טבלאות היצרן
+async function arubaCXPsuFans(session) {
+  const [pn, ps, pw, pm, fnm, fs, fr] = await Promise.all([
+    snmpWalk(session, OID.arubaCXPsuName).catch(() => []), snmpWalk(session, OID.arubaCXPsuState).catch(() => []),
+    snmpWalk(session, OID.arubaCXPsuWatts).catch(() => []), snmpWalk(session, OID.arubaCXPsuMax).catch(() => []),
+    snmpWalk(session, OID.arubaCXFanName).catch(() => []), snmpWalk(session, OID.arubaCXFanState).catch(() => []),
+    snmpWalk(session, OID.arubaCXFanRpm).catch(() => []),
+  ]);
+  const by = (rows, base) => new Map(rows.map(r => [suffixAfter(r.oid, base), r.value]));
+  const psState = by(ps, OID.arubaCXPsuState), psW = by(pw, OID.arubaCXPsuWatts), psM = by(pm, OID.arubaCXPsuMax);
+  const psus = pn.map(r => {
+    const [m, sl] = String(r.value).split('/').map(x => parseInt(x, 10));
+    const k = suffixAfter(r.oid, OID.arubaCXPsuName);
+    return { member: m || 1, slot: sl || 1, status: arubaCXHwState(psState.get(k)), watts: toNum(psW.get(k)) || null, maxWatts: toNum(psM.get(k)) || null };
+  });
+  const fState = by(fs, OID.arubaCXFanState), fRpm = by(fr, OID.arubaCXFanRpm);
+  const fans = fnm.map(r => {
+    const m = String(r.value).match(/^Tray-(\d+)\/(\d+)\/(\d+)/);
+    const k = suffixAfter(r.oid, OID.arubaCXFanName);
+    return m ? { member: +m[1], slot: (+m[2] - 1) * 2 + +m[3], status: arubaCXHwState(fState.get(k)), rpm: toNum(fRpm.get(k)) || null } : null;
+  }).filter(Boolean);
+  return { psus, fans };
+}
+
 const MAX_TEMPS = 4;
 const validLimit = (v) => Number.isFinite(v) && v > 0 && v < 200;
 function collectTemps(readings) {
@@ -576,44 +690,17 @@ function sensorValue(raw, scale, precision) {
 async function getHardwareStatusComware(device) {
   const session = createSession(device);
   try {
-    // ---- FANs ----
-    // הבטיחה הבאה נמצאה בפועל: על HPE 5130 JH326A ה-OID הזה מחזיר ~200
-    // שורות (עד אינדקס 955) — הרבה יותר ממה שסביר לטבלת FAN פיזית (עד
-    // כמה יחידות). זו כנראה טבלה per-interface (storm-control/loopback-
-    // detection וכו') שנרשמה בטעות כ-hh3cFanStatus, וגרמה להצגת "כשלי
-    // FAN" שקריים לכל שורה שמחזירה 1. אם הטבלה חורגת ממספר סביר של
-    // FANים פיזיים — מתעלמים ממנה כליל במקום להציג התראות שווא.
-    const MAX_PLAUSIBLE_FANS = 16;
-    const fanRows = await snmpWalk(session, OID.comwareFan).catch(() => []);
-    let fans = [];
-    if (fanRows.length > 0 && fanRows.length <= MAX_PLAUSIBLE_FANS) {
-      const failFans = [];
-      let okCount = 0;
-      for (const r of fanRows) {
-        const v = toNum(r.value);
-        const idx = parseInt(r.oid.split('.').pop());
-        if (v === 2) { okCount++; }
-        else if (v === 1) { failFans.push({ idx, status: 'fail' }); }
-      }
-      fans = [
-        ...(okCount > 0 ? [{ idx: 0, status: 'ok', count: okCount }] : []),
-        ...failFans,
-      ];
-    }
-
-    // ---- PSU ----
-    const psuEidCandidates = Array.from({ length: 61 }, (_, i) => 200 + i);
-    const psuOids = psuEidCandidates.map(i => OID.comwareAlarm + '.' + i);
-    const psuData = await snmpGet(session, psuOids).catch(() => ({}));
-    const psus = [];
-    for (const eid of psuEidCandidates) {
-      const v = toNum(psuData[OID.comwareAlarm + '.' + eid]);
-      if (v === 1 || v === 2) {
-        psus.push({ idx: psus.length + 1, entity: eid, status: v === 1 ? 'ok' : 'fail' });
-        if (psus.length >= 4) break;
-      }
-    }
-    if (psus.length === 0) psus.push({ idx: 1, status: 'unknown' });
+    // ---- PSU / FAN ----
+    // לפי ישויות ששמן "PSU n" / "FAN n". ההיוריסטיקה הקודמת (סריקת ישויות 200 עד 260) הציגה את חיישני
+    // הטמפרטורה כספקי כוח, ואת החריץ הריק של ספק שני כ"תקלה".
+    const hw = await comwareHwMembers(session, device).catch(() => ({ psus: [], fans: [] }));
+    const psus = hw.psus.filter(p => p.status !== 'absent').map((p, i) => ({ idx: i + 1, ...p }));
+    const okFans = hw.fans.filter(f => f.status === 'ok').length;
+    const fans = [
+      ...(okFans > 0 ? [{ idx: 0, status: 'ok', count: okFans }] : []),
+      ...hw.fans.filter(f => f.status === 'fail').map((f, i) => ({ idx: i + 1, member: f.member, status: 'fail' })),
+    ];
+    const members = groupByMember(hw.psus, hw.fans);
 
     // ---- Temperature ----
     const [tempRows, warnRows, critRows] = await Promise.all([
@@ -628,7 +715,7 @@ async function getHardwareStatusComware(device) {
       return { entity, celsius: toNum(r.value), warn: warnOf.get(entity), crit: critOf.get(entity) };
     }));
 
-    return { fans, temps, psus };
+    return { fans, temps, psus, members };
   } finally {
     safeClose(session);
   }
@@ -656,9 +743,10 @@ async function getHardwareStatusAruba(device) {
     // Fan status via Entity Sensor MIB (only fetch sensor rows for fan indices)
     let okCount = 0;
     const failFans = [];
+    let statusData = null;
     if (fanIndices.length > 0) {
       const statusOids = fanIndices.map(i => OID.entPhySensorOperStatus + '.' + i);
-      const statusData = await snmpGet(session, statusOids).catch(() => ({}));
+      statusData = await snmpGet(session, statusOids).catch(() => ({}));
       for (const idx of fanIndices) {
         const st = toNum(statusData[OID.entPhySensorOperStatus + '.' + idx]);
         // 1=ok, 2=unavailable, 3=nonoperational; 0/undefined = no sensor, assume ok
@@ -670,6 +758,13 @@ async function getHardwareStatusAruba(device) {
       ...(okCount > 0 ? [{ idx: 0, status: 'ok', count: okCount }] : []),
       ...failFans,
     ];
+    // לכל חבר במחסנית: מספר החבר נלקח ממספר הישות (במחסנית 1xxxxx, 2xxxxx ...; ללא מחסנית ללא קידומת)
+    const memberOfEntity = (i) => (parseInt(i, 10) >= 100000 ? Math.floor(parseInt(i, 10) / 100000) : 1);
+    let memberPsus = psuIndices.map(i => ({ member: memberOfEntity(i), slot: parseInt(i, 10) % 10, entity: parseInt(i, 10), status: 'present' }));
+    let memberFans = fanIndices.map(i => {
+      const st = statusData ? toNum(statusData[OID.entPhySensorOperStatus + '.' + i]) : 0;
+      return { member: memberOfEntity(i), slot: parseInt(i, 10) % 100, entity: parseInt(i, 10), status: st === 3 ? 'fail' : 'ok' };
+    });
 
     // PSU: no status OID available on ProCurve 2930M — report as present (ok)
     const psus = psuIndices.slice(0, 4).map((idx, i) => ({
@@ -721,8 +816,19 @@ async function getHardwareStatusAruba(device) {
     }
     const temps = collectTemps(readings);
 
-    if (fans.length === 0 && psus.length === 0 && temps.length === 0) return null;
-    return { fans, psus, temps };
+    // Aruba CX: מצב אמיתי של ספקי הכוח והמאווררים מטבלאות היצרן, לכל חבר. ב-ENTITY-MIB הספק תמיד נראה תקין.
+    let outPsus = psus;
+    if (/Aruba CX/i.test(device.vendor || '')) {
+      const cx = await arubaCXPsuFans(session).catch(() => null);
+      if (cx && (cx.psus.length || cx.fans.length)) {
+        memberPsus = cx.psus; memberFans = cx.fans;
+        outPsus = cx.psus.filter(p => p.status !== 'absent').map((p, i) => ({ idx: i + 1, ...p }));
+      }
+    }
+    const members = groupByMember(memberPsus, memberFans);
+
+    if (fans.length === 0 && outPsus.length === 0 && temps.length === 0) return null;
+    return { fans, psus: outPsus, temps, members };
   } finally {
     safeClose(session);
   }

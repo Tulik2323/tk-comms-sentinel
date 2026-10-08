@@ -45,7 +45,7 @@ Write-Host "  frontend\dist OK" -ForegroundColor Green
 # ever reaching production (found 2026-09-16: hostname_cache/audit migrations
 # never deployed because of this). Only the data files are excluded now -- the
 # directory itself is no longer skipped.
-& robocopy "$SRC\backend" "$PROD\backend" /MIR /XD node_modules certs logs iisnode-logs `
+& robocopy "$SRC\backend" "$PROD\backend" /MIR /XD node_modules certs logs iisnode-logs switch-images `
     /XF .env "netmonitor.db*" `
     /NFL /NDL /NJS /NC /NS /NP
 Write-Host "  backend OK" -ForegroundColor Green
@@ -83,7 +83,7 @@ if (-not (Test-Path $pkgVer)) {
 # overwrite backend JS (skip node_modules; keep backend\db\ code but never
 # ship any stray data file that might exist there in a dev checkout)
 & robocopy "$SRC\backend" "$pkgVer\backend" /MIR `
-    /XD node_modules `
+    /XD node_modules switch-images `
     /XF .env "netmonitor.db*" "*.db" "*.db-shm" "*.db-wal" "*.db.bak*" "*.key" "*.pem" "*.pfx" `
     /NFL /NDL /NJS /NC /NS /NP | Out-Null
 

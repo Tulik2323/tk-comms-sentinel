@@ -11,6 +11,7 @@ import StatusDot from '../components/ui/StatusDot';
 import { formatBps, formatUptime } from '../lib/api';
 import { tempLevel, tempLimits } from '../lib/temperature';
 import api from '../lib/api';
+import SwitchLayout from '../components/layout/SwitchLayout';
 
 // טיפ בגרף
 function CustomTooltip({ active, payload, label }) {
@@ -40,6 +41,7 @@ export default function DeviceDetailPage() {
   const highlightRef = useRef(null);
 
   const [device,  setDevice]  = useState(null);
+  const [tab, setTab] = useState('overview');   // overview | layout
   const [ports,   setPorts]   = useState([]);
   const [hours,   setHours]   = useState(24);
   const [portFilter,  setPortFilter]  = useState('all'); // all | up | down
@@ -254,6 +256,27 @@ export default function DeviceDetailPage() {
         </div>
       </div>
 
+      {/* לשוניות: סקירה (גרפים, פורטים) / Switch Layout (חזית הסוויץ', חלק אחורי) */}
+      {device.vendor && (
+        <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--border)' }}>
+          {[['overview', t('tab_overview')], ['layout', t('tab_layout')]].map(([id2, label]) => (
+            <button key={id2} onClick={() => setTab(id2)} style={{
+              padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: 'none', border: 'none',
+              color: tab === id2 ? 'var(--accent)' : 'var(--text-muted)',
+              borderBottom: `2px solid ${tab === id2 ? 'var(--accent)' : 'transparent'}`, marginBottom: -1,
+            }}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      {tab === 'layout' && device.vendor && (
+        <SwitchLayout deviceId={id} onOpenPort={(ifIndex) => {
+          const p = ports.find(x => x.if_index === ifIndex);
+          if (p) { setTab('overview'); openPortModal(p); }
+        }} />
+      )}
+
+      {(tab === 'overview' || !device.vendor) && (<>
       {/* Charts */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
         {/* Bandwidth Chart */}
@@ -566,6 +589,8 @@ export default function DeviceDetailPage() {
           </div>
         )}
       </div>
+
+      </>)}
 
       {/* ===== Port Detail Modal ===== */}
       {selectedPort && (

@@ -51,3 +51,5 @@ dist-pkg/
 Thumbs.db
 Desktop.ini
 .DS_Store
+# vendor switch photos (copyrighted): kept on the server only, see tools/build-switch-layouts.py
+/brand-source/

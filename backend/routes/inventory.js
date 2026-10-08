@@ -624,3 +624,4 @@ router.get('/entries', requireAuth, (req, res) => {
 });
 
 module.exports = router;
+module.exports.loadInventory = loadInventory;   // משמש את תצוגת Switch Layout

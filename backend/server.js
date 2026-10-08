@@ -56,6 +56,7 @@ const trendsRouter       = require('./routes/trends');
 const updatesRouter      = require('./routes/updates');
 const licenseRouter      = require('./routes/license');
 const inventoryRouter    = require('./routes/inventory');
+const layoutRouter       = require('./routes/layout');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -157,6 +158,7 @@ app.use('/api/trends',        trendsRouter);
 app.use('/api/updates',      updatesRouter);
 app.use('/api/license',      licenseRouter);
 app.use('/api/inventory',    inventoryRouter);
+app.use('/api/layout',       layoutRouter);
 
 // Health check
 // version נקרא מ-package.json, לא קשיח — אחרת אי אפשר להבחין בין גרסאות

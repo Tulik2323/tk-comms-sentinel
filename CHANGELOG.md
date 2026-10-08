@@ -2,6 +2,36 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.8.0] — 2026-10-08
+
+### Added
+- **Switch Layout tab.** Every switch device page now has a "Switch Layout" tab next to the overview:
+  the front panel of the switch with every port coloured, one panel per member of a stack (up to 10),
+  and below each one the rear panel with the power supplies and fans and their state. Read-only.
+  - Colour modes you can switch between: **Status** (up / no link / admin down), **Speed**, **VLAN**,
+    **Load** (traffic against the port speed) and **Errors**. Ports that connect to another switch
+    (an LLDP neighbour, or many MAC addresses) have a blue ring.
+  - Click a port to see its state, speed, VLAN with the name you gave it, description, traffic, errors,
+    the LLDP neighbour, and the devices seen on it: MAC, IP, device name and the **Inventory class**
+    (the same classification as the Inventory page). A button opens the existing full port history.
+  - Front photos for the Aruba 6300M, 8360, 2930M (24 and 48 ports), 2930F and HPE 5130 (24 and 48
+    ports); other models, and the HP 10508 chassis (its line cards are drawn per slot), get a clean
+    drawing from the real port list. The vendor photos are not part of the installer or the repository
+    (they are the vendors' pictures): they are kept in the server's `switch-images` folder, and an
+    administrator can add, replace or remove one from the tab itself (PNG or JPG, up to 4MB, the front
+    of the same model family).
+  - Rear panel: Aruba CX shows each power supply and fan from the switch's own tables (with watts and
+    RPM), HPE Comware shows PSU and FAN per stack member, and the 10508 shows its six power supplies per
+    chassis. Aruba 2930 reports only that a power supply is installed, not its health, and the panel says so.
+
+### Fixed
+- **HPE 5130 / Comware power supplies were read wrongly.** The old logic listed temperature sensors as
+  power supplies and showed an empty second power-supply slot as "failed" on most 5130 switches. The
+  PSUs and fans are now read by name and per stack member; an empty slot is shown as empty.
+- **Aruba CX power supplies always looked healthy.** They are now read from the switch's own power
+  supply table, so a real fault shows: the sweep of this installation found two power supplies with an
+  output fault and one missing.
+
 ## [1.7.0] — 2026-10-08
 
 ### Added
