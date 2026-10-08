@@ -13,7 +13,7 @@ const {
   blockedMessage, clientIp,
 } = require('../middleware/rateLimit');
 const { requireAuth, requireSetupOrAuth } = require('../middleware/auth');
-const { signMain, signTemp, verifyTemp }  = require('../services/tokens');
+const { signMain, signTemp, verifyTemp, sessionExpiry }  = require('../services/tokens');
 const { burnCompare }          = require('../services/passwords');
 const { logAudit }             = require('../db/audit');
 
@@ -187,7 +187,7 @@ router.post('/verify-2fa', async (req, res) => {
   logAudit('info', 'auth', 'login_2fa_success', { username: payload.username, role: user.role }, { username: payload.username, ip });
 
   // התפקיד נלקח מה-DB (נקבע בשלב הסיסמה) ולא מטוקן הביניים
-  const jwtToken = signMain({ username: payload.username, role: user.role }, '8h');
+  const jwtToken = signMain({ username: payload.username, role: user.role }, sessionExpiry(payload.username));
   res.json({ token: jwtToken, role: user.role });
 });
 
@@ -271,7 +271,7 @@ router.post('/confirm-2fa', requireSetupOrAuth, (req, res) => {
   logAudit('info', 'auth', 'twofa_setup_done', { username: req.user.username }, { username: req.user.username, ip: clientIp(req) });
 
   // הנפק JWT מלא — המשתמש מוכן להיכנס למערכת
-  const token = signMain({ username: req.user.username, role: req.user.role }, '8h');
+  const token = signMain({ username: req.user.username, role: req.user.role }, sessionExpiry(req.user.username));
   res.json({ ok: true, token, role: req.user.role, message: '2FA הופעל בהצלחה' });
 });
 

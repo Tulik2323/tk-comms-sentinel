@@ -216,6 +216,16 @@ export default function AdminPage() {
     loadUsers();
   }
 
+  // משך התחברות למשתמש. חל מהכניסה הבאה שלו (התחברות פתוחה לא משתנה).
+  async function setSessionHours(id, value) {
+    try {
+      await api.put(`/admin/users/${id}`, { session_hours: value === '' ? null : Number(value) });
+      loadUsers();
+    } catch (err) {
+      alert(err.response?.data?.error || t('save_error'));
+    }
+  }
+
   async function resetUserTotp(id) {
     try {
       await api.post(`/admin/users/${id}/reset-2fa`);
@@ -563,6 +573,7 @@ export default function AdminPage() {
                   <th>{t('col_role')}</th>
                   <th>2FA</th>
                   <th>{t('col_last_login')}</th>
+                  <th title={t('session_hint')}>{t('col_session')}</th>
                   <th>{t('col_actions')}</th>
                 </tr>
               </thead>
@@ -589,6 +600,17 @@ export default function AdminPage() {
                       {u.last_login
                         ? new Date(u.last_login * 1000).toLocaleString()
                         : '—'}
+                    </td>
+                    <td>
+                      <select className="nm-input" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }}
+                        value={u.session_hours == null ? '' : String(u.session_hours)}
+                        onChange={e => setSessionHours(u.id, e.target.value)}>
+                        <option value="">{t('session_default')}</option>
+                        <option value="24">{t('session_24')}</option>
+                        <option value="168">{t('session_168')}</option>
+                        <option value="720">{t('session_720')}</option>
+                        <option value="8760">{t('session_8760')}</option>
+                      </select>
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>

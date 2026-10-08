@@ -47,6 +47,7 @@ export default function Layout({ children }) {
   const navigate   = useNavigate();
   const [theme, setTheme]   = useState(localStorage.getItem('nm_theme') || 'dark');
   const [lang,  setLang]    = useState(localStorage.getItem('nm_lang')  || 'he');
+  const [logoOk, setLogoOk]   = useState(true);   // false = קובץ הלוגו חסר, חוזרים לציור הגיבוי
 
   // מצב רישוי — נטען פעם אחת בעלייה
   const [licenseStatus, setLicenseStatus] = useState(null);
@@ -131,7 +132,16 @@ export default function Layout({ children }) {
           alignItems:   'center',
           gap:          10,
         }}>
-          <BrandMark size={38} idPrefix="nav" />
+          {/* הלוגו האמיתי (לא ציור וקטורי). פינות הרקע הנייבי מוחלקות כדי שלא יופיע ריבוע על רקע הסרגל */}
+          {logoOk ? (
+            <img src="/brand-logo-64.png" alt="TK Comms Sentinel" width={38} height={38}
+              onError={() => setLogoOk(false)}
+              style={{ display: 'block', flexShrink: 0,
+                WebkitMaskImage: 'radial-gradient(circle, #000 70%, transparent 87%)',
+                maskImage: 'radial-gradient(circle, #000 70%, transparent 87%)' }} />
+          ) : (
+            <BrandMark size={38} idPrefix="nav" />
+          )}
           <div>
             <div style={{
               fontSize: 14, fontWeight: 700, lineHeight: 1.2, direction: 'ltr',

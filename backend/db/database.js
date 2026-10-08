@@ -316,6 +316,8 @@ async function initDb() {
     )
   `);
   try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_device_reboots_device ON device_reboots(device_id, detected_at DESC)'); } catch (_) {}
+  // כמה שעות התחברות של המשתמש בתוקף. NULL = ברירת המחדל (8). נקבע על ידי מנהל בדף המשתמשים.
+  try { _sqlDb.exec('ALTER TABLE user_accounts ADD COLUMN session_hours INTEGER'); } catch (_) {}
   // מתי התראת פורט עמוס עלתה לטלגרם (NULL = עוד לא, למשל כי העומס חלף לפני שעבר זמן ההשהיה)
   try {
     _sqlDb.exec('ALTER TABLE alert_events ADD COLUMN tg_sent_at INTEGER');

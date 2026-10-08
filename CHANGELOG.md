@@ -2,6 +2,22 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.7.0] — 2026-10-08
+
+### Added
+- **Session length per user.** Admin > Users has a new "Session length" column with a choice per user:
+  8 hours (the default, as before), 24 hours, 7 days, 30 days, or 1 year. A user who keeps the dashboard
+  open on a control-room screen can now stay signed in instead of being logged out after 8 hours. The
+  choice applies from that user's next sign-in; signed-in sessions are not cut off or extended, and
+  changing it is written to the audit log. A longer session is a bigger risk if the computer is stolen,
+  so set it only for the accounts that need it. Logging out, a password or role change and a 2FA reset
+  still end the session at once, whatever its length.
+
+### Fixed
+- **The sidebar showed a simplified redrawing of the logo instead of the real logo.** It now uses the
+  real logo image (as the sign-in page does), with the corners of its dark background softened so it
+  does not show as a square on the light theme.
+
 ## [1.6.1] — 2026-09-28
 
 ### Fixed

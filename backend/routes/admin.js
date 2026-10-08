@@ -9,6 +9,7 @@ const { logAudit }     = require('../db/audit');
 const { passwordProblem, USERNAME_RE } = require('../services/passwords');
 const { tlsOptions }   = require('../services/smtp');
 const telegram         = require('../services/telegram');
+const { SESSION_HOURS_ALLOWED } = require('../services/tokens');
 
 const ROLES = new Set(['admin', 'viewer']);
 const validId = (v) => /^\d{1,9}$/.test(String(v));
@@ -111,7 +112,7 @@ router.put('/settings', requireAdmin, (req, res) => {
 router.get('/users', requireAdmin, (req, res) => {
   const db    = getDb();
   const users = db.prepare(
-    'SELECT id, username, role, totp_enabled, last_login, created_at FROM user_accounts'
+    'SELECT id, username, role, totp_enabled, last_login, created_at, session_hours FROM user_accounts'
   ).all();
   res.json(users);
 });
@@ -170,6 +171,17 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
   const { role, password } = body;
   const changes = [];
 
+  // משך התחברות: רק ערכים מהרשימה. null או ריק = חזרה לברירת המחדל (8 שעות).
+  let sessionHours;   // undefined = לא משתנה
+  if (Object.prototype.hasOwnProperty.call(body, 'session_hours')) {
+    const raw = body.session_hours;
+    if (raw === null || raw === '') sessionHours = null;
+    else {
+      sessionHours = Number(raw);
+      if (!SESSION_HOURS_ALLOWED.includes(sessionHours)) return res.status(400).json({ error: 'משך התחברות לא תקין' });
+    }
+  }
+
   if (role !== undefined && role !== null && role !== '') {
     if (!ROLES.has(role)) return res.status(400).json({ error: 'תפקיד לא תקין' });
     if (role !== target.role) {
@@ -194,6 +206,15 @@ router.put('/users/:id', requireAdmin, async (req, res) => {
     const hash = await bcrypt.hash(password, 12);
     db.prepare('UPDATE user_accounts SET password_hash = ?, token_valid_after = unixepoch() WHERE id = ?').run(hash, target.id);
     changes.push('password');
+  }
+
+  // שינוי משך ההתחברות לא מבטל התחברויות פתוחות, והוא חל מהכניסה הבאה של המשתמש
+  if (sessionHours !== undefined) {
+    const cur = db.prepare('SELECT session_hours FROM user_accounts WHERE id = ?').get(target.id).session_hours ?? null;
+    if (cur !== sessionHours) {
+      db.prepare('UPDATE user_accounts SET session_hours = ? WHERE id = ?').run(sessionHours, target.id);
+      changes.push('session ' + (sessionHours === null ? 'default' : sessionHours + 'h'));
+    }
   }
 
   if (changes.length === 0) return res.status(400).json({ error: 'לא צוין שינוי' });

@@ -19,10 +19,24 @@ function tempSecret() {
 }
 
 // jwtid: מזהה ייחודי לכל טוקן, כדי שיציאה תבטל את הטוקן הזה בלבד ולא את שאר ההתחברויות של המשתמש
+// משך ההתחברות לפי משתמש (user_accounts.session_hours). משתמש של מסך בקרה צריך שההתחברות תחזיק ימים,
+// ובלי הגדרה כולם מקבלים 8 שעות כמו תמיד. רק הערכים ברשימה מתקבלים, כדי שערך שגוי לא ייצור טוקן לנצח.
+const SESSION_HOURS_ALLOWED = [8, 24, 168, 720, 8760];
+const SESSION_HOURS_DEFAULT = 8;
+function sessionExpiry(username) {
+  let hours = SESSION_HOURS_DEFAULT;
+  try {
+    const row = require('../db/database').getDb()
+      .prepare('SELECT session_hours FROM user_accounts WHERE username = ?').get(username);
+    if (row && SESSION_HOURS_ALLOWED.includes(row.session_hours)) hours = row.session_hours;
+  } catch (_) {}
+  return hours + 'h';
+}
+
 const signMain   = (payload, expiresIn = '8h') =>
   jwt.sign(payload, mainSecret(), { algorithm: ALG, expiresIn, jwtid: crypto.randomBytes(16).toString('hex') });
 const signTemp   = (payload, expiresIn)         => jwt.sign(payload, tempSecret(), { algorithm: ALG, expiresIn });
 const verifyMain = (token) => jwt.verify(token, mainSecret(), { algorithms: [ALG] });
 const verifyTemp = (token) => jwt.verify(token, tempSecret(), { algorithms: [ALG] });
 
-module.exports = { signMain, signTemp, verifyMain, verifyTemp };
+module.exports = { SESSION_HOURS_ALLOWED, sessionExpiry, signMain, signTemp, verifyMain, verifyTemp };
