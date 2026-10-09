@@ -2,6 +2,16 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.9.0] — 2026-10-09
+
+### Added
+- **"Open in IMC" link for busy ports.** A port-bandwidth alert (in the Alerts page's events list and in
+  the recurring-alerts panel) and the port-details panel in the Switch Layout tab now have an "Open in
+  IMC" link. It opens the organization's HPE IMC (NTA / traffic analysis) in a new tab, so a port that
+  triggered an alert can be checked for "who is generating the load" without leaving the switch's own
+  sFlow collector. The link only opens IMC's traffic-analysis screen — it does not change, read, or
+  collect any data from IMC itself.
+
 ## [1.8.0] — 2026-10-08
 
 ### Added

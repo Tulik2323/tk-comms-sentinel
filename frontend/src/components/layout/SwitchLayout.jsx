@@ -11,6 +11,7 @@ import api, { formatBps } from '../../lib/api';
 import { useAuth } from '../../hooks/useAuth';
 import { tempLevel, TEMP_COLORS } from '../../lib/temperature';
 import LAYOUTS from '../../lib/switchLayouts.json';
+import { IMC_NTA_URL } from '../../lib/imc';
 
 const REFRESH_MS = 60_000;
 const MODES = ['status', 'speed', 'vlan', 'load', 'errors'];
@@ -262,6 +263,15 @@ function PortDetails({ port, onOpen, onClose, t }) {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="nm-btn nm-btn-ghost" style={{ fontSize: 12 }} onClick={() => onOpen(port.id)}>{t('sl_open_port')}</button>
+          <a
+            href={IMC_NTA_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="nm-btn nm-btn-ghost"
+            style={{ fontSize: 12, textDecoration: 'none' }}
+          >
+            ↗ {t('open_in_imc')}
+          </a>
           <button className="nm-btn nm-btn-ghost" style={{ fontSize: 12 }} onClick={onClose}>✕</button>
         </div>
       </div>

@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useDevices } from '../hooks/useDevices';
 import Modal from '../components/ui/Modal';
 import { formatAlert } from '../lib/alertFormat';
+import { IMC_NTA_URL } from '../lib/imc';
 import api from '../lib/api';
 
 const METRIC_ICONS = {
@@ -328,6 +329,17 @@ export default function AlertsPage() {
                           {r.device_name || r.device_ip}
                           {r.port_if_index != null && ` · ${r.port_label || `${t('port_label')} ${r.port_if_index}`}`}
                         </Link>
+                        {r.port_if_index != null && (
+                          <a
+                            href={IMC_NTA_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={t('open_in_imc')}
+                            style={{ marginInlineStart: 6, color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}
+                          >
+                            ↗ IMC
+                          </a>
+                        )}
                       </td>
                       <td>{t(`metric_${r.metric}`)}</td>
                       <td style={{ fontFamily: 'monospace' }}>{t('days_of_window', { days: r.days, window: recurring.windowDays })}</td>
@@ -443,6 +455,18 @@ export default function AlertsPage() {
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-primary)', maxWidth: 320 }}>
                       {formatAlert(e, t)}
+                      {e.port_if_index != null && (
+                        <a
+                          href={IMC_NTA_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={ev => ev.stopPropagation()}
+                          title={t('open_in_imc')}
+                          style={{ marginInlineStart: 6, color: 'var(--accent)', textDecoration: 'none' }}
+                        >
+                          ↗ IMC
+                        </a>
+                      )}
                     </td>
                     <td style={{
                       fontFamily: 'monospace',
