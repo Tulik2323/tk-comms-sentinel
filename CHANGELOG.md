@@ -2,6 +2,20 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.10.0] — 2026-10-14
+
+### Fixed
+- **Short outages (under ~5 minutes) could go completely undetected.** The SNMP poller only checks each
+  device every `poll_interval_sec` (5 minutes by default), so an outage that starts and ends between two
+  polls was invisible — not just un-alerted, but never recorded anywhere. This is what happened on
+  2026-10-14: a switch dropped for about a minute and came back before the next scheduled poll, so no
+  alert, no outage-history row, nothing. A new, independent fast-ping check now pings every device every
+  20 seconds; after 2 consecutive missed pings (about 40 seconds) it marks the device down and fires the
+  same alert pipeline (email, Telegram, outage history) used by the full SNMP poller, and the normal
+  5-minute poller still runs unchanged for metrics and recovery confirmation. A device that never answers
+  ping at all (for example a firewall with ICMP blocked by policy) is never flagged down by this check —
+  only a device that has answered ping at least once can be.
+
 ## [1.9.0] — 2026-10-09
 
 ### Added

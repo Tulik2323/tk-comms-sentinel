@@ -9,6 +9,7 @@ const { logAudit } = require('../db/audit');
 const { refreshStaleHostnames } = require('./hostnames');
 const { sendTelegram, flushDelayedPortAlerts } = require('./telegram');
 const { noteFailure, noteRecovery, noteUptime, markPathOutage, pruneUptimeLog } = require('./uptimeLog');
+const { startFastPing } = require('./fastPing');
 
 // Map: deviceId -> last poll timestamp
 const lastPollTime = new Map();
@@ -467,6 +468,9 @@ function startPoller() {
 
   // כל 30 שניות בדוק אילו מכשירים צריך לפולל
   cron.schedule('*/30 * * * * *', runCycle);
+
+  // בדיקת ping מהירה ועצמאית — ראה services/fastPing.js (למה קיימת בכלל)
+  startFastPing();
 
   // ניקוי metrics ישנים — פעם ביום בחצות
   cron.schedule('0 0 * * *', () => {
