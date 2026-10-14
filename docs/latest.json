@@ -1,7 +1,7 @@
 ﻿{
-    "sha256":  "6520f3ba47dbd3827f4e4ee9a9f7b83be25bd1ca41c6656656a607f47ef250b5",
-    "version":  "1.11.0",
-    "signature":  "8e0jle9BtpGG-bLBEqPGh5GNOpIq6Y9E-Hp6E3GNx_MfnPo4PmHJIHv7z82-Z-IYPjHBo8nrO0TtIHa9lOQuDg",
+    "sha256":  "7a1db8562cd65f94d21116a922a3c3adee905d4df448c924670545295278b0c9",
+    "version":  "1.11.1",
+    "signature":  "ehwJBgFAVBbVPF3qngGAc3iClFqk_Rg6P3ndSAvt4Ju29l3XlyVMV-O7SGsWu8DjAEW14OHf5F0JezgkaCf2Cw",
     "downloadUrl":  "https://github.com/Tulik2323/tk-comms-sentinel/releases/latest/download/TKCommsSentinel-Setup-latest.exe",
     "date":  "2026-10-14",
     "notes":  "See CHANGELOG for details"
