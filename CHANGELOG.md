@@ -2,6 +2,14 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.11.1] — 2026-10-14
+
+### Fixed
+- **The Telegram test said "sent" even when Telegram alerts were switched off.** The test message goes
+  out regardless of the "Send alerts to Telegram" switch, so a successful test looked like everything was
+  set up while real alerts were never sent. When the switch is off, the test now still sends the message
+  but shows a red warning that real alerts will not be sent until the box is ticked and saved.
+
 ## [1.11.0] — 2026-10-14
 
 ### Added

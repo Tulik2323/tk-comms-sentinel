@@ -352,6 +352,11 @@ router.post('/test-telegram', requireAdmin, async (req, res) => {
     const sent = await telegram.sendNow(cfg.token, cfg.chatIds,
       '✅ TK Comms Sentinel: הודעת בדיקה\nאם קיבלת אותה, ההתראות לטלגרם מוגדרות נכון.\nנשלח בידי: ' + req.user.username);
     logAudit('info', 'admin', 'telegram_test_ok', { chats: sent }, { username: req.user.username, ip: req.ip });
+    // הבדיקה שולחת גם כשהמתג הראשי כבוי, ולכן הצלחה כאן לא אומרת שהתראות אמיתיות יוצאות
+    if (!cfg.enabled) {
+      return res.json({ ok: false, ms: Date.now() - t0,
+        error: 'הודעת הבדיקה נשלחה, אבל "שלח התראות לטלגרם" כבוי — התראות אמיתיות לא יישלחו. סמן את התיבה ושמור.' });
+    }
     res.json({ ok: true, ms: Date.now() - t0, message: sent === 1 ? 'הודעת בדיקה נשלחה לטלגרם' : 'הודעת בדיקה נשלחה ל-' + sent + ' צ\'אטים' });
   } catch (err) {
     const why = telegram.explainError(err);
