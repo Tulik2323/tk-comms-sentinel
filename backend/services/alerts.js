@@ -4,10 +4,29 @@ const { getDb, getSetting } = require('../db/database');
 const { decrypt }           = require('./secrets');
 const { DEFAULT_DURATION_MIN } = require('./thresholds');
 const { tlsOptions }           = require('./smtp');
-const { sendTelegram }         = require('./telegram');
+const { sendTelegram, KINDS }  = require('./telegram');
 
-// מטריקת סף של מכשיר -> סוג ההתראה שהמשתמש בוחר לטלגרם
+// מטריקת סף של מכשיר -> סוג ההתראה שהמשתמש בוחר (לטלגרם ולמייל)
 const TELEGRAM_KIND = { bandwidth_in: 'device_bandwidth', bandwidth_out: 'device_bandwidth', cpu: 'cpu', mem: 'mem' };
+
+// סוגי ההתראות שהמייל קיבל לפני שאפשר היה לבחור, ולכן ברירת המחדל כש-email_types לא נשמר מעולם
+const EMAIL_DEFAULT_KINDS = ['device_down', 'device_bandwidth', 'cpu', 'mem', 'port_bandwidth'];
+
+function emailKinds() {
+  const stored = getSetting('email_types');
+  if (stored == null) return EMAIL_DEFAULT_KINDS;
+  return String(stored).split(',').map(s => s.trim()).filter(k => KINDS.includes(k));
+}
+
+// האם לשלוח מייל על סוג ההתראה הזה עכשיו: הסוג מסומן בהגדרות, ולא בשעות השקט
+function emailAllowed(kind) {
+  if (!emailKinds().includes(kind)) return false;
+  if (isQuietHours()) {
+    console.log(`[Alerts] שעות שקט — מייל (${kind}) לא נשלח`);
+    return false;
+  }
+  return true;
+}
 
 // Map של מכשירים שנשלחה להם התראה (למניעת spam)
 // deviceId_metric -> unixtime of last alert
@@ -226,7 +245,7 @@ async function checkThresholds(device, metrics) {
     // טלגרם: לא מחכים לתוצאה, והמייל למטה נשלח בכל מקרה
     sendTelegram(TELEGRAM_KIND[check.metric], `⚠️ ${message}${deviceLink(device.id)}`);
 
-    await sendAlertEmail(
+    if (emailAllowed(TELEGRAM_KIND[check.metric])) await sendAlertEmail(
       `[NetMonitor] התראה: ${device.name || device.ip} — ${check.label} ${Math.round(pct)}%`,
       `מכשיר: ${device.name || device.ip} (${device.ip})\n` +
       `מטריקה: ${check.label}\n` +
@@ -371,7 +390,7 @@ async function checkPortThresholds(device, threshMap, now, intervalSec, keepOpen
 
       lastAlertSent.set(key, now);
 
-      await sendAlertEmail(
+      if (emailAllowed('port_bandwidth')) await sendAlertEmail(
         `[NetMonitor] פורט עמוס: ${devLabel} — ${portLabel}`,
         `מכשיר: ${devLabel} (${device.ip})\n` +
         `פורט: ${portLabel} [if_index: ${port.if_index}]\n` +
@@ -432,15 +451,12 @@ async function checkDeviceDown(device) {
   // טלגרם לא כפוף לשעות שקט: המטרה שלו היא שנפילה לא תיפול בין הכיסאות בערב
   sendTelegram('device_down', `🔴 ${device.name || device.ip} (${device.ip}) לא מגיב — DOWN${deviceLink(device.id)}`);
 
-  if (isQuietHours()) {
-    console.log(`[Alerts] שעות שקט — SNMP DOWN לא נשלח: ${device.name || device.ip}`);
-    return;
-  }
+  if (!emailAllowed('device_down')) return;
 
   await sendAlertEmail(
     `[NetMonitor] מכשיר DOWN: ${device.name || device.ip}`,
     `מכשיר: ${device.name || device.ip} (${device.ip})\n` +
-    `סטטוס: DOWN — לא מגיב ל-SNMP\n` +
+    `סטטוס: DOWN — לא מגיב\n` +
     `זמן: ${new Date().toLocaleString('he-IL')}` +
     deviceLink(device.id)
   );
@@ -457,6 +473,15 @@ function resolveDeviceDown(device) {
   if (open) {
     const mins = Math.max(1, Math.round((Date.now() / 1000 - open.sent_at) / 60));
     sendTelegram('device_up', `🟢 ${device.name || device.ip} (${device.ip}) חזר לפעול — היה למטה ${mins} דקות${deviceLink(device.id)}`);
+    if (emailAllowed('device_up')) {
+      sendAlertEmail(
+        `[NetMonitor] מכשיר חזר: ${device.name || device.ip}`,
+        `מכשיר: ${device.name || device.ip} (${device.ip})\n` +
+        `סטטוס: חזר לפעול — היה למטה כ-${mins} דקות\n` +
+        `זמן: ${new Date().toLocaleString('he-IL')}` +
+        deviceLink(device.id)
+      );
+    }
   }
 
   db.prepare(`
@@ -469,4 +494,4 @@ function resolveDeviceDown(device) {
   lastAlertSent.delete(`${device.id}_status`);
 }
 
-module.exports = { checkThresholds, checkDeviceDown, resolveDeviceDown, sendAlertEmail, maintainAlertEvents };
+module.exports = { checkThresholds, checkDeviceDown, resolveDeviceDown, sendAlertEmail, emailAllowed, maintainAlertEvents, EMAIL_DEFAULT_KINDS };

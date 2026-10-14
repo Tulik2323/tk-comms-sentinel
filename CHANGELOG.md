@@ -2,6 +2,22 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.11.0] — 2026-10-14
+
+### Added
+- **Choose which alerts are sent by email.** Admin > Settings > Email has a new "Which alerts are sent by
+  email" list with the same alert types as Telegram: device down, device back up, path outage and
+  recovery, total traffic load, CPU, memory, and single-port load. Until now every alert went to email,
+  including every busy port; now you can, for example, keep email for outages only. Anything not ticked
+  is still recorded in the alerts log. Email and Telegram are chosen independently. Installations that
+  never change it keep exactly what email received before (device down, traffic, CPU, memory, port load).
+- Email can now also be sent for **device back up** and for **path outage and its recovery** (before
+  this release those went to Telegram only). They are off by default and can be ticked in the list.
+
+### Changed
+- Quiet hours now apply to every alert email, not only to device-down emails. Telegram is still not
+  subject to quiet hours.
+
 ## [1.10.0] — 2026-10-14
 
 ### Fixed

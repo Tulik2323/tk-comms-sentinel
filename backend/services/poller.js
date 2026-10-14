@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const { getDb } = require('../db/database');
 const { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getHardwareStatus, getStackMembers, getPortVlans, getArpTable, getMacBridgeTable, explainSnmpError, parseVendorModel } = require('./snmp');
 const { saveMetrics, pruneOldMetrics } = require('./history');
-const { checkThresholds, checkDeviceDown, resolveDeviceDown, maintainAlertEvents } = require('./alerts');
+const { checkThresholds, checkDeviceDown, resolveDeviceDown, maintainAlertEvents, sendAlertEmail, emailAllowed } = require('./alerts');
 const { logAudit } = require('../db/audit');
 const { refreshStaleHostnames } = require('./hostnames');
 const { sendTelegram, flushDelayedPortAlerts } = require('./telegram');
@@ -414,6 +414,11 @@ async function runCycle() {
         console.error(`[Poller] ${msg}`);
         logAudit('error', 'poller', 'path_outage', { count: results.length }, {});
         sendTelegram('path_outage', '🌐 נפילת נתיב: כל ' + results.length + ' המכשירים נפלו יחד. כנראה תקלת ניתוב או חומת אש ולא תקלה במכשירים עצמם.');
+        if (emailAllowed('path_outage')) {
+          sendAlertEmail('[NetMonitor] נפילת נתיב: ' + results.length + ' מכשירים',
+            'כל ' + results.length + ' המכשירים בסבב נפלו יחד. כנראה תקלת ניתוב או חומת אש ולא תקלה במכשירים עצמם.\n' +
+            'זמן: ' + new Date().toLocaleString('he-IL'));
+        }
         try {
           db.prepare(`
             INSERT INTO alert_events (device_id, metric, value, threshold, message)
@@ -434,6 +439,11 @@ async function runCycle() {
         console.log(`[Poller] ${msg}`);
         logAudit('info', 'poller', 'path_recovered', { responding: results.length - failed.length, total: results.length }, {});
         sendTelegram('path_outage', '🟢 הנתיב חזר: ' + (results.length - failed.length) + ' מתוך ' + results.length + ' מכשירים עונים.');
+        if (emailAllowed('path_outage')) {
+          sendAlertEmail('[NetMonitor] הנתיב חזר',
+            (results.length - failed.length) + ' מתוך ' + results.length + ' מכשירים עונים.\n' +
+            'זמן: ' + new Date().toLocaleString('he-IL'));
+        }
         db.prepare(`
           UPDATE alert_events SET resolved_at = unixepoch()
           WHERE metric = 'path' AND resolved_at IS NULL

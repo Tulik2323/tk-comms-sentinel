@@ -41,7 +41,8 @@ router.put('/settings', requireAdmin, (req, res) => {
     'app_base_url',
     'update_feed_url',
     'smtp_tls_verify',
-    'telegram_enabled','telegram_bot_token','telegram_chat_id','telegram_types','telegram_port_min'
+    'telegram_enabled','telegram_bot_token','telegram_chat_id','telegram_types','telegram_port_min',
+    'email_types'
   ];
 
   const SENSITIVE = new Set(['smtp_pass', 'ldap_bind_password', 'telegram_bot_token']);
@@ -72,6 +73,11 @@ router.put('/settings', requireAdmin, (req, res) => {
     const list = String(body.telegram_types == null ? '' : body.telegram_types).split(',').map(x => x.trim()).filter(Boolean);
     if (!list.every(k => telegram.KINDS.includes(k))) return tgBad('סוג התראה לא מוכר בהגדרות הטלגרם');
     body.telegram_types = list.join(',');
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'email_types')) {
+    const list = String(body.email_types == null ? '' : body.email_types).split(',').map(x => x.trim()).filter(Boolean);
+    if (!list.every(k => telegram.KINDS.includes(k))) return tgBad('סוג התראה לא מוכר בהגדרות המייל');
+    body.email_types = list.join(',');
   }
   if (Object.prototype.hasOwnProperty.call(body, 'telegram_port_min')) {
     const raw = String(body.telegram_port_min == null ? '' : body.telegram_port_min).trim();

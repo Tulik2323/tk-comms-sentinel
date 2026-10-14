@@ -17,6 +17,8 @@ function Section({ title, children }) {
 
 // סוגי ההתראות שאפשר לבחור לטלגרם (חייב להתאים ל-KINDS ב-backend/services/telegram.js)
 const TG_KINDS = ['device_down', 'device_up', 'path_outage', 'device_bandwidth', 'cpu', 'mem', 'port_bandwidth'];
+// מה שהמייל קיבל לפני שאפשר היה לבחור — ברירת המחדל כש-email_types לא נשמר מעולם (כמו EMAIL_DEFAULT_KINDS ב-backend)
+const EMAIL_DEFAULT_KINDS = ['device_down', 'device_bandwidth', 'cpu', 'mem', 'port_bandwidth'];
 
 function SettingField({ label, desc, name, value, onChange, type = 'text', placeholder, ltr }) {
   return (
@@ -103,6 +105,15 @@ export default function AdminPage() {
     const next = tgTypes.includes(kind) ? tgTypes.filter(k => k !== kind) : [...tgTypes, kind];
     setSettings(s => ({ ...s, telegram_types: TG_KINDS.filter(k => next.includes(k)).join(',') }));
     setTgResult(null);
+  }
+
+  const emailTypes = settings.email_types === undefined
+    ? EMAIL_DEFAULT_KINDS
+    : String(settings.email_types).split(',').map(x => x.trim()).filter(k => TG_KINDS.includes(k));
+
+  function toggleEmailType(kind) {
+    const next = emailTypes.includes(kind) ? emailTypes.filter(k => k !== kind) : [...emailTypes, kind];
+    setSettings(s => ({ ...s, email_types: TG_KINDS.filter(k => next.includes(k)).join(',') }));
   }
 
   // בדיקות טלגרם פועלות על ההגדרות ששמורות בשרת, ולכן חובה לשמור קודם
@@ -373,6 +384,17 @@ export default function AdminPage() {
                   <option value="0">{t('smtp_tls_off')}</option>
                 </select>
               </div>
+            </div>
+
+            <div style={{ fontSize: 12, fontWeight: 600, margin: '4px 0 6px' }}>{t('em_types_title')}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{t('em_types_desc')}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '6px 16px', marginBottom: 14 }}>
+              {TG_KINDS.map(kind => (
+                <label key={kind} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={emailTypes.includes(kind)} onChange={() => toggleEmailType(kind)} />
+                  {t(`em_kind_${kind}`)}
+                </label>
+              ))}
             </div>
 
             {/* בדיקה מול השרת. שני מצבים: חיבור בלבד, או שליחה אמיתית. */}
