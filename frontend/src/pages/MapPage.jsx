@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import StatusDot from '../components/ui/StatusDot';
 import { formatBps } from '../lib/api';
 import api from '../lib/api';
+import { deviceLabel } from '../lib/deviceLabel';
 
 export default function MapPage() {
   const { t }        = useTranslation();
@@ -250,7 +251,7 @@ export default function MapPage() {
                 }}
               >
                 <div>
-                  <div style={{ color: 'var(--text-primary)' }}>{d.name || d.ip}</div>
+                  <div style={{ color: 'var(--text-primary)' }}>{deviceLabel(d)}</div>
                   <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{d.ip}</div>
                 </div>
                 <button
@@ -279,7 +280,7 @@ export default function MapPage() {
           pointerEvents: 'none',
           boxShadow:  '0 4px 16px rgba(0,0,0,0.3)',
         }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>{tooltip.device.name || tooltip.device.ip}</div>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>{deviceLabel(tooltip.device)}</div>
           <div style={{ color: 'var(--text-muted)' }}>{tooltip.device.ip}</div>
           <div>↓ {formatBps(tooltip.device.total_in_bps)}</div>
           <div>↑ {formatBps(tooltip.device.total_out_bps)}</div>

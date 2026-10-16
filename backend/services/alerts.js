@@ -5,6 +5,7 @@ const { decrypt }           = require('./secrets');
 const { DEFAULT_DURATION_MIN } = require('./thresholds');
 const { tlsOptions }           = require('./smtp');
 const { sendTelegram, KINDS }  = require('./telegram');
+const { deviceLabel } = require('../lib/deviceLabel');
 
 // מטריקת סף של מכשיר -> סוג ההתראה שהמשתמש בוחר (לטלגרם ולמייל)
 const TELEGRAM_KIND = { bandwidth_in: 'device_bandwidth', bandwidth_out: 'device_bandwidth', cpu: 'cpu', mem: 'mem' };
@@ -233,7 +234,7 @@ async function checkThresholds(device, metrics) {
       }
     }
 
-    const message = `${device.name || device.ip} — ${check.label}: ${Math.round(pct)}%${topPortDetail} (סף: ${threshold}%)`;
+    const message = `${deviceLabel(device)} — ${check.label}: ${Math.round(pct)}%${topPortDetail} (סף: ${threshold}%)`;
 
     db.prepare(`
       INSERT INTO alert_events (device_id, metric, value, threshold, message)
@@ -246,8 +247,8 @@ async function checkThresholds(device, metrics) {
     sendTelegram(TELEGRAM_KIND[check.metric], `⚠️ ${message}${deviceLink(device.id)}`);
 
     if (emailAllowed(TELEGRAM_KIND[check.metric])) await sendAlertEmail(
-      `[NetMonitor] התראה: ${device.name || device.ip} — ${check.label} ${Math.round(pct)}%`,
-      `מכשיר: ${device.name || device.ip} (${device.ip})\n` +
+      `[NetMonitor] התראה: ${deviceLabel(device)} — ${check.label} ${Math.round(pct)}%`,
+      `מכשיר: ${deviceLabel(device)} (${device.ip})\n` +
       `מטריקה: ${check.label}\n` +
       `ערך: ${Math.round(pct)}%\n` +
       `סף: ${threshold}%\n` +
@@ -348,7 +349,7 @@ async function checkPortThresholds(device, threshMap, now, intervalSec, keepOpen
     WHERE device_id = ? AND oper_status = 'up' AND if_speed > 0
   `).all(device.id);
 
-  const devLabel = device.name || device.ip;
+  const devLabel = deviceLabel(device);
 
   for (const port of ports) {
     const portLabel = port.if_alias || port.if_name || port.if_descr || `Port ${port.if_index}`;
@@ -444,18 +445,18 @@ async function checkDeviceDown(device) {
   db.prepare(`
     INSERT INTO alert_events (device_id, metric, value, threshold, message)
     VALUES (?, 'status', 0, 1, ?)
-  `).run(device.id, `${device.name || device.ip} ירד מהרשת (DOWN)`);
+  `).run(device.id, `${deviceLabel(device)} ירד מהרשת (DOWN)`);
 
   lastAlertSent.set(key, now);
 
   // טלגרם לא כפוף לשעות שקט: המטרה שלו היא שנפילה לא תיפול בין הכיסאות בערב
-  sendTelegram('device_down', `🔴 ${device.name || device.ip} (${device.ip}) לא מגיב — DOWN${deviceLink(device.id)}`);
+  sendTelegram('device_down', `🔴 ${deviceLabel(device)} (${device.ip}) לא מגיב — DOWN${deviceLink(device.id)}`);
 
   if (!emailAllowed('device_down')) return;
 
   await sendAlertEmail(
-    `[NetMonitor] מכשיר DOWN: ${device.name || device.ip}`,
-    `מכשיר: ${device.name || device.ip} (${device.ip})\n` +
+    `[NetMonitor] מכשיר DOWN: ${deviceLabel(device)}`,
+    `מכשיר: ${deviceLabel(device)} (${device.ip})\n` +
     `סטטוס: DOWN — לא מגיב\n` +
     `זמן: ${new Date().toLocaleString('he-IL')}` +
     deviceLink(device.id)
@@ -472,11 +473,11 @@ function resolveDeviceDown(device) {
   `).get(device.id);
   if (open) {
     const mins = Math.max(1, Math.round((Date.now() / 1000 - open.sent_at) / 60));
-    sendTelegram('device_up', `🟢 ${device.name || device.ip} (${device.ip}) חזר לפעול — היה למטה ${mins} דקות${deviceLink(device.id)}`);
+    sendTelegram('device_up', `🟢 ${deviceLabel(device)} (${device.ip}) חזר לפעול — היה למטה ${mins} דקות${deviceLink(device.id)}`);
     if (emailAllowed('device_up')) {
       sendAlertEmail(
-        `[NetMonitor] מכשיר חזר: ${device.name || device.ip}`,
-        `מכשיר: ${device.name || device.ip} (${device.ip})\n` +
+        `[NetMonitor] מכשיר חזר: ${deviceLabel(device)}`,
+        `מכשיר: ${deviceLabel(device)} (${device.ip})\n` +
         `סטטוס: חזר לפעול — היה למטה כ-${mins} דקות\n` +
         `זמן: ${new Date().toLocaleString('he-IL')}` +
         deviceLink(device.id)

@@ -7,6 +7,7 @@ const { logAudit }    = require('../db/audit');
 const dns  = require('dns');
 const path = require('path');
 const fs   = require('fs');
+const { DEVICE_LABEL_SQL } = require('../lib/deviceLabel');
 
 // ---- OUI lookup ----
 
@@ -348,7 +349,7 @@ function loadInventory(db) {
       me.device_id,
       me.if_index,
       me.phys_if_index,
-      d.name  AS device_name,
+      ${DEVICE_LABEL_SQL()} AS device_name,
       d.ip    AS device_ip,
       p.if_name,
       p.if_alias

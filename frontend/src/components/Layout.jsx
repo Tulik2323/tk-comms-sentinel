@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import i18n from '../lib/i18n';
 import BrandMark from './BrandMark';
 import api from '../lib/api';
+import { deviceLabel } from '../lib/deviceLabel';
 
 // אייקונים SVG פשוטים
 const Icons = {
@@ -191,7 +192,7 @@ export default function Layout({ children }) {
                   {r.type === 'device' ? (
                     <>
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                        🖧 <bdi>{r.name || r.ip}</bdi>
+                        🖧 <bdi>{deviceLabel(r)}</bdi>
                       </div>
                       <div style={{ color: 'var(--text-muted)', marginTop: 2 }}><bdi dir="ltr">{r.ip}</bdi></div>
                     </>

@@ -4,6 +4,7 @@ const router  = express.Router();
 const { getDb }       = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
 const { attachHostnames } = require('../services/hostnames');
+const { DEVICE_LABEL_SQL } = require('../lib/deviceLabel');
 
 router.get('/', requireAuth, (req, res) => {
   const q = (req.query.q || '').trim();
@@ -32,7 +33,7 @@ router.get('/', requireAuth, (req, res) => {
   const ACCESS_MAX_MACS = 8;
   const macBaseSql = `
     SELECT m.mac_address, m.ip_address, m.device_id, m.phys_if_index, m.if_index, m.last_seen,
-           d.name AS device_name, d.ip AS device_ip, d.status AS device_status,
+           ${DEVICE_LABEL_SQL()} AS device_name, d.ip AS device_ip, d.status AS device_status,
            p.if_name, p.if_descr, p.if_alias,
            CASE WHEN m.phys_if_index IS NULL THEN NULL ELSE (
              SELECT COUNT(DISTINCT m2.mac_address) FROM mac_entries m2

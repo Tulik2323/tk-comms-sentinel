@@ -1,6 +1,7 @@
 // services/reports.js — יצירת דוחות לפי סוג
 const { getDb } = require('../db/database');
 const { toCSV } = require('./csv');   // כולל נטרול נוסחאות של Excel
+const { deviceLabel, DEVICE_LABEL_SQL } = require('../lib/deviceLabel');
 
 // ---- דוח 1: זמינות מכשירים (Uptime %) ----
 function generateUptime({ period_days = 7 } = {}) {
@@ -21,13 +22,13 @@ function generateUptime({ period_days = 7 } = {}) {
   const downMap = {};
   for (const r of downTimes) downMap[r.device_id] = r.down_sec;
 
-  const devices = db.prepare(`SELECT id, name, ip, status, location FROM devices ORDER BY name`).all();
+  const devices = db.prepare(`SELECT id, name, sys_name, ip, status, location FROM devices ORDER BY name`).all();
 
   const headers = ['שם מכשיר', 'כתובת IP', 'מיקום', 'זמינות %', 'זמן DOWN (דק)', 'סטטוס נוכחי'];
   const rows = devices.map(d => {
     const downSec  = downMap[d.id] || 0;
     const upPct    = Math.max(0, Math.min(100, ((periodSec - downSec) / periodSec) * 100));
-    return [d.name || '', d.ip, d.location || '', upPct.toFixed(2), Math.round(downSec / 60), d.status];
+    return [deviceLabel(d), d.ip, d.location || '', upPct.toFixed(2), Math.round(downSec / 60), d.status];
   });
 
   return { title: `זמינות מכשירים — ${period_days} ימים אחרונים`, headers, rows };
@@ -38,7 +39,7 @@ function generateTopPorts({ limit = 20 } = {}) {
   const db = getDb();
   const rows_raw = db.prepare(`
     SELECT
-      d.name AS device_name, d.ip,
+      ${DEVICE_LABEL_SQL()} AS device_name, d.ip,
       p.if_name, p.if_alias, p.if_descr,
       p.in_bps, p.out_bps, p.if_speed, p.oper_status
     FROM ports p
@@ -73,7 +74,7 @@ function generateAlertHistory({ period_days = 7 } = {}) {
     SELECT
       ae.id, ae.metric, ae.value, ae.threshold,
       ae.message, ae.sent_at, ae.resolved_at,
-      d.name AS device_name, d.ip
+      ${DEVICE_LABEL_SQL()} AS device_name, d.ip
     FROM alert_events ae
     LEFT JOIN devices d ON d.id = ae.device_id
     WHERE ae.sent_at >= ?
@@ -102,7 +103,7 @@ function generatePortErrors({ min_errors = 0 } = {}) {
   const db = getDb();
   const rows_raw = db.prepare(`
     SELECT
-      d.name AS device_name, d.ip,
+      ${DEVICE_LABEL_SQL()} AS device_name, d.ip,
       p.if_name, p.if_alias, p.if_descr,
       p.in_errors, p.out_errors, p.oper_status, p.last_updated
     FROM ports p

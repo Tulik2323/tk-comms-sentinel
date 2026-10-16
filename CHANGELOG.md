@@ -2,6 +2,25 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.13.0] — 2026-10-16
+
+### Added
+- **Port changes now record cable connect/disconnect.** The port-changes log (and the port-changes table
+  on a device page) kept only speed, admin status, VLAN and description changes, so unplugging a cable
+  left no trace at all. A port going from connected to disconnected or back is now logged as
+  "Link up/down", shown as Connected (green) / Disconnected (red), and can be filtered. It is recorded at
+  the regular poll (every 5 minutes); for second-by-second watching use the Port Watchdog.
+
+### Fixed
+- **Switches shown only by IP address.** Almost every device has no manual name, only the name the switch
+  reports itself (sysName), but the Port Watchdog, dashboard lists, map, alert settings, search results and
+  the alert e-mails/Telegram messages fell back straight to the IP. They now show the switch name, and the
+  Watchdog list is sorted by name and can be searched by it.
+- **Port Watchdog could silently miss a change.** When reading a switch failed even once (a large stack can
+  take 3–4 seconds to answer), the watchdog discarded what it knew about that switch's ports, so a cable
+  pulled during that moment was never reported. A failed read now keeps the previous state, the switch is
+  marked with ⚠️ and a "cannot read" note appears until reads succeed again.
+
 ## [1.12.2] — 2026-10-16
 
 ### Fixed

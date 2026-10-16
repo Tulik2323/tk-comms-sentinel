@@ -10,6 +10,7 @@ import Modal from '../components/ui/Modal';
 import { formatBps, formatUptime } from '../lib/api';
 import api from '../lib/api';
 import { tempLevel, TEMP_COLORS } from '../lib/temperature';
+import { deviceLabel } from '../lib/deviceLabel';
 
 function AddDeviceModal({ open, onClose, onAdded }) {
   const { t } = useTranslation();
@@ -266,7 +267,7 @@ function EditDeviceModal({ device, onClose, onSaved }) {
   );
 
   return (
-    <Modal open onClose={onClose} title={`✏️ ${t('edit_device_title')} — ${device.name || device.ip}`}>
+    <Modal open onClose={onClose} title={`✏️ ${t('edit_device_title')} — ${deviceLabel(device)}`}>
       {error && (
         <div style={{ background: '#7f1d1d', color: '#fecaca', padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>
           {error}
@@ -910,7 +911,7 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
           // במקום GigabitEthernet4/0/35).
           const portInfo = (rawData?.[devId] || []).find(p => String(p.if_index) === String(ifIdx));
           changes.push({
-            deviceId: devId, ip: dev?.ip, name: dev?.name || dev?.ip,
+            deviceId: devId, ip: dev?.ip, name: deviceLabel(dev),
             if_index: ifIdx,
             if_name: portInfo?.if_name || portInfo?.if_descr || `Port ${ifIdx}`,
             prev, curr: status, ts: new Date().toLocaleTimeString('he-IL'),
@@ -1059,7 +1060,7 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
                 background: checked ? 'rgba(59,130,246,0.1)' : 'transparent', borderRadius: 4, marginBottom: 2 }}>
                 <input type="checkbox" checked={checked} disabled={disabled}
                   onChange={() => !disabled && toggleDevice(id)} style={{ accentColor: 'var(--accent)' }} />
-                <span style={{ fontSize: 13, fontWeight: checked ? 600 : 400 }}>{d.name || d.ip}</span>
+                <span style={{ fontSize: 13, fontWeight: checked ? 600 : 400 }}>{deviceLabel(d)}</span>
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 'auto' }}>{d.ip}</span>
               </label>
             );
@@ -1144,7 +1145,7 @@ function WatchdogModal({ open, onClose, devices, initialDeviceId }) {
                     ? r.p.oper_status === 'down' ? 'rgba(239,68,68,0.18)' : 'rgba(34,197,94,0.12)'
                     : 'transparent',
                 }}>
-                  <td style={{ color: 'var(--text-muted)' }}>{r.dev?.name || r.dev?.ip}</td>
+                  <td style={{ color: 'var(--text-muted)' }}>{deviceLabel(r.dev)}</td>
                   <td style={{ fontFamily: 'monospace' }}>{r.p.if_name || r.p.if_descr || `Port ${r.p.if_index}`}</td>
                   <td style={{ fontWeight: r.statusChanged ? 700 : 400,
                                color: r.p.oper_status === 'up' ? '#4ade80' : r.p.oper_status === 'down' ? '#f87171' : 'var(--text-muted)' }}>

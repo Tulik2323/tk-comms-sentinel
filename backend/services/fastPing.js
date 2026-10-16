@@ -17,6 +17,7 @@ const { getDb } = require('../db/database');
 const { checkDeviceDown, resolveDeviceDown } = require('./alerts');
 const { noteFailure, noteRecovery } = require('./uptimeLog');
 const { logAudit } = require('../db/audit');
+const { deviceLabel } = require('../lib/deviceLabel');
 
 const PING_TIMEOUT_MS     = 800;
 const PING_FAIL_THRESHOLD = 2;   // כשלונות ping רצופים לפני הכרזת DOWN (~40 שניות בקצב הבדיקה כאן)
@@ -57,7 +58,7 @@ async function handleResult(device, ok) {
     try { resolveDeviceDown({ ...device, status: 'up' }); }
     catch (e) { console.warn(`[FastPing] resolveDeviceDown נכשל עבור ${device.ip}: ${e.message}`); }
     logAudit('info', 'poller', 'device_back_online',
-      { device: device.name || device.ip }, { device_id: device.id, ip: device.ip });
+      { device: deviceLabel(device) }, { device_id: device.id, ip: device.ip });
     return;
   }
 
@@ -74,7 +75,7 @@ async function handleResult(device, ok) {
   db.prepare("UPDATE devices SET status = 'down' WHERE id = ?").run(device.id);
   console.warn(`[FastPing] ${device.ip} DOWN (ping ${fails}/${PING_FAIL_THRESHOLD})`);
   logAudit('warn', 'poller', 'device_unresponsive',
-    { device: device.name || device.ip, why: 'ICMP ping לא נענה', error: 'ping timeout' },
+    { device: deviceLabel(device), why: 'ICMP ping לא נענה', error: 'ping timeout' },
     { device_id: device.id, ip: device.ip });
   try { await checkDeviceDown({ ...device, status: 'down' }); }
   catch (e) { console.warn(`[FastPing] checkDeviceDown נכשל עבור ${device.ip}: ${e.message}`); }
@@ -84,7 +85,7 @@ async function runPingCycle() {
   if (_cycleRunning) return;
   _cycleRunning = true;
   try {
-    const devices = getDb().prepare('SELECT id, name, ip, status FROM devices').all();
+    const devices = getDb().prepare('SELECT id, name, sys_name, ip, status FROM devices').all();
     if (devices.length === 0) return;
 
     let idx = 0;

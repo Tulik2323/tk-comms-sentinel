@@ -5,10 +5,17 @@ import { useTranslation } from 'react-i18next';
 import api from '../lib/api';
 import StatusDot from '../components/ui/StatusDot';
 
-const ATTR_KEYS = ['if_alias', 'admin_status', 'if_speed', 'pvid'];
+const ATTR_KEYS = ['oper_status', 'if_alias', 'admin_status', 'if_speed', 'pvid'];
 
-function fmtVal(attr, v) {
+// צבע ערך: לסטטוס קישור לפי הערך עצמו (מחובר=ירוק, מנותק=אדום); לשאר — ישן אדום, חדש ירוק
+function valColor(attr, v, isNew) {
+  if (attr === 'oper_status') return v === 'up' ? '#22c55e' : '#ef4444';
+  return isNew ? '#22c55e' : '#ef4444';
+}
+
+function fmtVal(attr, v, t) {
   if (v == null) return '—';
+  if (attr === 'oper_status') return v === 'up' ? `🟢 ${t('link_connected')}` : `🔴 ${t('link_disconnected')}`;
   if (attr === 'if_speed') {
     const n = Number(v);
     if (!n) return v;
@@ -160,7 +167,7 @@ export default function PortChangesPage() {
               </span>
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, paddingInlineStart: 13 }}>
-              {d.ip} · {fmtAgo(d.last_change)}
+              <bdi dir="ltr">{d.ip}</bdi> · {fmtAgo(d.last_change)}
             </div>
           </button>
         ))}
@@ -188,7 +195,7 @@ export default function PortChangesPage() {
                 : `🌐 ${t('all_changes')}`}
             </div>
             {selected && (
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{selected.ip}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}><bdi dir="ltr">{selected.ip}</bdi></div>
             )}
           </div>
 
@@ -273,7 +280,7 @@ export default function PortChangesPage() {
                         >
                           {c.device_name}
                         </Link>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.device_ip}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}><bdi dir="ltr">{c.device_ip}</bdi></div>
                       </td>
                     )}
                     <td style={{ padding: '9px 16px', whiteSpace: 'nowrap' }}>
@@ -292,11 +299,11 @@ export default function PortChangesPage() {
                         {ATTR_LABELS[c.attribute] || c.attribute}
                       </span>
                     </td>
-                    <td style={{ padding: '9px 16px', fontFamily: 'monospace', fontSize: 12, color: '#ef4444' }}>
-                      {fmtVal(c.attribute, c.old_value)}
+                    <td style={{ padding: '9px 16px', fontFamily: 'monospace', fontSize: 12, color: valColor(c.attribute, c.old_value, false) }}>
+                      {fmtVal(c.attribute, c.old_value, t)}
                     </td>
-                    <td style={{ padding: '9px 16px', fontFamily: 'monospace', fontSize: 12, color: '#22c55e' }}>
-                      {fmtVal(c.attribute, c.new_value)}
+                    <td style={{ padding: '9px 16px', fontFamily: 'monospace', fontSize: 12, color: valColor(c.attribute, c.new_value, true) }}>
+                      {fmtVal(c.attribute, c.new_value, t)}
                     </td>
                   </tr>
                 ))}

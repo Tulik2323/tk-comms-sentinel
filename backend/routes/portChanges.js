@@ -3,12 +3,15 @@ const express     = require('express');
 const router      = express.Router();
 const { getDb }   = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
+const { DEVICE_LABEL_SQL } = require('../lib/deviceLabel');
+
+const ATTRS = ['oper_status', 'if_alias', 'admin_status', 'if_speed', 'pvid'];
 
 // רשימת מכשירים שיש להם שינויים (לפאנל השמאלי)
 router.get('/devices', requireAuth, (req, res) => {
   const db = getDb();
   const rows = db.prepare(`
-    SELECT d.id, COALESCE(d.name, d.sys_name, d.ip) AS name, d.ip, d.status,
+    SELECT d.id, ${DEVICE_LABEL_SQL()} AS name, d.ip, d.status,
            COUNT(pc.id) AS change_count,
            MAX(pc.changed_at) AS last_change
     FROM port_changes pc
@@ -22,14 +25,14 @@ router.get('/devices', requireAuth, (req, res) => {
 // שינויים — לפי מכשיר ספציפי, או כל המכשירים
 router.get('/', requireAuth, (req, res) => {
   const db        = getDb();
-  const deviceId  = req.query.device_id || null;
+  const deviceId  = /^\d+$/.test(req.query.device_id || '') ? Number(req.query.device_id) : null;
   const limit     = Math.min(parseInt(req.query.limit) || 300, 1000);
-  const attr      = req.query.attr || null;   // if_alias | admin_status | if_speed | pvid
+  const attr      = ATTRS.includes(req.query.attr) ? req.query.attr : null;
 
   let sql = `
     SELECT pc.id, pc.device_id, pc.if_index, pc.if_name, pc.attribute,
            pc.old_value, pc.new_value, pc.changed_at,
-           COALESCE(d.name, d.sys_name, d.ip) AS device_name, d.ip AS device_ip
+           ${DEVICE_LABEL_SQL()} AS device_name, d.ip AS device_ip
     FROM port_changes pc
     JOIN devices d ON d.id = pc.device_id
     WHERE 1=1

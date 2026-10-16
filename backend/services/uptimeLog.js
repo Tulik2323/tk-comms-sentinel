@@ -8,6 +8,7 @@
 // ההיסטוריה מתחילה ברגע השחרור (uptime_tracking_since): את העבר אי אפשר לשחזר, כי alert_events נסגר
 // ידנית או אוטומטית ולכן משכי הזמן שלו אינם משכי נפילה אמיתיים.
 const { getDb, getSetting } = require('../db/database');
+const { deviceLabel } = require('../lib/deviceLabel');
 
 const RETENTION_DAYS = 180;
 // sysUpTime הוא מונה 32 סיביות של מאיות שנייה ועוטף אחרי ~497 ימים. מכשיר שהיה למעלה מ-486 יום
@@ -83,7 +84,7 @@ function getOutages(range) {
 
   const rows = db.prepare(`
     SELECT o.id, o.device_id, o.started_at, o.confirmed_at, o.ended_at, o.path_outage,
-           d.name, d.ip
+           d.name, d.sys_name, d.ip
     FROM device_outages o JOIN devices d ON d.id = o.device_id
     WHERE COALESCE(o.ended_at, ?) >= ?
     ORDER BY o.started_at DESC
@@ -94,7 +95,7 @@ function getOutages(range) {
   for (const r of rows) {
     if (r.path_outage) { pathRows.push(r); continue; }
     events.push({
-      kind: 'device', device_id: r.device_id, name: r.name || r.ip, ip: r.ip,
+      kind: 'device', device_id: r.device_id, name: deviceLabel(r), ip: r.ip,
       started_at: r.started_at, ended_at: r.ended_at,
       duration_sec: (r.ended_at ?? now) - r.started_at, ongoing: r.ended_at == null,
     });
@@ -119,7 +120,7 @@ function getOutages(range) {
       kind: 'path', started_at: started, ended_at: ended,
       duration_sec: (ended ?? now) - started, ongoing,
       device_count: c.rows.length,
-      devices: c.rows.slice(0, 100).map(r => ({ device_id: r.device_id, name: r.name || r.ip, ip: r.ip })),
+      devices: c.rows.slice(0, 100).map(r => ({ device_id: r.device_id, name: deviceLabel(r), ip: r.ip })),
     });
   }
   events.sort((a, b) => b.started_at - a.started_at);
@@ -162,7 +163,7 @@ function getUptimeOverview() {
   const now   = nowSec();
   const since = trackingSince();
 
-  const devices = db.prepare('SELECT id, name, ip, status, uptime_sec, created_at FROM devices ORDER BY name, ip').all();
+  const devices = db.prepare('SELECT id, name, sys_name, ip, status, uptime_sec, created_at FROM devices ORDER BY name, ip').all();
 
   const outageRows = db.prepare(`
     SELECT device_id, started_at, COALESCE(ended_at, ?) AS e, path_outage
@@ -189,7 +190,7 @@ function getUptimeOverview() {
       const iv = byDevice.get(d.id) || [];
       const rb = reboots.get(d.id);
       return {
-        id: d.id, name: d.name || d.ip, ip: d.ip, status: d.status,
+        id: d.id, name: deviceLabel(d), ip: d.ip, status: d.status,
         uptime_sec: d.status === 'down' ? null : d.uptime_sec,
         booted_at:  d.status !== 'down' && d.uptime_sec != null ? now - d.uptime_sec : null,
         avail_7d:   availabilityPct(iv, 7,  d.created_at, since, now),
@@ -205,7 +206,7 @@ function getUptimeOverview() {
 function getDeviceLog(deviceId) {
   const db  = getDb();
   const now = nowSec();
-  const d = db.prepare('SELECT id, name, ip, status, uptime_sec FROM devices WHERE id = ?').get(deviceId);
+  const d = db.prepare('SELECT id, name, sys_name, ip, status, uptime_sec FROM devices WHERE id = ?').get(deviceId);
   if (!d) return null;
 
   const outages = db.prepare(`
@@ -226,7 +227,7 @@ function getDeviceLog(deviceId) {
   const ov = getUptimeOverview().devices.find(x => x.id === deviceId);
   return {
     now, tracking_since: trackingSince(),
-    device: { id: d.id, name: d.name || d.ip, ip: d.ip, status: d.status },
+    device: { id: d.id, name: deviceLabel(d), ip: d.ip, status: d.status },
     uptime_sec: ov?.uptime_sec ?? null, booted_at: ov?.booted_at ?? null,
     avail_7d: ov?.avail_7d ?? null, avail_30d: ov?.avail_30d ?? null,
     events,
@@ -239,7 +240,7 @@ const TEMP_WARN = 45;
 const TEMP_CRIT = 60;
 
 function getHottest(limit) {
-  const rows = getDb().prepare('SELECT id, name, ip, status, vendor, model, hw_status FROM devices').all();
+  const rows = getDb().prepare('SELECT id, name, sys_name, ip, status, vendor, model, hw_status FROM devices').all();
   const ranked = [];
   const noData = [];
   let down = 0;
@@ -249,10 +250,10 @@ function getHottest(limit) {
     let temps = [];
     try { temps = JSON.parse(r.hw_status || 'null')?.temps || []; } catch (_) {}
     const usable = temps.filter(t => Number.isFinite(t.celsius));
-    if (!usable.length) { noData.push({ id: r.id, name: r.name || r.ip, ip: r.ip, model: r.model }); continue; }
+    if (!usable.length) { noData.push({ id: r.id, name: deviceLabel(r), ip: r.ip, model: r.model }); continue; }
     const hottest = usable.reduce((a, b) => (b.celsius > a.celsius ? b : a));
     ranked.push({
-      id: r.id, name: r.name || r.ip, ip: r.ip, model: r.model,
+      id: r.id, name: deviceLabel(r), ip: r.ip, model: r.model,
       celsius: hottest.celsius, sensors: usable.length,
       // הספים שהסוויץ' מדווח לחיישן החם (אם יש); בלעדיהם הממשק משתמש בברירת המחדל warn / crit
       warn: hottest.warn ?? null, crit: hottest.crit ?? null,

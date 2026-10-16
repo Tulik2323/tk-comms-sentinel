@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const { getDb }       = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
+const { DEVICE_LABEL_SQL } = require('../lib/deviceLabel');
 
 // GET /api/trends?days=7
 // מחזיר: פורטים בעייתיים, מכשירים עם הרבה התראות, מגמות bandwidth/CPU
@@ -14,7 +15,7 @@ router.get('/', requireAuth, (req, res) => {
   // פורטים עם הכי הרבה שינויי סטטוס (flapping)
   const flappingPorts = db.prepare(`
     SELECT
-      pc.device_id, d.name AS device_name, d.ip AS device_ip,
+      pc.device_id, ${DEVICE_LABEL_SQL()} AS device_name, d.ip AS device_ip,
       pc.if_index, pc.if_name,
       COUNT(*) AS change_count,
       SUM(CASE WHEN pc.attribute = 'admin_status' THEN 1 ELSE 0 END) AS admin_changes,
@@ -31,7 +32,7 @@ router.get('/', requireAuth, (req, res) => {
   // פורטים עם שגיאות גבוהות (מה-ports table כרגע)
   const errorPorts = db.prepare(`
     SELECT
-      p.device_id, d.name AS device_name, d.ip AS device_ip,
+      p.device_id, ${DEVICE_LABEL_SQL()} AS device_name, d.ip AS device_ip,
       p.if_index, p.if_name, p.if_alias,
       p.in_errors, p.out_errors, (p.in_errors + p.out_errors) AS total_errors,
       p.in_bps, p.out_bps, p.if_speed
@@ -45,7 +46,7 @@ router.get('/', requireAuth, (req, res) => {
   // מכשירים עם הכי הרבה התראות בתקופה
   const alertDevices = db.prepare(`
     SELECT
-      ae.device_id, d.name AS device_name, d.ip AS device_ip,
+      ae.device_id, ${DEVICE_LABEL_SQL()} AS device_name, d.ip AS device_ip,
       COUNT(*) AS alert_count,
       COUNT(DISTINCT ae.metric) AS metric_types,
       GROUP_CONCAT(DISTINCT ae.metric) AS metrics,
@@ -62,7 +63,7 @@ router.get('/', requireAuth, (req, res) => {
   // מכשירים עם CPU גבוה ממוצע בתקופה
   const highCpuDevices = db.prepare(`
     SELECT
-      m.device_id, d.name AS device_name, d.ip AS device_ip,
+      m.device_id, ${DEVICE_LABEL_SQL()} AS device_name, d.ip AS device_ip,
       ROUND(AVG(m.cpu_pct), 1) AS avg_cpu,
       ROUND(MAX(m.cpu_pct), 1) AS max_cpu,
       COUNT(*) AS sample_count

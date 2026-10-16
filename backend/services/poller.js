@@ -10,6 +10,7 @@ const { refreshStaleHostnames } = require('./hostnames');
 const { sendTelegram, flushDelayedPortAlerts } = require('./telegram');
 const { noteFailure, noteRecovery, noteUptime, markPathOutage, pruneUptimeLog } = require('./uptimeLog');
 const { startFastPing } = require('./fastPing');
+const { deviceLabel } = require('../lib/deviceLabel');
 
 // Map: deviceId -> last poll timestamp
 const lastPollTime = new Map();
@@ -62,7 +63,7 @@ async function pollDevice(device, opts = {}) {
       try { noteRecovery(device.id, now); }
       catch (e) { console.warn(`[Poller] סגירת נפילה נכשלה עבור ${device.ip}: ${e.message}`); }
       resolveDeviceDown(device);
-      logAudit('info', 'poller', 'device_back_online', { device: device.name || device.ip }, { device_id: device.id, ip: device.ip });
+      logAudit('info', 'poller', 'device_back_online', { device: deviceLabel(device) }, { device_id: device.id, ip: device.ip });
     }
 
     // --- פורטים ---
@@ -74,7 +75,7 @@ async function pollDevice(device, opts = {}) {
       const prevPortMap = {};
       try {
         const prevPorts = db.prepare(
-          'SELECT if_index, if_alias, admin_status, if_speed, pvid FROM ports WHERE device_id=?'
+          'SELECT if_index, if_alias, oper_status, admin_status, if_speed, pvid FROM ports WHERE device_id=?'
         ).all(device.id);
         for (const p of prevPorts) prevPortMap[p.if_index] = p;
       } catch (_) {}
@@ -162,6 +163,13 @@ async function pollDevice(device, opts = {}) {
           const newAlias = port.if_alias !== null ? toStr(port.if_alias) : toStr(prev.if_alias);
           if (toStr(prev.if_alias) !== newAlias) {
             changeStmt.run(device.id, port.if_index, portLabel, 'if_alias', toStr(prev.if_alias), newAlias);
+          }
+          // oper_status — חיבור/ניתוק כבל. נרשם רק כשהפורט עבר בין up ללא-up;
+          // 'unknown' (walk חלקי שנכשל) לא נחשב שינוי, כדי לא לייצר רשומות שווא.
+          const oldOper = toStr(prev.oper_status), newOper = toStr(port.oper_status);
+          if (oldOper && newOper && oldOper !== 'unknown' && newOper !== 'unknown' &&
+              (oldOper === 'up') !== (newOper === 'up')) {
+            changeStmt.run(device.id, port.if_index, portLabel, 'oper_status', oldOper, newOper);
           }
           // admin_status, if_speed, pvid — רק כשהערך הישן כבר קיים (לא null)
           // null בערך ישן = עמודה חדשה/אתחול, לא שינוי אמיתי
@@ -334,7 +342,7 @@ async function pollDevice(device, opts = {}) {
 
     if (wasUp) {
       logAudit('warn', 'poller',
-        'device_unresponsive', { device: device.name || device.ip, why, error: err.message },
+        'device_unresponsive', { device: deviceLabel(device), why, error: err.message },
         { device_id: device.id, ip: device.ip });
     }
 
@@ -456,7 +464,7 @@ async function runCycle() {
           const dev = db.prepare('SELECT * FROM devices WHERE id = ?').get(r.deviceId);
           if (!dev) continue;
           logAudit('warn', 'poller',
-            `מכשיר לא מגיב: ${dev.name || dev.ip} — ${r.why || 'לא ידוע'}`,
+            `מכשיר לא מגיב: ${deviceLabel(dev)} — ${r.why || 'לא ידוע'}`,
             { device_id: dev.id, ip: dev.ip });
         }
         const dev = db.prepare('SELECT * FROM devices WHERE id = ?').get(r.deviceId);

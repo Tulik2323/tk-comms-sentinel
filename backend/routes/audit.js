@@ -4,6 +4,7 @@ const router  = express.Router();
 const { getDb }       = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { logAudit }     = require('../db/audit');
+const { DEVICE_LABEL_SQL } = require('../lib/deviceLabel');
 
 // GET /api/audit?limit=100&level=warn&source=poller&device_id=5&from=1700000000
 // admin בלבד: הלוג מכיל שמות משתמשים, כתובות ופרטי תצורה
@@ -13,7 +14,7 @@ router.get('/', requireAdmin, (req, res) => {
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 2000);
 
   let sql = `
-    SELECT a.*, d.name AS device_name, d.ip AS device_ip
+    SELECT a.*, ${DEVICE_LABEL_SQL()} AS device_name, d.ip AS device_ip
     FROM audit_log a
     LEFT JOIN devices d ON a.device_id = d.id
     WHERE 1=1

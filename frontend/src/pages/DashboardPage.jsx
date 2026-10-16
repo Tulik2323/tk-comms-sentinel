@@ -8,6 +8,7 @@ import { formatBps } from '../lib/api';
 import { formatAlert } from '../lib/alertFormat';
 import api from '../lib/api';
 import { OutagesWidget, UptimeWidget, HottestWidget } from '../components/dashboard/UptimeWidgets';
+import { deviceLabel } from '../lib/deviceLabel';
 
 // ---- סדר ברירת מחדל של ה-widgets ----
 const DEFAULT_ORDER = ['outages', 'top-bandwidth', 'recent-alerts', 'top-ports', 'problem-ports', 'top-cpu', 'hottest', 'duplicate-ips', 'uptime', 'all-devices'];
@@ -106,7 +107,7 @@ function TopBandwidthWidget({ devices }) {
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <StatusDot status={d.status} />
-                    <span style={{ color: 'var(--text-primary)', fontSize: 12 }}>{d.name || d.ip}</span>
+                    <span style={{ color: 'var(--text-primary)', fontSize: 12 }}>{deviceLabel(d)}</span>
                   </div>
                 </td>
                 <td style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{d.ip}</td>
@@ -309,7 +310,7 @@ function TopCpuWidget() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <StatusDot status={d.status} />
-                    <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{d.name || d.ip}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{deviceLabel(d)}</span>
                   </div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{d.ip}</span>
                 </div>
@@ -550,7 +551,7 @@ export default function DashboardPage() {
           ⚠️ {t('devices_unavailable', { count: down, plural: down > 1 ? 's' : '' })}:{' '}
           {devices.filter(d => d.status === 'down').map(d =>
             <Link key={d.id} to={`/devices/${d.id}`} style={{ color: '#fca5a5', marginInlineStart: 8 }}>
-              {d.name || d.ip}
+              {deviceLabel(d)}
             </Link>
           )}
         </div>

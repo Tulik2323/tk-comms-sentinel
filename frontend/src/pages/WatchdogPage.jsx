@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../lib/i18n';
 import { useDevices } from '../hooks/useDevices';
+import { deviceLabel } from '../lib/deviceLabel';
 
 const POLL_MS   = 3000;
 const MAX_ITEMS = 100;
@@ -44,12 +45,20 @@ function sendNotification(c) {
   } catch (_) {}
 }
 
+// מחזיר null כשהקריאה נכשלה (שגיאת רשת/SNMP או רשימה ריקה). חשוב להבדיל
+// בין "נכשל" לבין "אין שינוי": קריאה שנכשלה לא דורסת את ה-baseline, אחרת
+// ניתוק שקרה בזמן התקלה נבלע בשקט.
 async function fetchLiveStatus(id, token) {
-  const r = await fetch(`/api/devices/${id}/ports/live-status`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) return [];
-  return r.json();
+  try {
+    const r = await fetch(`/api/devices/${id}/ports/live-status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    return Array.isArray(data) && data.length > 0 ? data : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 function buildIndex(portsArr) {
@@ -61,7 +70,9 @@ function buildIndex(portsArr) {
 export default function WatchdogPage() {
   const { t }                   = useTranslation();
   const { devices }             = useDevices();
-  const upDevices               = devices.filter(d => d.status === 'up');
+  const upDevices               = devices
+    .filter(d => d.status === 'up')
+    .sort((a, b) => deviceLabel(a).localeCompare(deviceLabel(b), undefined, { numeric: true }));
 
   const [devSearch, setDevSearch]     = useState('');
   const [selected,  setSelected]      = useState(new Set());
@@ -69,6 +80,7 @@ export default function WatchdogPage() {
   const [changes,   setChanges]       = useState([]);   // [{id, ts, devName, if_name, prev, curr}]
   const [notifyOk,  setNotifyOk]      = useState(false);
   const [error,     setError]         = useState('');
+  const [failing,   setFailing]       = useState(new Set());  // מכשירים שהקריאה האחרונה מהם נכשלה
 
   const intervalRef = useRef(null);
   const inFlightRef = useRef(false);
@@ -103,11 +115,14 @@ export default function WatchdogPage() {
     const ids    = [...selected];
     const devMap = Object.fromEntries(devices.map(d => [String(d.id), d]));
     const base   = {};
+    const failed = new Set();
     await Promise.all(ids.map(async id => {
-      const ports = await fetchLiveStatus(id, token).catch(() => []);
-      base[id]    = buildIndex(ports);
+      const ports = await fetchLiveStatus(id, token);
+      if (ports) base[id] = buildIndex(ports);
+      else failed.add(id);       // ה-baseline ייקבע בקריאה המוצלחת הראשונה
     }));
     prevRef.current = base;
+    setFailing(failed);
     setChanges([]);
     setRunning(true);
 
@@ -117,10 +132,13 @@ export default function WatchdogPage() {
       inFlightRef.current = true;
       try {
         const fresh = [];
+        const failedNow = new Set();
         await Promise.all(ids.map(async id => {
-          const ports   = await fetchLiveStatus(id, token).catch(() => []);
+          const ports = await fetchLiveStatus(id, token);
+          if (!ports) { failedNow.add(id); return; }   // שומרים את ה-baseline הקודם
           const currIdx = buildIndex(ports);
-          const prevIdx = prevRef.current[id] || {};
+          const prevIdx = prevRef.current[id];
+          if (!prevIdx) { prevRef.current[id] = currIdx; return; }
           const dev     = devMap[String(id)];
           const ts      = new Date().toLocaleTimeString('he-IL');
           for (const [ifIdx, status] of Object.entries(currIdx)) {
@@ -130,7 +148,8 @@ export default function WatchdogPage() {
               const c = {
                 id:       `${id}_${ifIdx}_${Date.now()}`,
                 deviceId: id,
-                devName:  dev?.name || dev?.ip || id,
+                devName:  deviceLabel(dev) || id,
+                devIp:    dev?.ip || '',
                 if_index: ifIdx,
                 if_name:  portInfo?.if_name || portInfo?.if_descr || `Port ${ifIdx}`,
                 prev, curr: status, ts,
@@ -140,8 +159,11 @@ export default function WatchdogPage() {
               sendNotification(c);
             }
           }
-          prevRef.current[id] = currIdx;
+          // מיזוג: פורט שחסר בקריאה חלקית שומר את הסטטוס הקודם שלו
+          prevRef.current[id] = { ...prevIdx, ...currIdx };
         }));
+        if (!intervalRef.current) return;   // נעצר בזמן הקריאה
+        setFailing(failedNow);
         if (fresh.length > 0) {
           setChanges(prev => [...fresh, ...prev].slice(0, MAX_ITEMS));
         }
@@ -154,6 +176,7 @@ export default function WatchdogPage() {
   function stop() {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     prevRef.current = {};
+    setFailing(new Set());
     setRunning(false);
   }
 
@@ -164,8 +187,9 @@ export default function WatchdogPage() {
     const q = devSearch.trim().toLowerCase();
     return q
       ? upDevices.filter(d =>
-          (d.name || '').toLowerCase().includes(q) ||
-          (d.ip   || '').includes(q))
+          (d.name     || '').toLowerCase().includes(q) ||
+          (d.sys_name || '').toLowerCase().includes(q) ||
+          (d.ip       || '').includes(q))
       : upDevices;
   })();
 
@@ -221,9 +245,9 @@ export default function WatchdogPage() {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)',
                                 whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {d.name || d.ip}
+                    {deviceLabel(d)}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{d.ip}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}><bdi dir="ltr">{d.ip}</bdi></div>
                 </div>
               </label>
             );
@@ -270,7 +294,7 @@ export default function WatchdogPage() {
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px 20px', overflow: 'auto' }}>
 
         {/* Status bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
           {running ? (
             <>
               <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
@@ -278,15 +302,22 @@ export default function WatchdogPage() {
               <span style={{ fontSize: 13, fontWeight: 600, color: '#22c55e' }}>{t('monitoring_active')}</span>
               {[...selected].map(id => {
                 const d = devices.find(x => String(x.id) === id);
+                const bad = failing.has(id);
                 return d ? (
-                  <span key={id} style={{
+                  <span key={id} title={bad ? t('watchdog_read_failed_tip') : d.ip} style={{
                     fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                    background: 'rgba(59,130,246,0.15)', color: '#60a5fa',
+                    background: bad ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                    color:      bad ? '#ef4444' : '#60a5fa',
                   }}>
-                    {d.name || d.ip}
+                    {bad ? '⚠️ ' : ''}{deviceLabel(d)}
                   </span>
                 ) : null;
               })}
+              {failing.size > 0 && (
+                <span style={{ fontSize: 11, color: '#ef4444' }}>
+                  {t('watchdog_read_failed', { count: failing.size })}
+                </span>
+              )}
             </>
           ) : (
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
@@ -338,6 +369,11 @@ export default function WatchdogPage() {
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
                   {c.devName}
+                  {c.devIp && c.devIp !== c.devName && (
+                    <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-muted)', marginInlineStart: 6 }}>
+                      <bdi dir="ltr">{c.devIp}</bdi>
+                    </span>
+                  )}
                 </span>
                 <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-primary)' }}>
                   {c.if_name}

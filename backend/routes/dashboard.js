@@ -4,6 +4,7 @@ const router  = express.Router();
 const { getDb }       = require('../db/database');
 const { requireAuth } = require('../middleware/auth');
 const uptimeLog       = require('../services/uptimeLog');
+const { DEVICE_LABEL_SQL } = require('../lib/deviceLabel');
 
 // GET /api/dashboard/top-ports?limit=10
 // 10 הפורטים הכי עמוסים ברגע זה (לפי in_bps + out_bps)
@@ -16,7 +17,7 @@ router.get('/top-ports', requireAuth, (req, res) => {
       p.in_bps, p.out_bps, p.in_errors, p.out_errors,
       p.oper_status, p.if_speed,
       d.id   AS device_id,
-      d.name AS device_name,
+      ${DEVICE_LABEL_SQL()} AS device_name,
       d.ip   AS device_ip
     FROM ports p
     JOIN devices d ON d.id = p.device_id
@@ -97,7 +98,7 @@ router.get('/problem-ports', requireAuth, (req, res) => {
   const ports = db.prepare(`
     SELECT p.id, p.if_index, p.if_name, p.if_descr, p.if_alias,
            p.in_errors, p.out_errors, p.in_bps, p.out_bps, p.oper_status, p.if_speed,
-           d.id AS device_id, d.name AS device_name, d.ip AS device_ip
+           d.id AS device_id, ${DEVICE_LABEL_SQL()} AS device_name, d.ip AS device_ip
     FROM ports p JOIN devices d ON d.id = p.device_id
     WHERE d.status = 'up'
   `).all();

@@ -9,6 +9,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { getDb } = require('../db/database');
+const { deviceLabel } = require('../lib/deviceLabel');
 
 // מפתחות התצוגות שיש להן תמונת חזית ומיקומי פורטים (frontend/src/lib/switchLayouts.json)
 const LAYOUT_KEYS = ['6300M-48', '5130-48', '5130-24', '2930F-48', '2930M-48', '2930M-24', '8360-48Y6C'];
@@ -93,7 +94,7 @@ const validSpeed = (bps) => (bps > 0 && bps < 4294967295 ? Number(bps) : null);
 function buildLayout(device) {
   const db = getDb();
   const family = familyOf(device);
-  if (!family) return { supported: false, device: { id: device.id, name: device.name || device.ip, ip: device.ip, model: device.model } };
+  if (!family) return { supported: false, device: { id: device.id, name: deviceLabel(device), ip: device.ip, model: device.model } };
 
   const rows = db.prepare(`
     SELECT if_index, if_name, if_descr, if_alias, if_speed, oper_status, admin_status,
@@ -158,7 +159,7 @@ function buildLayout(device) {
 
   return {
     supported: true, family,
-    device: { id: device.id, name: device.name || device.ip, ip: device.ip, model: device.model, status: device.status, stack_members: device.stack_members },
+    device: { id: device.id, name: deviceLabel(device), ip: device.ip, model: device.model, status: device.status, stack_members: device.stack_members },
     temps: hw && hw.temps ? hw.temps : [],
     hw_known: !!(hw && hw.members),
     members,

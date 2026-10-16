@@ -10,6 +10,7 @@ const { attachHostnames } = require('../services/hostnames');
 const { PORT_METRICS, DEFAULT_DURATION_MIN, parsePct, parseDuration, savePortThreshold } = require('../services/thresholds');
 const { toCSV }         = require('../services/csv');
 const { isIPv4, cleanText, intInRange, expandRange, expandCIDR } = require('../services/validate');
+const { deviceLabel, DEVICE_LABEL_SQL } = require('../lib/deviceLabel');
 
 const SNMP_VERSIONS = ['v2c', 'v3'];
 const MAX_SCAN_IPS  = 1024;
@@ -86,7 +87,7 @@ router.get('/endpoint-search', requireAuth, (req, res) => {
   const ACCESS_MAX_MACS = 8;
   const baseSql = `
     SELECT me.mac_address, me.ip_address, me.device_id, me.phys_if_index,
-           me.last_seen, d.name AS device_name, d.ip AS device_ip,
+           me.last_seen, ${DEVICE_LABEL_SQL()} AS device_name, d.ip AS device_ip,
            p.if_name, p.if_alias,
            CASE WHEN me.phys_if_index IS NULL THEN NULL ELSE (
              SELECT COUNT(DISTINCT m2.mac_address) FROM mac_entries m2
@@ -284,7 +285,7 @@ router.put('/:id/port-threshold/:ifIndex', requireAdmin, (req, res) => {
   const dur = parseDuration(duration_min);
   if (!dur.ok) return res.status(400).json({ error: 'duration_min חייב להיות מספר שלם בין 0 ל-1440' });
 
-  const device = db.prepare('SELECT id, name, ip FROM devices WHERE id = ?').get(devId);
+  const device = db.prepare('SELECT id, name, sys_name, ip FROM devices WHERE id = ?').get(devId);
   if (!device) {
     return res.status(404).json({ error: 'מכשיר לא נמצא' });
   }
@@ -292,7 +293,7 @@ router.put('/:id/port-threshold/:ifIndex', requireAdmin, (req, res) => {
   // משך ריק = ירושה מסף המכשיר/הגלובלי
   savePortThreshold(db, { deviceId: devId, ifIndex, metric, pct, duration: dur.value ?? null });
 
-  const scope = `${device.name || device.ip} / ifIndex ${ifIndex}`;
+  const scope = `${deviceLabel(device)} / ifIndex ${ifIndex}`;
   const who   = { username: req.user.username, ip: req.ip, device_id: device.id };
   if (dur.value == null) logAudit('info', 'admin', 'threshold_saved_nodur', { scope, metric, pct }, who);
   else                   logAudit('info', 'admin', 'threshold_saved', { scope, metric, pct, duration: dur.value }, who);
@@ -313,9 +314,9 @@ router.delete('/:id/port-threshold/:ifIndex/:metric', requireAdmin, (req, res) =
   `).run(devId, ifIndex, metric).changes;
 
   if (removed > 0) {
-    const device = db.prepare('SELECT id, name, ip FROM devices WHERE id = ?').get(devId);
+    const device = db.prepare('SELECT id, name, sys_name, ip FROM devices WHERE id = ?').get(devId);
     logAudit('info', 'admin', 'threshold_deleted', {
-      scope: `${device ? (device.name || device.ip) : devId} / ifIndex ${ifIndex}`, metric,
+      scope: `${device ? deviceLabel(device) : devId} / ifIndex ${ifIndex}`, metric,
     }, { username: req.user.username, ip: req.ip, device_id: device ? device.id : null });
   }
 
@@ -449,7 +450,7 @@ router.put('/:id', requireAdmin, (req, res) => {
     name, ip, snmp_version, community, snmp_v3_user, snmp_v3_auth, snmp_v3_priv, poll_interval_sec, location, notes,
   }).filter(([, v]) => v !== undefined).map(([k]) => k);
   if (fields.length > 0) {
-    logAudit('info', 'admin', 'device_updated', { device: name || device.name || device.ip, fields: fields.join(', ') },
+    logAudit('info', 'admin', 'device_updated', { device: name || deviceLabel(device), fields: fields.join(', ') },
       { username: req.user.username, ip: req.ip, device_id: device.id });
   }
 
@@ -459,12 +460,12 @@ router.put('/:id', requireAdmin, (req, res) => {
 // מחק מכשיר
 router.delete('/:id', requireAdmin, (req, res) => {
   const db = getDb();
-  const device = db.prepare('SELECT id, name, ip FROM devices WHERE id = ?').get(req.params.id);
+  const device = db.prepare('SELECT id, name, sys_name, ip FROM devices WHERE id = ?').get(req.params.id);
   const result = db.prepare('DELETE FROM devices WHERE id = ?').run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'מכשיר לא נמצא' });
   // device_id לא נשמר בשורה: המכשיר כבר נמחק, ושם וכתובת נשארים בפרמטרים
   if (device) {
-    logAudit('warn', 'admin', 'device_deleted', { device: device.name || device.ip, ip: device.ip },
+    logAudit('warn', 'admin', 'device_deleted', { device: deviceLabel(device), ip: device.ip },
       { username: req.user.username, ip: req.ip });
   }
   res.json({ ok: true });

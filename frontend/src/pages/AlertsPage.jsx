@@ -7,6 +7,7 @@ import { useDevices } from '../hooks/useDevices';
 import Modal from '../components/ui/Modal';
 import { formatAlert } from '../lib/alertFormat';
 import api from '../lib/api';
+import { deviceLabel } from '../lib/deviceLabel';
 
 const METRIC_ICONS = {
   bandwidth_in: '↓', bandwidth_out: '↑',
@@ -95,7 +96,7 @@ function ThresholdModal({ open, onClose, onSaved, devices, thresholds, initial }
           <select className="nm-input" value={deviceId} onChange={e => pick(e.target.value, metric)}>
             <option value="">{t('global_all_devices')}</option>
             {devices.map(d => (
-              <option key={d.id} value={d.id}>{d.name || d.ip}</option>
+              <option key={d.id} value={d.id}>{deviceLabel(d)}</option>
             ))}
           </select>
         </div>

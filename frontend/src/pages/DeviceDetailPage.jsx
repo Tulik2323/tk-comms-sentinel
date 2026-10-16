@@ -12,6 +12,7 @@ import { formatBps, formatUptime } from '../lib/api';
 import { tempLevel, tempLimits } from '../lib/temperature';
 import api from '../lib/api';
 import SwitchLayout from '../components/layout/SwitchLayout';
+import { deviceLabel } from '../lib/deviceLabel';
 
 // טיפ בגרף
 function CustomTooltip({ active, payload, label }) {
@@ -213,7 +214,7 @@ export default function DeviceDetailPage() {
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
         <Link to="/devices" style={{ color: 'var(--accent)' }}>{t('devices')}</Link>
         {' › '}
-        {device.name || device.ip}
+        {deviceLabel(device)}
       </div>
 
       {/* Header */}
@@ -557,6 +558,7 @@ export default function DeviceDetailPage() {
                 <tbody>
                   {portChanges.map(c => {
                     const ATTR_LABELS = {
+                      oper_status:  t('attr_oper_status'),
                       if_alias:     t('col_description'),
                       admin_status: 'Admin',
                       if_speed:     t('col_speed'),
@@ -570,7 +572,10 @@ export default function DeviceDetailPage() {
                       return v;
                     };
                     const fmt = (attr, v) =>
-                      attr === 'if_speed' ? fmtSpeed(v) : (v || '—');
+                      attr === 'oper_status' ? (v === 'up' ? `🟢 ${t('link_connected')}` : `🔴 ${t('link_disconnected')}`)
+                      : attr === 'if_speed' ? fmtSpeed(v) : (v || '—');
+                    const color = (attr, v, isNew) =>
+                      attr === 'oper_status' ? (v === 'up' ? '#22c55e' : '#ef4444') : (isNew ? '#22c55e' : '#ef4444');
                     return (
                       <tr key={c.id}>
                         <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
@@ -578,8 +583,8 @@ export default function DeviceDetailPage() {
                         </td>
                         <td style={{ fontSize: 12, fontWeight: 600 }}>{c.if_name || `#${c.if_index}`}</td>
                         <td style={{ fontSize: 12 }}>{ATTR_LABELS[c.attribute] || c.attribute}</td>
-                        <td style={{ fontSize: 12, color: '#ef4444' }}>{fmt(c.attribute, c.old_value)}</td>
-                        <td style={{ fontSize: 12, color: '#22c55e' }}>{fmt(c.attribute, c.new_value)}</td>
+                        <td style={{ fontSize: 12, color: color(c.attribute, c.old_value, false) }}>{fmt(c.attribute, c.old_value)}</td>
+                        <td style={{ fontSize: 12, color: color(c.attribute, c.new_value, true) }}>{fmt(c.attribute, c.new_value)}</td>
                       </tr>
                     );
                   })}
