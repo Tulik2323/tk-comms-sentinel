@@ -1,5 +1,7 @@
 $ErrorActionPreference = 'Continue'
 $PROD  = 'C:\inetpub\wwwroot\tkcommssentinel'
+$LIVE_HOST = 'srv-tk'   # the IIS binding host (*:9443:srv-tk); requests to 127.0.0.1 get HTTP 400
+$LIVE_PORT = 9443
 $SRC   = $PSScriptRoot
 $ISCC  = "C:\Users\tulik\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
 $GH    = "C:\Program Files\GitHub CLI\gh.exe"
@@ -57,9 +59,24 @@ Set-Location "$PROD\backend"
 Set-Location $SRC
 
 Import-Module WebAdministration -ErrorAction SilentlyContinue
-Stop-WebAppPool 'tkcommssentinel'
-Start-Sleep -Seconds 2
-Start-WebAppPool 'tkcommssentinel'
+# A pool takes several seconds to stop, and starting one that is still "Stopping" fails with
+# 0x80070425. A fixed 2-second wait did exactly that in 1.12.0: the live site stayed down (503)
+# while this script printed OK. So wait for Stopped, retry the start, and check the live site.
+Stop-WebAppPool 'tkcommssentinel' -ErrorAction SilentlyContinue
+$deadline = (Get-Date).AddSeconds(60)
+while ((Get-WebAppPoolState 'tkcommssentinel').Value -ne 'Stopped' -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+$poolStarted = $false
+for ($i = 1; $i -le 10 -and -not $poolStarted; $i++) {
+    try { Start-WebAppPool 'tkcommssentinel' -ErrorAction Stop } catch { Start-Sleep -Seconds 2 }
+    Start-Sleep -Seconds 1
+    $poolStarted = (Get-WebAppPoolState 'tkcommssentinel').Value -eq 'Started'
+}
+if (-not $poolStarted) {
+    Write-Host "  App Pool did NOT start - the live site is down. Run: Start-WebAppPool tkcommssentinel" -ForegroundColor Red
+    exit 1
+}
+& node "$SRC\tools\check-live-health.js" $LIVE_HOST $LIVE_PORT $ver
+if ($LASTEXITCODE -ne 0) { Write-Host "  Live site is not serving v$ver - stopping before the release is published" -ForegroundColor Red; exit 1 }
 Write-Host "  App Pool restarted OK" -ForegroundColor Green
 
 # 5. prepare package\versions\{ver} for Inno Setup

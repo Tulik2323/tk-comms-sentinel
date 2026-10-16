@@ -2,6 +2,16 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.12.1] — 2026-10-16
+
+### Fixed
+- **Release process: the web server could be left stopped after an update.** Deploying 1.12.0 restarted
+  the IIS application pool with a fixed 2-second pause; the pool was still stopping, the start was
+  refused, and the site answered "503 Service Unavailable" for several minutes while the deploy reported
+  success (the poller and the alerts kept running). The deploy now waits until the pool has stopped,
+  retries the start, and checks that the live site answers with the new version before anything is
+  published. The application itself is unchanged in this release.
+
 ## [1.12.0] — 2026-10-16
 
 ### Removed
