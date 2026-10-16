@@ -2,6 +2,13 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.12.0] — 2026-10-16
+
+### Removed
+- **The "Open in IMC" link** (added in 1.9.0) is gone from the Alerts page (busy-port alerts and the
+  recurring-alerts panel) and from the port-details panel in the Switch Layout tab, together with its
+  fixed IMC address. Nothing else changes: the system never read or stored IMC data.
+
 ## [1.11.2] — 2026-10-16
 
 ### Fixed
@@ -57,7 +64,7 @@ All notable changes to TK Comms Sentinel are documented here.
   IMC" link. It opens the organization's HPE IMC (NTA / traffic analysis) in a new tab, so a port that
   triggered an alert can be checked for "who is generating the load" without leaving the switch's own
   sFlow collector. The link only opens IMC's traffic-analysis screen — it does not change, read, or
-  collect any data from IMC itself.
+  collect any data from IMC itself. *(Removed in 1.12.0.)*
 
 ## [1.8.0] — 2026-10-08
 
