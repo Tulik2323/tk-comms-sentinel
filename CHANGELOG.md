@@ -2,6 +2,24 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.12.2] — 2026-10-16
+
+### Fixed
+- **Addresses shown scrambled in the Hebrew interface.** In the search results a MAC address could appear
+  with its parts reordered (for example `aa:bb:01:10:65:30` instead of `10:65:30:aa:bb:01`) and host names
+  were broken across lines; the CSV-import example and its input box showed the IP at the end of the line.
+  MAC addresses, IPs and host names are now always shown left to right, each kept on one line.
+- **Outage start time was ~20 seconds late** when the fast ping caught it: it was the moment the outage was
+  confirmed (second missed ping). It is now the first missed ping, as the outage history says.
+- The outage-history note on the Dashboard now explains that the fast ping (every 20 seconds, two missed
+  pings) records outages, not only 3 failed SNMP polls.
+
+### Security
+- **Removed real network data from the product.** A sample device list with live addresses and an SNMP
+  community string, and the same community string in the CSV-import example, were part of the source and
+  the installer. They are gone, and every example in the interface (base URL, scan range, CSV, diagnostic
+  tools) now uses generic addresses.
+
 ## [1.12.1] — 2026-10-16
 
 ### Fixed
@@ -191,7 +209,7 @@ Three new windows on the Dashboard, and temperature readings for most of the swi
   because they now come from the right column.
   The temperature list of a device is now sorted from the hottest sensor down, so the Devices page column
   and the new widget both show the maximum.
-- The HP 10508 core switch (10.221.0.244) was not recognised as a Comware switch, so it had no hardware
+- The HP 10508 core switch was not recognised as a Comware switch, so it had no hardware
   status at all. The vendor is now detected from its description.
 - **Dialogs opened in English were laid out right to left.** The dialog frame is now always in the
   direction of the page.

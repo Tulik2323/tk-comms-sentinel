@@ -3,7 +3,7 @@
 // ה-SNMP polling הרגיל (poller.js) בודק כל מכשיר לפי poll_interval_sec שלו (ברירת
 // מחדל 300 שניות). נפילה קצרה שמתחילה ומסתיימת בין שני polls עוקבים נשארת בלתי
 // נראית לגמרי — לא רק בלי התראה, אלא בלי שום רישום שהיא בכלל קרתה. זו בדיוק התקרית
-// מ-2026-10-14: GICU_NEW_2 (10.221.0.148) נפל לכ-60 שניות, בדיוק בפער של כ-6.5 דקות
+// מ-2026-10-14: סוויץ' נפל לכ-60 שניות, בדיוק בפער של כ-6.5 דקות
 // בין שני polls, ולא נראה שום רישום בשום מקום.
 //
 // הפתרון כאן: בדיקת ICMP ping קלה לכל המכשירים כל 20 שניות, עצמאית לגמרי מה-SNMP
@@ -63,13 +63,15 @@ async function handleResult(device, ok) {
 
   const fails = (pingFailCount.get(device.id) || 0) + 1;
   pingFailCount.set(device.id, fails);
-  if (fails < PING_FAIL_THRESHOLD) return;
   if (!pingEverOk.has(device.id)) return; // ICMP כנראה חסום למכשיר הזה — אין בסיס להכריע DOWN על פיו
   if (device.status === 'down') return;   // כבר מסומן (על ידי כאן או על ידי ה-SNMP poller) — אל תכפיל טיפול
 
-  db.prepare("UPDATE devices SET status = 'down' WHERE id = ?").run(device.id);
+  // נקרא כבר בכשל הראשון, כדי ששעת ההתחלה של הנפילה תהיה הכשל הראשון ולא רגע האישור
   try { noteFailure(device.id, fails, PING_FAIL_THRESHOLD, now); }
   catch (e) { console.warn(`[FastPing] רישום נפילה נכשל עבור ${device.ip}: ${e.message}`); }
+  if (fails < PING_FAIL_THRESHOLD) return;
+
+  db.prepare("UPDATE devices SET status = 'down' WHERE id = ?").run(device.id);
   console.warn(`[FastPing] ${device.ip} DOWN (ping ${fails}/${PING_FAIL_THRESHOLD})`);
   logAudit('warn', 'poller', 'device_unresponsive',
     { device: device.name || device.ip, why: 'ICMP ping לא נענה', error: 'ping timeout' },

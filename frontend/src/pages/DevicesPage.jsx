@@ -134,17 +134,17 @@ function ScanModal({ open, onClose, onDone }) {
           <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
             {t('cidr_label')}
           </label>
-          <input className="nm-input" value={cidr} onChange={e => { setCidr(e.target.value); if (e.target.value) { setStartIp(''); setEndIp(''); } }} placeholder="10.221.0.0/24" />
+          <input className="nm-input" value={cidr} onChange={e => { setCidr(e.target.value); if (e.target.value) { setStartIp(''); setEndIp(''); } }} placeholder="10.0.1.0/24" />
         </div>
         <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: 8 }}>— {t('or_word')} —</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('ip_start')}</label>
-            <input className="nm-input" value={startIp} onChange={e => { setStartIp(e.target.value); if (e.target.value) setCidr(''); }} placeholder="10.221.0.1" />
+            <input className="nm-input" value={startIp} onChange={e => { setStartIp(e.target.value); if (e.target.value) setCidr(''); }} placeholder="10.0.1.1" />
           </div>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>{t('ip_end')}</label>
-            <input className="nm-input" value={endIp} onChange={e => { setEndIp(e.target.value); if (e.target.value) setCidr(''); }} placeholder="10.221.0.254" />
+            <input className="nm-input" value={endIp} onChange={e => { setEndIp(e.target.value); if (e.target.value) setCidr(''); }} placeholder="10.0.1.254" />
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
@@ -345,9 +345,9 @@ function CsvImportModal({ open, onClose, onImported }) {
   return (
     <Modal open={open} onClose={handleClose} title={`📥 ${t('import_csv_title')}`}>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, background: 'var(--bg-secondary)', padding: '8px 12px', borderRadius: 6 }}>
-        {t('csv_format_hint')} <code>ip,name,community,snmp_version,location</code><br />
-        {t('csv_example')} <code>10.221.0.1,Core-SW-01,POCrd19,v2c,Floor 1</code><br />
-        {t('csv_comment_hint')} <code>snmp_version</code> {t('csv_default')}
+        {t('csv_format_hint')} <code dir="ltr">ip,name,community,snmp_version,location</code><br />
+        {t('csv_example')} <code dir="ltr">10.0.1.1,Core-SW-01,public,v2c,Floor 1</code><br />
+        {t('csv_comment_hint')} <code dir="ltr">snmp_version</code> {t('csv_default')}
       </div>
       <div style={{ marginBottom: 12 }}>
         <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
@@ -363,6 +363,7 @@ function CsvImportModal({ open, onClose, onImported }) {
         <textarea
           className="nm-input"
           rows={8}
+          dir="ltr"
           style={{ fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
           value={csvText}
           onChange={e => setCsvText(e.target.value)}
@@ -493,7 +494,7 @@ export default function DevicesPage() {
   });
 
   // IP חייב מיון מספרי לפי אוקטטות. מיון טקסטואלי היה מציב
-  // 10.221.0.106 לפני 10.221.0.25, וזה בדיוק מה שמקשה למצוא מכשיר.
+  // 10.0.1.106 לפני 10.0.1.25, וזה בדיוק מה שמקשה למצוא מכשיר.
   const ipToNum = (ip) =>
     String(ip || '').split('.').reduce((acc, o) => acc * 256 + (parseInt(o, 10) || 0), 0);
 

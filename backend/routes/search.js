@@ -47,7 +47,7 @@ router.get('/', requireAuth, (req, res) => {
     LEFT JOIN ports p ON p.device_id = m.device_id
                      AND p.if_index = COALESCE(m.phys_if_index, m.if_index)
   `;
-  // התאמה מדויקת ל-IP קודם (מונע ש-"10.221.43.1" יתפוס גם .10/.13/.14),
+  // התאמה מדויקת ל-IP קודם (מונע ש-"10.0.43.1" יתפוס גם .10/.13/.14),
   // אחרת substring / MAC.
   let macRows = db.prepare(`${macBaseSql} WHERE m.ip_address = ? LIMIT 60`).all(q);
   if (macRows.length === 0) {

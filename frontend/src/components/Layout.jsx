@@ -191,21 +191,22 @@ export default function Layout({ children }) {
                   {r.type === 'device' ? (
                     <>
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                        🖧 {r.name || r.ip}
+                        🖧 <bdi>{r.name || r.ip}</bdi>
                       </div>
-                      <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>{r.ip}</div>
+                      <div style={{ color: 'var(--text-muted)', marginTop: 2 }}><bdi dir="ltr">{r.ip}</bdi></div>
                     </>
                   ) : (
                     <>
+                      {/* bdi: בממשק עברית כתובת MAC/IP ושם מארח מתהפכים בלי בידוד כיוון (aa:bb:01:10:65:30 במקום 10:65:30:aa:bb:01) */}
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
-                        📡 {r.mac_address}
+                        📡 <bdi dir="ltr">{r.mac_address}</bdi>
                       </div>
                       <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
-                        {r.ip_address && <span>{r.ip_address} · </span>}
-                        {r.hostname && <span>{r.hostname} · </span>}
-                        {r.device_name || r.device_ip}
+                        {r.ip_address && <><bdi dir="ltr" style={{ whiteSpace: 'nowrap' }}>{r.ip_address}</bdi> · </>}
+                        {r.hostname && <><bdi dir="ltr" style={{ whiteSpace: 'nowrap' }}>{r.hostname}</bdi> · </>}
+                        <bdi style={{ whiteSpace: 'nowrap' }}>{r.device_name || r.device_ip}</bdi>
                         {(r.if_alias || r.if_descr || r.if_name) && (
-                          <span> · {r.if_alias || r.if_descr || r.if_name}</span>
+                          <> · <bdi style={{ whiteSpace: 'nowrap' }}>{r.if_alias || r.if_descr || r.if_name}</bdi></>
                         )}
                       </div>
                     </>

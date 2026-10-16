@@ -592,7 +592,7 @@ export default function AdminPage() {
             </div>
             <SettingField label={t('base_url_label')} name="app_base_url"
               value={settings.app_base_url} onChange={handleSettingChange}
-              placeholder="http://10.221.0.5:8080" />
+              placeholder="https://netmon.example.local:9443" />
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
               {t('base_url_note')}
             </div>

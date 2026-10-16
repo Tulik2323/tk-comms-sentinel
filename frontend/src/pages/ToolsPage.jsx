@@ -85,7 +85,7 @@ export default function ToolsPage() {
               </label>
               <input className="nm-input" value={target} required
                 onChange={e => setTarget(e.target.value)}
-                placeholder="10.221.0.2" style={{ fontFamily: 'monospace' }} />
+                placeholder="10.0.1.2" style={{ fontFamily: 'monospace' }} />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>

@@ -103,8 +103,8 @@ router.get('/endpoint-search', requireAuth, (req, res) => {
     LEFT JOIN ports p ON p.device_id = me.device_id AND p.if_index = me.phys_if_index
   `;
 
-  // התאמה מדויקת קודם: substring לבד הופך "10.221.43.1" למתאים גם ל-
-  // "10.221.43.10", "10.221.43.12" וכו' — מציף תוצאות של מכשירים אחרים
+  // התאמה מדויקת קודם: substring לבד הופך "10.0.43.1" למתאים גם ל-
+  // "10.0.43.10", "10.0.43.12" וכו' — מציף תוצאות של מכשירים אחרים
   // לגמרי סביב הפורט הנכון היחיד שהמשתמש מחפש. נופלים ל-substring רק
   // כשאין שום התאמה מדויקת (למשל חיפוש חלקי מכוון של MAC).
   let rows = db.prepare(`${baseSql} WHERE LOWER(me.ip_address) = ? OR LOWER(me.mac_address) = ? LIMIT 60`)

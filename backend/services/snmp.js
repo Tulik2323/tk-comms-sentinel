@@ -722,7 +722,7 @@ async function getHardwareStatusComware(device) {
 }
 
 // Aruba ProCurve / HP ProCurve: Entity MIB + Entity Sensor MIB
-// Confirmed on Aruba 2930M-40G-8SR-PoE (10.221.0.119):
+// Confirmed on Aruba 2930M-40G-8SR-PoE:
 //   entPhysicalClass=7 (fan) at 11001-11005 => entPhySensorOperStatus 1=ok
 //   entPhysicalClass=6 (PSU) at 14001-14002  => no sensor status available, report present
 //   entPhySensorType=8 (celsius) at 12001 => entPhySensorValue=24
