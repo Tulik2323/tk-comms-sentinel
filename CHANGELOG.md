@@ -2,6 +2,15 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.11.2] — 2026-10-16
+
+### Fixed
+- **Settings changes could be lost without anyone noticing.** The "Save settings" button sat at the very
+  bottom of a long Admin page, so a ticked box (for example "Send alerts to Telegram") was easy to leave
+  unsaved, and the alerts silently stayed off. The save button now stays pinned to the bottom of the
+  screen, shows "You have unsaved changes" with an amber line as soon as something changes, and asks
+  before leaving the page (another menu item, refresh or closing the tab) while changes are unsaved.
+
 ## [1.11.1] — 2026-10-14
 
 ### Fixed

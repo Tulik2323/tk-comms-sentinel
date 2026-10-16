@@ -20,6 +20,13 @@ const TG_KINDS = ['device_down', 'device_up', 'path_outage', 'device_bandwidth',
 // מה שהמייל קיבל לפני שאפשר היה לבחור — ברירת המחדל כש-email_types לא נשמר מעולם (כמו EMAIL_DEFAULT_KINDS ב-backend)
 const EMAIL_DEFAULT_KINDS = ['device_down', 'device_bandwidth', 'cpu', 'mem', 'port_bandwidth'];
 
+// הגדרה שלא נשמרה מעולם שווה לערך ריק, חוץ מרשימות הסוגים: אצלן "לא נשמר" פירושו ברירת המחדל, ו"ריק" פירושו אף סוג
+const UNSET_MEANS = { telegram_types: TG_KINDS.join(','), email_types: EMAIL_DEFAULT_KINDS.join(',') };
+function sameSettings(a, b) {
+  const norm = (o, k) => String(o[k] ?? UNSET_MEANS[k] ?? '');
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].every(k => norm(a, k) === norm(b, k));
+}
+
 function SettingField({ label, desc, name, value, onChange, type = 'text', placeholder, ltr }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -59,10 +66,30 @@ export default function AdminPage() {
   const [updateChecking,   setUpdateChecking]   = useState(false);
   const [updateInfo,       setUpdateInfo]       = useState(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
+  // ההגדרות כפי שהן שמורות בשרת, לזיהוי שינויים שלא נשמרו
+  const [savedSnapshot, setSavedSnapshot] = useState(null);
+  const dirty = savedSnapshot !== null && !sameSettings(settings, savedSnapshot);
 
   function loadSettings() {
-    api.get('/admin/settings').then(r => setSettings(r.data)).catch(console.error);
+    api.get('/admin/settings').then(r => { setSettings(r.data); setSavedSnapshot(r.data); }).catch(console.error);
   }
+
+  // יציאה מהדף עם שינויים שלא נשמרו: רענון/סגירה דרך beforeunload, ומעבר בתוך האפליקציה דרך לחיצה על קישור
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    const onLinkClick = (e) => {
+      const a = e.target.closest && e.target.closest('a[href]');
+      if (!a || a.target === '_blank' || e.defaultPrevented) return;
+      if (!window.confirm(t('unsaved_leave_confirm'))) { e.preventDefault(); e.stopPropagation(); }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    document.addEventListener('click', onLinkClick, true);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      document.removeEventListener('click', onLinkClick, true);
+    };
+  }, [dirty, t]);
   function loadUsers() {
     api.get('/admin/users').then(r => setUsers(r.data)).catch(console.error);
   }
@@ -187,6 +214,7 @@ export default function AdminPage() {
       Object.entries(settings).filter(([, v]) => v !== '***')
     );
     await api.put('/admin/settings', toSave);
+    setSavedSnapshot(settings);
   }
 
   async function saveSettings(e) {
@@ -570,11 +598,17 @@ export default function AdminPage() {
             </div>
           </Section>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* כפתור השמירה נשאר צמוד לתחתית המסך — בסוף דף ארוך קל לפספס אותו ולאבד שינויים */}
+          <div style={{
+            position: 'sticky', bottom: 0, zIndex: 5, display: 'flex', alignItems: 'center', gap: 12,
+            padding: '12px 16px', margin: '0 -16px', background: 'var(--bg-primary)',
+            borderTop: `1px solid ${dirty ? '#f59e0b' : 'var(--border)'}`,
+          }}>
             <button type="submit" className="nm-btn nm-btn-primary" disabled={saving}>
               {saving ? t('saving') : `💾 ${t('save_settings')}`}
             </button>
-            {saved && <span style={{ color: '#22c55e', fontSize: 13 }}>✅ {t('saved_ok')}</span>}
+            {dirty && !saving && <span style={{ color: '#f59e0b', fontSize: 13, fontWeight: 600 }}>⚠️ {t('unsaved_changes')}</span>}
+            {saved && !dirty && <span style={{ color: '#22c55e', fontSize: 13 }}>✅ {t('saved_ok')}</span>}
           </div>
         </form>
       )}
