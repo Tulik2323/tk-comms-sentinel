@@ -95,8 +95,8 @@ function safeClose(session) {
 }
 
 // יצירת session SNMP לפי גרסה
-function createSession(device) {
-  const opts = { timeout: TIMEOUT, retries: RETRIES };
+function createSession(device, overrides = {}) {
+  const opts = { timeout: TIMEOUT, retries: RETRIES, ...overrides };
 
   if (device.snmp_version === 'v3') {
     // רמת האבטחה נגזרת ממה שהוזן בפועל ולא מקובעת ל-authPriv.
@@ -482,6 +482,23 @@ async function pingSnmp(ip, community, snmp_version = 'v2c') {
       safeClose(session);
       if (err || !varbinds || varbinds.length === 0) resolve(false);
       else resolve(!snmp.isVarbindError(varbinds[0]));
+    });
+  });
+}
+
+// בדיקת חיות SNMP קצרה: GET יחיד ל-sysUpTime עם timeout קצר, בפרטי הגישה המלאים של
+// המכשיר (כולל v3). משמש את ה-ping המהיר כ"דעה שנייה" לפני הכרזת DOWN: מתג שעונה ל-SNMP
+// חי, גם אם בקשות ICMP אליו נזרקות (מתגי Aruba 2930 מגבילים ping למעבד הניהול בעומס).
+function snmpAlive(device, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    let session;
+    try { session = createSession(device, { timeout: timeoutMs, retries: 1 }); }
+    catch (_) { return resolve(false); }
+    const guard = setTimeout(() => { safeClose(session); resolve(false); }, timeoutMs * 2 + 1000);
+    session.get([OID.sysUpTime], (err, varbinds) => {
+      clearTimeout(guard);
+      safeClose(session);
+      resolve(!err && Array.isArray(varbinds) && varbinds.length > 0 && !snmp.isVarbindError(varbinds[0]));
     });
   });
 }
@@ -963,4 +980,4 @@ async function getArpTable(device) {
   }
 }
 
-module.exports = { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getPortStatuses, getHardwareStatus, getStackMembers, getPortVlans, getArpTable, getMacBridgeTable, pingSnmp, explainSnmpError, parseVendorModel, OID };
+module.exports = { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getPortStatuses, getHardwareStatus, getStackMembers, getPortVlans, getArpTable, getMacBridgeTable, pingSnmp, snmpAlive, explainSnmpError, parseVendorModel, OID };

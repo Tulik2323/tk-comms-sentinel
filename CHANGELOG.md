@@ -2,6 +2,23 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.13.1] — 2026-10-17
+
+### Fixed
+- **False "device DOWN" alerts, each followed seconds later by "back up".** The fast ping (every 20 seconds)
+  sent a single ping with a 0.8-second timeout and declared a device down after two misses in a row. A
+  10-minute measurement showed that the Aruba 2930M switches drop pings in short bursts (about 1%) and
+  sometimes answer only after 1–2 seconds; every outage recorded since 14/10 (38 of 39) lasted exactly the
+  ~40-second minimum, the signature of lost pings rather than real outages. Each check now waits up to
+  2 seconds and tries up to 3 times, a reply counts only if it really came from the device, and before an
+  outage is declared the switch is asked over SNMP: if it answers, no outage is declared and no alert is sent.
+  A real outage is still caught in about 40 seconds.
+- **An outage could stay open forever, with no "back up" message.** The SNMP poll reads the device list at
+  the start of its round, which can take several minutes; when the fast ping marked a switch down in the
+  meantime, the poll then set it back to up from its stale copy without closing the outage or the alert
+  (10.221.0.90 on 17/10). The poll now reads the current status, and an outage or DOWN alert left open on a
+  device that is up is closed automatically at its first successful poll.
+
 ## [1.13.0] — 2026-10-16
 
 ### Added

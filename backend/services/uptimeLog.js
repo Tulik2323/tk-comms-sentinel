@@ -31,6 +31,27 @@ function noteFailure(deviceId, fails, threshold, now) {
     .run(deviceId, failStart.get(deviceId) ?? now, now);
 }
 
+// כשלים שלא אושרו כנפילה (למשל ping אבד אבל SNMP ענה): שוכחים את שעת ההתחלה, כדי
+// שנפילה אמיתית מאוחרת יותר לא תתחיל בזמן של הכשל הישן.
+function discardPendingFailure(deviceId) {
+  failStart.delete(deviceId);
+}
+
+// נפילה או התראת DOWN שנשארו פתוחות על מכשיר שה-SNMP poller מצא חי, בלי שהסטטוס היה
+// DOWN (מרוץ בין ה-ping המהיר לסבב ה-SNMP, עד גרסה 1.13.0). נסגרות בשקט, בלי הודעת
+// "חזר"; שעת הסיום היא ה-poll המוצלח הראשון אחרי תחילת הנפילה, ולא עכשיו.
+function closeOrphanOutage(deviceId, now) {
+  const db = getDb();
+  const open = db.prepare('SELECT id, started_at FROM device_outages WHERE device_id = ? AND ended_at IS NULL').get(deviceId);
+  if (open) {
+    const firstOk = db.prepare('SELECT MIN(ts) AS ts FROM metrics WHERE device_id = ? AND ts > ?').get(deviceId, open.started_at)?.ts;
+    db.prepare('UPDATE device_outages SET ended_at = ? WHERE id = ?').run(firstOk || now, open.id);
+    failStart.delete(deviceId);
+  }
+  db.prepare(`UPDATE alert_events SET resolved_at = unixepoch()
+              WHERE device_id = ? AND metric = 'status' AND resolved_at IS NULL`).run(deviceId);
+}
+
 // נקרא מ-poller כשמכשיר שהיה DOWN ענה. סוגר את הנפילה הפתוחה.
 function noteRecovery(deviceId, now) {
   failStart.delete(deviceId);
@@ -270,6 +291,6 @@ function getHottest(limit) {
 }
 
 module.exports = {
-  noteFailure, noteRecovery, noteUptime, markPathOutage, pruneUptimeLog,
+  noteFailure, noteRecovery, discardPendingFailure, closeOrphanOutage, noteUptime, markPathOutage, pruneUptimeLog,
   getOutages, getUptimeOverview, getDeviceLog, getHottest, RANGES,
 };

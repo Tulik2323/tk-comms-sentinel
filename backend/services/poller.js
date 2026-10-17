@@ -8,7 +8,7 @@ const { checkThresholds, checkDeviceDown, resolveDeviceDown, maintainAlertEvents
 const { logAudit } = require('../db/audit');
 const { refreshStaleHostnames } = require('./hostnames');
 const { sendTelegram, flushDelayedPortAlerts } = require('./telegram');
-const { noteFailure, noteRecovery, noteUptime, markPathOutage, pruneUptimeLog } = require('./uptimeLog');
+const { noteFailure, noteRecovery, closeOrphanOutage, noteUptime, markPathOutage, pruneUptimeLog } = require('./uptimeLog');
 const { startFastPing } = require('./fastPing');
 const { deviceLabel } = require('../lib/deviceLabel');
 
@@ -52,6 +52,10 @@ async function pollDevice(device, opts = {}) {
 
     // עדכן מידע וסטטוס UP (כולל vendor/model מה-sysDescr)
     const { vendor, model } = parseVendorModel(info.sys_descr);
+    // הסטטוס הנוכחי נקרא מה-DB ולא מ-device: האובייקט נטען בתחילת הסבב (שיכול להימשך
+    // דקות), וה-ping המהיר עשוי היה לסמן DOWN בינתיים. עם הסטטוס הישן הנפילה נשארה
+    // פתוחה וההתראה לא נסגרה (10.221.0.90, 17/10/2026).
+    const statusBefore = db.prepare('SELECT status FROM devices WHERE id = ?').get(device.id)?.status;
     db.prepare(`
       UPDATE devices
       SET status = 'up', sys_name = ?, sys_descr = ?, uptime_sec = ?, vendor = ?, model = ?
@@ -59,11 +63,15 @@ async function pollDevice(device, opts = {}) {
     `).run(info.sys_name, info.sys_descr, info.uptime_sec, vendor, model, device.id);
 
     // אם חזר מ-down — סגור event ורשום audit
-    if (device.status === 'down') {
+    if (statusBefore === 'down') {
       try { noteRecovery(device.id, now); }
       catch (e) { console.warn(`[Poller] סגירת נפילה נכשלה עבור ${device.ip}: ${e.message}`); }
       resolveDeviceDown(device);
       logAudit('info', 'poller', 'device_back_online', { device: deviceLabel(device) }, { device_id: device.id, ip: device.ip });
+    } else {
+      // ניקוי יתומים: נפילה או התראת DOWN שנשארו פתוחות על מכשיר שמסומן UP
+      try { closeOrphanOutage(device.id, now); }
+      catch (e) { console.warn(`[Poller] סגירת נפילה יתומה נכשלה עבור ${device.ip}: ${e.message}`); }
     }
 
     // --- פורטים ---
@@ -319,7 +327,7 @@ async function pollDevice(device, opts = {}) {
     const fails = (failCount.get(device.id) || 0) + 1;
     failCount.set(device.id, fails);
 
-    const wasUp = device.status !== 'down';
+    const wasUp = (db.prepare('SELECT status FROM devices WHERE id = ?').get(device.id)?.status ?? device.status) !== 'down';
 
     // סמן DOWN ב-DB תמיד — אבל שלח התראה רק אחרי FAIL_THRESHOLD כשלונות ברצף.
     // כשל בודד (blip של SNMP) לא מצדיק מייל.

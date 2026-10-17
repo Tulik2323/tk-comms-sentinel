@@ -15,11 +15,18 @@ const { execFile } = require('child_process');
 const cron = require('node-cron');
 const { getDb } = require('../db/database');
 const { checkDeviceDown, resolveDeviceDown } = require('./alerts');
-const { noteFailure, noteRecovery } = require('./uptimeLog');
+const { noteFailure, noteRecovery, discardPendingFailure } = require('./uptimeLog');
 const { logAudit } = require('../db/audit');
 const { deviceLabel } = require('../lib/deviceLabel');
+const { snmpAlive } = require('./snmp');
 
-const PING_TIMEOUT_MS     = 800;
+// מדידה (17/10/2026, 10 דקות, ping בכל שנייה): מתגי Aruba 2930M זורקים ping בפרצים של
+// כמה שניות (עד ~1%), ולפעמים עונים רק אחרי 1-2 שניות. ping בודד עם timeout של 800ms,
+// פעמיים ברצף, הספיק להכריז DOWN — כל ה"נפילות" מ-14/10 היו בדיוק ~40 שניות. לכן:
+// timeout ארוך יותר, עד 3 ניסיונות לפני שבדיקה נחשבת כשל, ובדיקת SNMP לפני הכרזה.
+const PING_TIMEOUT_MS     = 2000;
+const PING_ATTEMPTS       = 3;      // ניסיונות בכל בדיקה; הצלחה אחת מספיקה
+const PING_RETRY_GAP_MS   = 1000;
 const PING_FAIL_THRESHOLD = 2;   // כשלונות ping רצופים לפני הכרזת DOWN (~40 שניות בקצב הבדיקה כאן)
 const PING_CONCURRENCY    = 10;
 
@@ -35,17 +42,31 @@ const pingEverOk = new Set();
 
 let _cycleRunning = false;
 
-function pingHost(ip) {
+// הצלחה רק כשהגיעה תשובה אמיתית מהיעד (TTL=). ping של Windows מחזיר קוד 0 גם על
+// "Destination host unreachable" מנתב בדרך — זה לא אומר שהמתג חי.
+function pingOnce(ip) {
   return new Promise((resolve) => {
     execFile('ping', ['-n', '1', '-w', String(PING_TIMEOUT_MS), ip],
-      { timeout: PING_TIMEOUT_MS + 1000 },
-      (err) => resolve(!err));
+      { timeout: PING_TIMEOUT_MS + 2000, windowsHide: true },
+      (err, stdout) => resolve(!err && /TTL=/i.test(stdout || '')));
   });
+}
+
+async function pingHost(ip) {
+  for (let i = 0; i < PING_ATTEMPTS; i++) {
+    if (await pingOnce(ip)) return true;
+    if (i < PING_ATTEMPTS - 1) await new Promise(r => setTimeout(r, PING_RETRY_GAP_MS));
+  }
+  return false;
 }
 
 async function handleResult(device, ok) {
   const db  = getDb();
   const now = Math.floor(Date.now() / 1000);
+  // הסטטוס נקרא מחדש: ה-SNMP poller רץ במקביל ועשוי לשנות אותו מאז תחילת הסבב
+  const cur = db.prepare('SELECT status FROM devices WHERE id = ?').get(device.id);
+  if (!cur) return;
+  device = { ...device, status: cur.status };
 
   if (ok) {
     pingEverOk.add(device.id);
@@ -67,11 +88,28 @@ async function handleResult(device, ok) {
   if (!pingEverOk.has(device.id)) return; // ICMP כנראה חסום למכשיר הזה — אין בסיס להכריע DOWN על פיו
   if (device.status === 'down') return;   // כבר מסומן (על ידי כאן או על ידי ה-SNMP poller) — אל תכפיל טיפול
 
-  // נקרא כבר בכשל הראשון, כדי ששעת ההתחלה של הנפילה תהיה הכשל הראשון ולא רגע האישור
+  // הכשל הראשון רק שומר את שעת ההתחלה (כדי שהנפילה תתחיל בכשל הראשון ולא ברגע האישור);
+  // שורת הנפילה עצמה נכתבת רק אחרי האישור למטה
+  if (fails < PING_FAIL_THRESHOLD) {
+    try { noteFailure(device.id, fails, PING_FAIL_THRESHOLD, now); }
+    catch (e) { console.warn(`[FastPing] רישום נפילה נכשל עבור ${device.ip}: ${e.message}`); }
+    return;
+  }
+
+  // דעה שנייה לפני הכרזה: מתג שעונה ל-SNMP לא נפל — ה-ICMP אליו נזרק (הגבלת קצב
+  // במעבד הניהול). הנפילה המתוכננת מבוטלת, והמונה מתאפס.
+  const full = db.prepare('SELECT * FROM devices WHERE id = ?').get(device.id);
+  if (full && await snmpAlive(full).catch(() => false)) {
+    pingFailCount.delete(device.id);
+    discardPendingFailure(device.id);
+    console.warn(`[FastPing] ${device.ip}: ping לא נענה ${fails} בדיקות ברצף אבל SNMP עונה — לא מוכרז DOWN`);
+    return;
+  }
+  // ה-SNMP poller עשוי היה לסמן בינתיים — אל תכפיל טיפול
+  if (db.prepare('SELECT status FROM devices WHERE id = ?').get(device.id)?.status === 'down') return;
+
   try { noteFailure(device.id, fails, PING_FAIL_THRESHOLD, now); }
   catch (e) { console.warn(`[FastPing] רישום נפילה נכשל עבור ${device.ip}: ${e.message}`); }
-  if (fails < PING_FAIL_THRESHOLD) return;
-
   db.prepare("UPDATE devices SET status = 'down' WHERE id = ?").run(device.id);
   console.warn(`[FastPing] ${device.ip} DOWN (ping ${fails}/${PING_FAIL_THRESHOLD})`);
   logAudit('warn', 'poller', 'device_unresponsive',
