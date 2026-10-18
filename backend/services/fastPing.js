@@ -148,4 +148,10 @@ function startFastPing() {
   cron.schedule('*/20 * * * * *', runPingCycle);
 }
 
-module.exports = { startFastPing, runPingCycle };
+// האם המכשיר עונה כרגע ל-ping (ענה בעבר, ואין כשלים פתוחים מאז). ה-SNMP poller משתמש
+// בזה כדי לא להכריז DOWN על מכשיר שרק ה-SNMP שלו לא עונה.
+function pingReachable(deviceId) {
+  return pingEverOk.has(deviceId) && !pingFailCount.has(deviceId);
+}
+
+module.exports = { startFastPing, runPingCycle, pingReachable };

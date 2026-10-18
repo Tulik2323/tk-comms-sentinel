@@ -9,7 +9,7 @@ const { logAudit } = require('../db/audit');
 const { refreshStaleHostnames } = require('./hostnames');
 const { sendTelegram, flushDelayedPortAlerts } = require('./telegram');
 const { noteFailure, noteRecovery, closeOrphanOutage, noteUptime, markPathOutage, pruneUptimeLog } = require('./uptimeLog');
-const { startFastPing } = require('./fastPing');
+const { startFastPing, pingReachable } = require('./fastPing');
 const { deviceLabel } = require('../lib/deviceLabel');
 
 // Map: deviceId -> last poll timestamp
@@ -340,12 +340,12 @@ async function pollDevice(device, opts = {}) {
 
     if (fails < FAIL_THRESHOLD) {
       // עדיין לא הגענו לסף — לא מתריעים
-      return { ok: false, wasUp: false, why, deviceId: device.id };
+      return { ok: false, wasUp: false, confirmed: false, why, deviceId: device.id };
     }
 
     // הגענו לסף — הסבב יחליט אם זו תקלה נקודתית או נפילת נתיב
     if (opts.deferDownAlert) {
-      return { ok: false, wasUp, why, deviceId: device.id };
+      return { ok: false, wasUp, confirmed: true, why, deviceId: device.id };
     }
 
     if (wasUp) {
@@ -466,14 +466,23 @@ async function runCycle() {
         `).run();
       }
 
-      // תקלות נקודתיות — כל אחת מקבלת את הטיפול הרגיל
+      // תקלות נקודתיות — כל אחת מקבלת את הטיפול הרגיל. התראה רק אחרי FAIL_THRESHOLD
+      // כשלונות ברצף: עד 1.13.1 נשלחה התראת DOWN כבר על timeout בודד של SNMP (117 כאלה
+      // בלוג, רק 10 הגיעו ל-3 ברצף), ומיד אחריה "חזר" מה-ping המהיר.
       for (const r of failed) {
+        if (!r.confirmed) continue;
         if (r.wasUp) {
           const dev = db.prepare('SELECT * FROM devices WHERE id = ?').get(r.deviceId);
           if (!dev) continue;
           logAudit('warn', 'poller',
             `מכשיר לא מגיב: ${deviceLabel(dev)} — ${r.why || 'לא ידוע'}`,
             { device_id: dev.id, ip: dev.ip });
+        }
+        // SNMP לא עונה אבל ה-ping המהיר כן: המכשיר ברשת, רק הסוכן שלו לא עונה — לא DOWN
+        if (pingReachable(r.deviceId)) {
+          const d = db.prepare('SELECT ip FROM devices WHERE id = ?').get(r.deviceId);
+          console.warn(`[Poller] ${d ? d.ip : r.deviceId}: SNMP לא עונה ${FAIL_THRESHOLD} פעמים ברצף אבל ping עונה — לא נשלחת התראת DOWN`);
+          continue;
         }
         const dev = db.prepare('SELECT * FROM devices WHERE id = ?').get(r.deviceId);
         if (dev) await checkDeviceDown(dev).catch(() => {});

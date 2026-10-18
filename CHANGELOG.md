@@ -2,6 +2,17 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.13.2] — 2026-10-18
+
+### Fixed
+- **A single SNMP timeout still sent a "device DOWN" alert**, followed seconds later by "back up" from the
+  fast ping (CR_137, 17/10 06:43). The polling round alerted on every failed device, including those that
+  had failed only once, although the design is to alert after 3 failures in a row: the poller log shows 117
+  single SNMP failures and only 10 that reached three in a row. A DOWN alert from the SNMP poll now needs 3
+  failures in a row, and it is not sent at all when the device still answers the fast ping (the device is
+  on the network, only its SNMP agent is not answering). Devices that answer ping are still covered within
+  about 40 seconds by the fast ping.
+
 ## [1.13.1] — 2026-10-17
 
 ### Fixed
