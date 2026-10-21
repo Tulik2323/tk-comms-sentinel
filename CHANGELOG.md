@@ -2,6 +2,16 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.14.0] — 2026-10-21
+
+### Added
+- **Help page in the menu ("עזרה").** A short user guide inside the system, for every signed-in user
+  (viewers included): what the system does, how to sign in, what each screen in the menu is for, common
+  tasks step by step, common problems and what to do, and safety rules. The page has a table of contents
+  and shows the guide file `backend/help/guide.md` as is, so the guide is updated together with every
+  change in how the system is operated. It also opens when the license or trial has ended, since it
+  explains how to activate a license.
+
 ## [1.13.2] — 2026-10-18
 
 ### Fixed

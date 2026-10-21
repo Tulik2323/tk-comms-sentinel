@@ -24,6 +24,7 @@ const Icons = {
   license:     '🔑',
   watchdog:    '🔌',
   inventory:   '📦',
+  help:        '❓',
   logout:      '🚪',
   dark:        '🌙',
   light:       '☀️',
@@ -254,6 +255,7 @@ export default function Layout({ children }) {
           {user?.role === 'admin' && (
             <NavItem to="/license" icon={Icons.license}   label={t('license')}     />
           )}
+          <NavItem to="/help"      icon={Icons.help}        label={t('help')}         />
         </nav>
 
         {/* Bottom: user info + controls */}

@@ -86,6 +86,9 @@ const he = {
     reports:       'דוחות',
     license:       'רישוי',
     watchdog:      'Watchdog',
+    help:          'עזרה',
+    help_contents: 'תוכן',
+    help_unavailable: 'המדריך לא זמין כרגע. פנו למנהל המערכת.',
     inventory:     'מלאי',
 
     // layout — מחרוזות ממשק
@@ -924,6 +927,9 @@ const en = {
     reports:       'Reports',
     license:       'License',
     watchdog:      'Watchdog',
+    help:          'Help',
+    help_contents: 'Contents',
+    help_unavailable: 'The guide is not available right now. Contact your system administrator.',
     inventory:     'Inventory',
 
     // layout strings

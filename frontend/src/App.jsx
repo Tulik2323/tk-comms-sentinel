@@ -20,6 +20,7 @@ import TrendsPage       from './pages/TrendsPage';
 import LicensePage     from './pages/LicensePage';
 import WatchdogPage    from './pages/WatchdogPage';
 import InventoryPage   from './pages/InventoryPage';
+import HelpPage        from './pages/HelpPage';
 
 function AppRoutes() {
   return (
@@ -135,6 +136,14 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <InventoryPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/help" element={
+        <ProtectedRoute>
+          <Layout>
+            <HelpPage />
           </Layout>
         </ProtectedRoute>
       } />

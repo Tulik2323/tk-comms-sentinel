@@ -57,6 +57,7 @@ const updatesRouter      = require('./routes/updates');
 const licenseRouter      = require('./routes/license');
 const inventoryRouter    = require('./routes/inventory');
 const layoutRouter       = require('./routes/layout');
+const helpRouter         = require('./routes/help');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -126,7 +127,8 @@ app.use('/api', (req, res, next) => {
 // auth middleware can return 401 as usual.
 const licenseLib = require('./lib/license');
 const LICENSE_BLOCK = new Set(['expired', 'trial-expired', 'invalid']);
-const LICENSE_SKIP  = new Set(['/auth', '/license', '/health']);
+// /help פתוח גם כשהרישוי פג: המדריך מסביר איך מפעילים רישוי
+const LICENSE_SKIP  = new Set(['/auth', '/license', '/health', '/help']);
 
 app.use('/api', (req, res, next) => {
   const seg = '/' + req.path.split('/')[1];
@@ -159,6 +161,7 @@ app.use('/api/updates',      updatesRouter);
 app.use('/api/license',      licenseRouter);
 app.use('/api/inventory',    inventoryRouter);
 app.use('/api/layout',       layoutRouter);
+app.use('/api/help',         helpRouter);
 
 // Health check
 // version נקרא מ-package.json, לא קשיח — אחרת אי אפשר להבחין בין גרסאות
