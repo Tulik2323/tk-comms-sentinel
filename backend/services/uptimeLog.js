@@ -161,6 +161,40 @@ function getOutages(range) {
       devices: c.rows.slice(0, 100).map(r => ({ device_id: r.device_id, name: deviceLabel(r), ip: r.ip })),
     });
   }
+  // אתחולי מתגים בטווח. כמה מתגים שאותחלו בתוך 5 דקות זה מזה = אירוע אחד (22/10/2026: 26 מתגים
+  // ב-01:52 — ההיסטוריה לא הראתה כלום, כי אתחול לא נרשם כנפילה והניטור לא פעל באותה שעה).
+  const reboots = db.prepare(`
+    SELECT r.device_id, r.booted_at, d.name, d.sys_name, d.ip
+    FROM device_reboots r JOIN devices d ON d.id = r.device_id
+    WHERE r.booted_at >= ?
+    ORDER BY r.booted_at
+  `).all(since);
+  const rbClusters = [];
+  for (const r of reboots) {
+    const c = rbClusters[rbClusters.length - 1];
+    if (c && r.booted_at - c.last <= 300) { c.rows.push(r); c.last = r.booted_at; }
+    else rbClusters.push({ rows: [r], last: r.booted_at });
+  }
+  for (const c of rbClusters) {
+    const first = c.rows[0];
+    events.push(c.rows.length === 1
+      ? { kind: 'reboot', device_id: first.device_id, name: deviceLabel(first), ip: first.ip,
+          started_at: first.booted_at, ended_at: first.booted_at, duration_sec: null, ongoing: false }
+      : { kind: 'reboot_group', started_at: first.booted_at, ended_at: c.last, duration_sec: null, ongoing: false,
+          device_count: c.rows.length,
+          devices: c.rows.slice(0, 100).map(r => ({ device_id: r.device_id, name: deviceLabel(r), ip: r.ip })) });
+  }
+
+  // תקופות שבהן הניטור עצמו לא פעל: נפילות מאותו זמן לא נתפסו
+  let gaps = [];
+  try {
+    gaps = db.prepare('SELECT started_at, ended_at FROM monitor_gaps WHERE ended_at >= ? ORDER BY started_at').all(since);
+  } catch (_) { /* טבלה חדשה — לפני ההפעלה הראשונה של initDb */ }
+  for (const g of gaps) {
+    events.push({ kind: 'monitor_gap', started_at: g.started_at, ended_at: g.ended_at,
+                  duration_sec: g.ended_at - g.started_at, ongoing: false });
+  }
+
   events.sort((a, b) => b.started_at - a.started_at);
 
   return {
@@ -169,6 +203,8 @@ function getOutages(range) {
       events:         events.length,
       device_events:  events.filter(e => e.kind === 'device').length,
       path_events:    events.filter(e => e.kind === 'path').length,
+      reboots:        reboots.length,
+      monitor_gaps:   gaps.length,
       ongoing:        events.filter(e => e.ongoing).length,
       devices_affected: new Set(rows.filter(r => !r.path_outage).map(r => r.device_id)).size,
     },

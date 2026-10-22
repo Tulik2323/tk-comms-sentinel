@@ -9,7 +9,7 @@
 //   3. התראת מערכת (מייל + טלגרם) שלא תלויה בבחירת סוגי ההתראות.
 const fs   = require('fs');
 const path = require('path');
-const { getSetting, setSetting } = require('../db/database');
+const { getDb, getSetting, setSetting } = require('../db/database');
 
 const HEARTBEAT_KEY      = 'poller_heartbeat';
 const STALE_AFTER_SEC    = 180;                 // 3 דקות בלי heartbeat = הניטור לא פועל
@@ -131,6 +131,8 @@ function reportStartupGap() {
   const gap = nowSec() - prev;
   if (gap < GAP_REPORT_SEC) return;
   setSetting('poller_last_down_from', String(prev));
+  try { getDb().prepare('INSERT INTO monitor_gaps (started_at, ended_at) VALUES (?, ?)').run(prev, nowSec()); }
+  catch (e) { console.warn(`[Health] רישום הפסקת ניטור נכשל: ${e.message}`); }
   if (Number(getSetting('monitor_down_alerted_at')) || 0) return notifyMonitorResumed(prev);
   sendSystemAlert('הניטור חזר לפעול אחרי הפסקה',
     `תהליך הניטור הופעל מחדש (${fmtTime(nowSec())}) אחרי הפסקה של ${fmtDuration(gap)} — מאז ${fmtTime(prev)}.\n` +

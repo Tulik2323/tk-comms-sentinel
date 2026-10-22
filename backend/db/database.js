@@ -321,6 +321,15 @@ async function initDb() {
     )
   `);
   try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_device_reboots_device ON device_reboots(device_id, detected_at DESC)'); } catch (_) {}
+  // תקופות שבהן תהליך הניטור לא פעל (נרשמות כשהוא עולה אחרי הפסקה). מוצגות בהיסטוריית
+  // הנפילות: בזמן כזה נפילות לא נתפסו, וחשוב שזה ייראה (22/10/2026: 11.5 שעות עיוורון).
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS monitor_gaps (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      started_at INTEGER NOT NULL,
+      ended_at   INTEGER NOT NULL
+    )
+  `);
   // כמה שעות התחברות של המשתמש בתוקף. NULL = ברירת המחדל (8). נקבע על ידי מנהל בדף המשתמשים.
   try { _sqlDb.exec('ALTER TABLE user_accounts ADD COLUMN session_hours INTEGER'); } catch (_) {}
   // מתי התראת פורט עמוס עלתה לטלגרם (NULL = עוד לא, למשל כי העומס חלף לפני שעבר זמן ההשהיה)

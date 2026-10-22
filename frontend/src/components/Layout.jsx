@@ -166,6 +166,10 @@ export default function Layout({ children }) {
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
               {t('net_monitoring')}
+              {/* מספר הגרסה ליד הלוגו: בתחתית התפריט הוא נחתך במסכים נמוכים */}
+              <span dir="ltr" style={{ marginInlineStart: 6, fontFamily: 'monospace', color: 'var(--accent)', fontWeight: 600 }}>
+                v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'}
+              </span>
             </div>
           </div>
         </div>

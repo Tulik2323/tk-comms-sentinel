@@ -2,6 +2,17 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.15.1] — 2026-10-22
+
+### Fixed
+- **The outage history showed nothing for the night of 21–22/10.** It listed only outages caught while monitoring
+  was running, so switch reboots and the hours when monitoring itself was down did not appear at all. It now also
+  shows reboots (switches that rebooted within 5 minutes of each other are one row, "N switches rebooted") and
+  the periods when monitoring was not running ("Monitoring not running", recorded each time the poller starts
+  after a gap).
+- **The version number was hard to find.** It sat at the very bottom of the menu and was cut off on lower screens;
+  it is now shown next to the logo.
+
 ## [1.15.0] — 2026-10-22
 
 Incident, 21–22/10: the server's C: drive filled up (54GB of temporary OCR images left in C:WindowsTemp

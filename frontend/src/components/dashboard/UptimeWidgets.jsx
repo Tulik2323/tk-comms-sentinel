@@ -84,6 +84,9 @@ export function OutagesWidget() {
         <>
           <div style={{ fontSize: 12, ...muted, marginBottom: 8 }}>
             {t('outages_summary', { events: data.summary.events, devices: data.summary.devices_affected })}
+            {(data.summary.reboots > 0 || data.summary.monitor_gaps > 0) && (
+              <> · {t('outages_extra', { reboots: data.summary.reboots || 0, gaps: data.summary.monitor_gaps || 0 })}</>
+            )}
           </div>
           <div style={{ maxHeight: 300, overflowY: 'auto' }}>
             <table className="nm-table">
@@ -98,9 +101,26 @@ export function OutagesWidget() {
               <tbody>
                 {data.events.map((e, i) => (
                   <tr key={`${e.kind}-${e.device_id || 'p'}-${e.started_at}-${i}`}
-                      style={e.kind === 'path' ? { background: 'rgba(251,191,36,0.08)' } : undefined}>
+                      style={e.kind === 'path' ? { background: 'rgba(251,191,36,0.08)' }
+                           : e.kind === 'monitor_gap' ? { background: 'rgba(239,68,68,0.10)' }
+                           : e.kind === 'reboot_group' ? { background: 'rgba(96,165,250,0.08)' } : undefined}>
                     <td style={{ fontSize: 12 }}>
-                      {e.kind === 'path' ? (
+                      {e.kind === 'monitor_gap' ? (
+                        <span>
+                          <b style={{ color: '#f87171' }}>⛔ {t('outage_monitor_gap')}</b>
+                          <div style={{ fontSize: 11, ...muted, maxWidth: 220 }}>{t('outage_monitor_gap_desc')}</div>
+                        </span>
+                      ) : e.kind === 'reboot_group' ? (
+                        <span title={e.devices.map(d => d.name).join('\n')}>
+                          <b style={{ color: '#60a5fa' }}>🔄 {t('outage_reboot_group', { count: e.device_count })}</b>
+                          <div style={{ fontSize: 11, ...muted, maxWidth: 220 }}>{t('outage_reboot_group_desc')}</div>
+                        </span>
+                      ) : e.kind === 'reboot' ? (
+                        <Link to={`/devices/${e.device_id}`} style={{ color: 'var(--text-primary)', textDecoration: 'none' }}>
+                          🔄 {e.name}
+                          <div style={{ fontSize: 11, ...muted }}>{t('outage_reboot')} · <bdi dir="ltr">{e.ip}</bdi></div>
+                        </Link>
+                      ) : e.kind === 'path' ? (
                         <span title={e.devices.map(d => d.name).join('\n')}>
                           <b style={{ color: '#fbbf24' }}>🌐 {t('outage_path')}</b>
                           <div style={{ fontSize: 11, ...muted, maxWidth: 220 }}>{t('outage_path_desc', { count: e.device_count })}</div>
@@ -114,11 +134,13 @@ export function OutagesWidget() {
                     </td>
                     <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{fmtTime(e.started_at)}</td>
                     <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-                      {e.ongoing
+                      {(e.kind === 'reboot' || e.kind === 'reboot_group')
+                        ? <span style={muted}>{t('outage_reboot_at')}</span>
+                        : e.ongoing
                         ? <span style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }}>{t('outage_still_down')}</span>
                         : fmtTime(e.ended_at)}
                     </td>
-                    <td style={{ fontSize: 11, fontFamily: 'monospace' }}>{dur(e.duration_sec)}</td>
+                    <td style={{ fontSize: 11, fontFamily: 'monospace' }}>{e.duration_sec == null ? '—' : dur(e.duration_sec)}</td>
                   </tr>
                 ))}
               </tbody>
