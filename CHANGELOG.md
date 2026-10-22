@@ -2,6 +2,15 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.15.2] — 2026-10-22
+
+### Fixed
+- **False "monitoring stopped" alert right after a server restart.** The watchdog ran as soon as the server came
+  up, read the heartbeat from before the restart, and killed the poller that had just started (about 15 seconds
+  after it started), then sent "monitoring stopped". The watchdog now waits 10 minutes after a server boot, reads
+  the heartbeat again before acting, and never stops a poller that is younger than 5 minutes.
+- The "monitoring stopped" message is now sent only when the poller is really missing or stuck.
+
 ## [1.15.1] — 2026-10-22
 
 ### Fixed
