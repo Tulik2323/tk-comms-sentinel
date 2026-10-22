@@ -7,6 +7,7 @@ import i18n from '../lib/i18n';
 import BrandMark from './BrandMark';
 import api from '../lib/api';
 import { deviceLabel } from '../lib/deviceLabel';
+import { fmtSince } from '../lib/staleness';
 
 // אייקונים SVG פשוטים
 const Icons = {
@@ -75,6 +76,17 @@ export default function Layout({ children }) {
     }, 300);
     return () => clearTimeout(t);
   }, [searchQ]);
+
+  // האם הניטור עצמו פועל, ומקום פנוי בדיסק של השרת. נבדק כל דקה; פס אדום בראש כל מסך
+  // כשה-poller לא פועל — אחרת הנתונים הישנים נראים תקינים לגמרי.
+  const [sysStatus, setSysStatus] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => api.get('/system-status').then(r => { if (alive) setSysStatus(r.data); }).catch(() => {});
+    load();
+    const timer = setInterval(load, 60 * 1000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
 
   // סגור dropdown בלחיצה מחוץ
   useEffect(() => {
@@ -325,6 +337,27 @@ export default function Layout({ children }) {
         display:   'flex',
         flexDirection: 'column',
       }}>
+        {/* Monitoring health banners */}
+        {sysStatus?.monitor?.stale && (
+          <div role="alert" style={{
+            padding: '10px 20px', textAlign: 'center', fontSize: 13, fontWeight: 700,
+            background: 'rgba(239,68,68,0.18)', borderBottom: '1px solid rgba(239,68,68,0.5)',
+            color: '#ef4444',
+          }}>
+            ⛔ {sysStatus.monitor.heartbeat
+              ? t('monitor_stale_banner', { since: fmtSince(sysStatus.monitor.heartbeat, i18n.language === 'he' ? 'he-IL' : 'en-GB') })
+              : t('monitor_never_banner')}
+          </div>
+        )}
+        {sysStatus?.disk?.low && (
+          <div role="alert" style={{
+            padding: '10px 20px', textAlign: 'center', fontSize: 13, fontWeight: 600,
+            background: 'rgba(245,158,11,0.15)', borderBottom: '1px solid rgba(245,158,11,0.4)',
+            color: '#f59e0b',
+          }}>
+            💾 {t('disk_low_banner', { free: sysStatus.disk.free_gb })}
+          </div>
+        )}
         {/* License banners */}
         {licenseStatus?.status === 'trial' && (
           <div style={{

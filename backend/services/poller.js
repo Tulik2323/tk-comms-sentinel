@@ -4,12 +4,13 @@ const cron = require('node-cron');
 const { getDb } = require('../db/database');
 const { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getHardwareStatus, getStackMembers, getPortVlans, getArpTable, getMacBridgeTable, explainSnmpError, parseVendorModel } = require('./snmp');
 const { saveMetrics, pruneOldMetrics } = require('./history');
-const { checkThresholds, checkDeviceDown, resolveDeviceDown, maintainAlertEvents, sendAlertEmail, emailAllowed } = require('./alerts');
+const { checkThresholds, checkDeviceDown, resolveDeviceDown, alertDeviceReboot, maintainAlertEvents, sendAlertEmail, emailAllowed } = require('./alerts');
 const { logAudit } = require('../db/audit');
 const { refreshStaleHostnames } = require('./hostnames');
 const { sendTelegram, flushDelayedPortAlerts } = require('./telegram');
 const { noteFailure, noteRecovery, closeOrphanOutage, noteUptime, markPathOutage, pruneUptimeLog } = require('./uptimeLog');
 const { startFastPing, pingReachable } = require('./fastPing');
+const { beat, checkDisk, reportStartupGap } = require('./systemHealth');
 const { deviceLabel } = require('../lib/deviceLabel');
 
 // Map: deviceId -> last poll timestamp
@@ -47,8 +48,11 @@ async function pollDevice(device, opts = {}) {
     const info = await getDeviceInfo(device);
 
     // ירידה ב-uptime בין שני polls = אתחול. device.uptime_sec הוא הערך מה-poll הקודם.
-    try { noteUptime(device.id, device.uptime_sec, info.uptime_sec, now); }
-    catch (e) { console.warn(`[Poller] רישום אתחול נכשל עבור ${device.ip}: ${e.message}`); }
+    // device הוא תמונת המצב מתחילת הסבב; uptime_sec/uptime_at נשמרים רק כאן, ולכן הם עדכניים
+    try {
+      const bootedAt = noteUptime(device.id, device.uptime_sec, info.uptime_sec, now, device.uptime_at || null);
+      if (bootedAt) alertDeviceReboot(device, bootedAt, device.uptime_sec);
+    } catch (e) { console.warn(`[Poller] רישום אתחול נכשל עבור ${device.ip}: ${e.message}`); }
 
     // עדכן מידע וסטטוס UP (כולל vendor/model מה-sysDescr)
     const { vendor, model } = parseVendorModel(info.sys_descr);
@@ -58,9 +62,9 @@ async function pollDevice(device, opts = {}) {
     const statusBefore = db.prepare('SELECT status FROM devices WHERE id = ?').get(device.id)?.status;
     db.prepare(`
       UPDATE devices
-      SET status = 'up', sys_name = ?, sys_descr = ?, uptime_sec = ?, vendor = ?, model = ?
+      SET status = 'up', sys_name = ?, sys_descr = ?, uptime_sec = ?, uptime_at = ?, vendor = ?, model = ?
       WHERE id = ?
-    `).run(info.sys_name, info.sys_descr, info.uptime_sec, vendor, model, device.id);
+    `).run(info.sys_name, info.sys_descr, info.uptime_sec, now, vendor, model, device.id);
 
     // אם חזר מ-down — סגור event ורשום audit
     if (statusBefore === 'down') {
@@ -489,6 +493,7 @@ async function runCycle() {
       }
     }
 
+    beat();
     const secs = ((Date.now() - started) / 1000).toFixed(1);
     console.log(`[Poller] סבב הושלם: ${due.length} מכשירים ב-${secs} שניות` +
                 (failed.length ? ` | ${failed.length} כשלים` : ''));
@@ -506,6 +511,21 @@ function startPoller() {
 
   // בדיקת ping מהירה ועצמאית — ראה services/fastPing.js (למה קיימת בכלל)
   startFastPing();
+
+  // בריאות מערכת הניטור עצמה (ראה services/systemHealth.js): heartbeat מיד בהפעלה, ובדיקת
+  // מקום פנוי בדיסק כל 5 דקות — התראה לפני שהדיסק מתמלא והניטור נעצר.
+  try { reportStartupGap(); } catch (err) { console.error('[Health] דיווח הפסקה נכשל:', err.message); }
+  beat();
+  const diskCheck = () => { try { checkDisk(); } catch (err) { console.error('[Health] בדיקת דיסק נכשלה:', err.message); } };
+  cron.schedule('*/5 * * * *', diskCheck);
+  diskCheck();
+
+  // checkpoint מלא פעם בשעה: מעביר את ה-WAL לקובץ הראשי ומקצץ אותו (journal_size_limit).
+  // נכשל בשקט אם יש קורא פעיל באותו רגע — ינסה שוב בשעה הבאה.
+  cron.schedule('23 * * * *', () => {
+    try { getDb().exec('PRAGMA wal_checkpoint(TRUNCATE)'); }
+    catch (err) { console.warn('[Poller] checkpoint נכשל:', err.message); }
+  });
 
   // ניקוי metrics ישנים — פעם ביום בחצות
   cron.schedule('0 0 * * *', () => {

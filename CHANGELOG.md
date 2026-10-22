@@ -2,6 +2,43 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.15.0] — 2026-10-22
+
+Incident, 21–22/10: the server's C: drive filled up (54GB of temporary OCR images left in C:WindowsTemp
+by another application). The poller died without an error at 19:10, and every restart failed instantly
+for the next 11.5 hours. 26 switches rebooted together at 01:52 and nothing was reported; the screens kept
+showing the last values, green, as if they were current (for example 49 days of uptime on a switch that had
+been up for 5 hours). In the morning a poller that hung while holding a database lock also stopped the web
+site from starting (HTTP 500.1002). This release makes the system report on itself.
+
+### Added
+- **"Monitoring is not running" banner and alert.** The poller writes a heartbeat every 20 seconds. When it is
+  older than 3 minutes, every screen shows a red banner (the data on screen is not current and no alerts are
+  sent); after 5 minutes a Telegram message and an e-mail go out, and another one when monitoring resumes.
+  When the poller starts after a gap it reports how long monitoring was down. These system alerts are sent
+  whatever alert types were chosen (e-mail still respects quiet hours).
+- **External watchdog** (`backend/poller-watchdog.js`, scheduled task "NetMonitor Watchdog" every 5 minutes,
+  registered once with `tools/register-poller-watchdog.ps1` as Administrator). It does not depend on the
+  poller or the web site: it alerts when the heartbeat is old, closes a poller that is running but stuck so the
+  poller task can start a new one, and warns about low disk space.
+- **Low disk space alert** (under 10GB or 5% free on the database drive), repeated every 6 hours while low, and
+  an orange banner on every screen.
+- **Switch reboot alert.** A reboot (uptime reset) is now reported by Telegram and e-mail on the same channel as
+  DOWN alerts and logged in the alert log, also when the outage itself was missed.
+- **"Not checked since" marker** next to a device whose SNMP data is older than 3 poll intervals (at least
+  15 minutes), in the device list and on the device page.
+- Timestamps on every line of the poller log.
+
+### Fixed
+- **Reboots missed after a long monitoring gap.** A reboot was detected only when the new uptime was lower
+  than the last reading; after a long gap a rebooted switch could report more than that (last reading 2 hours,
+  monitoring down 10 hours, reboot 5 hours ago). The new uptime is now compared with the expected uptime
+  (last reading plus the time that passed since it was taken).
+- **Web site did not start while the database was locked** (500.1002). Start-up now retries for about 20 seconds;
+  the poller retries for up to 2 minutes.
+- **The database log file (WAL) never shrank** (1.1GB). It is now limited and checkpointed every hour, so the first
+  open after a crash no longer has to scan a huge file.
+
 ## [1.14.0] — 2026-10-21
 
 ### Added

@@ -340,9 +340,16 @@ const he = {
     metric_mem:                'זיכרון',
     metric_status:             'סטטוס (DOWN)',
     metric_path:               'נפילת נתיב',
+    metric_reboot:             'אתחול',
 
     // alert message templates
     alert_device_down:    '{{device}} ירד מהרשת (DOWN)',
+    alert_device_reboot:  '{{device}} אותחל (זמן הפעולה התאפס)',
+    monitor_stale_banner: 'הניטור לא פועל מאז {{since}}. הנתונים במסך אינם עדכניים ולא נשלחות התראות.',
+    monitor_never_banner: 'הניטור לא פועל: לא התקבל אות חיים מתהליך הניטור. הנתונים במסך אינם עדכניים.',
+    disk_low_banner:      'מקום פנוי נמוך בדיסק של שרת הניטור: {{free}}GB. כשהדיסק מתמלא, הניטור נעצר.',
+    data_stale:           'לא נבדק מאז {{since}}',
+    data_stale_tip:       'המכשיר לא נקרא בהצלחה ב-SNMP מאז הזמן הזה. הנתונים (כולל זמן הפעולה) עלולים להיות ישנים.',
     alert_device_metric:  '{{device}} — {{metric}}: {{value}}% (סף: {{threshold}}%)',
     alert_port_bw:        '{{device}} — פורט {{port}} [{{ifIndex}}]: {{metric}} {{value}}% (סף: {{threshold}}%)',
     alert_path_outage:    'נפילת נתיב: כל {{count}} המכשירים אינם מגיבים בו-זמנית. סביר שזו תקלת ניתוב או חומת אש ולא תקלה במכשירים עצמם.',
@@ -1181,9 +1188,16 @@ const en = {
     metric_mem:                'Memory',
     metric_status:             'Status (DOWN)',
     metric_path:               'Path Down',
+    metric_reboot:             'Reboot',
 
     // alert message templates
     alert_device_down:    '{{device}} went offline (DOWN)',
+    alert_device_reboot:  '{{device}} rebooted (uptime reset)',
+    monitor_stale_banner: 'Monitoring has not been running since {{since}}. The data on screen is not current and no alerts are sent.',
+    monitor_never_banner: 'Monitoring is not running: no heartbeat from the monitoring process. The data on screen is not current.',
+    disk_low_banner:      'Low free disk space on the monitoring server: {{free}}GB. When the disk fills up, monitoring stops.',
+    data_stale:           'Not checked since {{since}}',
+    data_stale_tip:       'This device has not been read successfully over SNMP since then. Its data (including uptime) may be out of date.',
     alert_device_metric:  '{{device}} — {{metric}}: {{value}}% (threshold: {{threshold}}%)',
     alert_port_bw:        '{{device}} — port {{port}} [{{ifIndex}}]: {{metric}} {{value}}% (threshold: {{threshold}}%)',
     alert_path_outage:    'Path outage: all {{count}} devices are unresponsive simultaneously. Likely a routing or firewall issue, not the devices themselves.',

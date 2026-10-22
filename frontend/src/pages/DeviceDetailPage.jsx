@@ -13,6 +13,8 @@ import { tempLevel, tempLimits } from '../lib/temperature';
 import api from '../lib/api';
 import SwitchLayout from '../components/layout/SwitchLayout';
 import { deviceLabel } from '../lib/deviceLabel';
+import { isStale, lastReadTs, fmtSince } from '../lib/staleness';
+import i18n from '../lib/i18n';
 
 // טיפ בגרף
 function CustomTooltip({ active, payload, label }) {
@@ -235,6 +237,11 @@ export default function DeviceDetailPage() {
             {device.model && <span style={{ marginInlineStart: 8, color: 'var(--accent)', fontWeight: 600 }}>· {device.model}</span>}
             {!device.model && device.sys_name && <span style={{ marginInlineStart: 8 }}>· {device.sys_name}</span>}
             <span style={{ marginInlineStart: 8 }}>· Uptime: {formatUptime(device.uptime_sec)}</span>
+            {isStale(device) && (
+              <span title={t('data_stale_tip')} style={{ marginInlineStart: 8, color: '#f59e0b', fontWeight: 700 }}>
+                ⚠️ {t('data_stale', { since: fmtSince(lastReadTs(device), i18n.language === 'he' ? 'he-IL' : 'en-GB') })}
+              </span>
+            )}
           </div>
         </div>
 

@@ -463,6 +463,32 @@ async function checkDeviceDown(device) {
   );
 }
 
+// אתחול מתג: זמן הפעולה (sysUpTime) ירד מאז הבדיקה הקודמת. נשלח גם כשהנפילה עצמה לא
+// נתפסה — אתחול מהיר, או שהניטור לא פעל באותה שעה (22/10/2026: מתגים אותחלו בלילה
+// בזמן שה-poller היה מושבת, ולא נשלחה שום הודעה). נרשם כאירוע סגור בלוג ההתראות,
+// ונשלח באותו ערוץ של התראות DOWN.
+function alertDeviceReboot(device, bootedAt, prevUptimeSec) {
+  const label = deviceLabel(device);
+  const when  = new Date(bootedAt * 1000).toLocaleString('he-IL');
+  const prevDays = Math.max(0, Math.round((prevUptimeSec || 0) / 86400));
+  getDb().prepare(`
+    INSERT INTO alert_events (device_id, metric, value, threshold, message, resolved_at)
+    VALUES (?, 'reboot', ?, 0, ?, unixepoch())
+  `).run(device.id, prevDays, `${label} אותחל (זמן הפעולה התאפס) — עלה ב-${when}`);
+
+  sendTelegram('device_down',
+    `🔄 ${label} (${device.ip}) אותחל — עלה ב-${when}. לפני כן פעל ${prevDays} ימים${deviceLink(device.id)}`);
+  if (!emailAllowed('device_down')) return;
+  sendAlertEmail(
+    `[NetMonitor] מתג אותחל: ${label}`,
+    `מכשיר: ${label} (${device.ip})\n` +
+    `אותחל: זמן הפעולה התאפס, המתג עלה ב-${when}\n` +
+    `לפני האתחול פעל ${prevDays} ימים\n` +
+    `זמן הזיהוי: ${new Date().toLocaleString('he-IL')}` +
+    deviceLink(device.id)
+  );
+}
+
 // סגור event DOWN כשמכשיר חוזר UP ושלח מייל אישור
 function resolveDeviceDown(device) {
   const db = getDb();
@@ -495,4 +521,4 @@ function resolveDeviceDown(device) {
   lastAlertSent.delete(`${device.id}_status`);
 }
 
-module.exports = { checkThresholds, checkDeviceDown, resolveDeviceDown, sendAlertEmail, emailAllowed, maintainAlertEvents, EMAIL_DEFAULT_KINDS };
+module.exports = { checkThresholds, checkDeviceDown, resolveDeviceDown, alertDeviceReboot, sendAlertEmail, emailAllowed, isQuietHoursNow: () => isQuietHours(), maintainAlertEvents, EMAIL_DEFAULT_KINDS };

@@ -102,7 +102,8 @@ async function sendNow(token, chatIds, text) {
 function sendTelegram(kind, text) {
   try {
     const cfg = readConfig();
-    if (!cfg.enabled || !cfg.types.includes(kind)) return Promise.resolve(false);
+    // 'system' = הניטור עצמו בסכנה (הפסיק לעבוד, דיסק מתמלא): נשלח בלי קשר לסוגים שנבחרו
+    if (!cfg.enabled || (kind !== 'system' && !cfg.types.includes(kind))) return Promise.resolve(false);
     if (validateConfig(cfg.token, cfg.chatIds)) return Promise.resolve(false);
     if (Date.now() < _failedUntil) return Promise.resolve(false);
 

@@ -58,14 +58,31 @@ function noteRecovery(deviceId, now) {
   getDb().prepare('UPDATE device_outages SET ended_at = ? WHERE device_id = ? AND ended_at IS NULL').run(now, deviceId);
 }
 
-// נקרא מ-poller בכל poll מוצלח. prevUptime הוא ה-uptime_sec שנשמר ב-poll הקודם.
-function noteUptime(deviceId, prevUptime, newUptime, now) {
-  if (prevUptime == null || newUptime == null) return;
-  if (prevUptime >= UPTIME_WRAP_GUARD_SEC) return;
-  if (newUptime + 10 >= prevUptime) return;   // 10 שניות סובלנות לרעש
+// נקרא מ-poller בכל poll מוצלח. prevUptime הוא ה-uptime_sec שנשמר ב-poll הקודם, ו-prevPollTs
+// הוא זמן ה-poll הזה. מחזיר את זמן העלייה אם זוהה אתחול, אחרת null.
+//
+// ההשוואה היא מול זמן הפעולה הצפוי (הקודם + הזמן שעבר), ולא מול הקודם בלבד: אחרי תקופה
+// ארוכה בלי בדיקה (הניטור לא פעל), מתג שאותחל יכול להחזיר זמן פעולה גדול מהערך הישן
+// (ישן: שעתיים, הניטור מושבת 10 שעות, אתחול לפני 5 שעות) — וזה היה נבלע.
+const REBOOT_TOLERANCE_SEC = 120;
+function noteUptime(deviceId, prevUptime, newUptime, now, prevPollTs = null) {
+  if (prevUptime == null || newUptime == null) return null;
+  if (prevUptime >= UPTIME_WRAP_GUARD_SEC) return null;
+  const elapsed  = prevPollTs ? Math.max(0, now - prevPollTs) : 0;
+  const expected = prevUptime + elapsed;
+  // סובלנות: 2 דקות, או 2% מהזמן שעבר (שעון ה-uptime של מתג יכול לסטות מעט משעון השרת)
+  const tol = Math.max(REBOOT_TOLERANCE_SEC, elapsed * 0.02);
+  if (newUptime + tol >= expected && newUptime + 10 >= prevUptime) return null;
+  const bootedAt = now - newUptime;
+  // אותו אתחול לא נרשם פעמיים (למשל אם ה-poll הקודם לא שמר את זמן הפעולה החדש)
+  const dup = getDb().prepare(
+    'SELECT 1 FROM device_reboots WHERE device_id = ? AND ABS(booted_at - ?) < 300'
+  ).get(deviceId, bootedAt);
+  if (dup) return null;
   getDb().prepare(
     'INSERT INTO device_reboots (device_id, detected_at, booted_at, prev_uptime_sec, new_uptime_sec) VALUES (?, ?, ?, ?, ?)'
-  ).run(deviceId, now, now - newUptime, prevUptime, newUptime);
+  ).run(deviceId, now, bootedAt, prevUptime, newUptime);
+  return bootedAt;
 }
 
 // הסבב זיהה שכל המכשירים נפלו יחד: הנפילות שאושרו בסבב הזה הן נפילת נתיב

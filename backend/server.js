@@ -58,6 +58,7 @@ const licenseRouter      = require('./routes/license');
 const inventoryRouter    = require('./routes/inventory');
 const layoutRouter       = require('./routes/layout');
 const helpRouter         = require('./routes/help');
+const systemStatusRouter = require('./routes/systemStatus');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -162,6 +163,7 @@ app.use('/api/license',      licenseRouter);
 app.use('/api/inventory',    inventoryRouter);
 app.use('/api/layout',       layoutRouter);
 app.use('/api/help',         helpRouter);
+app.use('/api/system-status', systemStatusRouter);
 
 // Health check
 // version נקרא מ-package.json, לא קשיח — אחרת אי אפשר להבחין בין גרסאות
@@ -211,7 +213,20 @@ app.use((err, req, res, next) => {
 // ה-polling רץ בתהליך נפרד — poller-service.js. אל תפעיל אותו כאן:
 // iisnode ממחזר workers, ולולאת polling בתוכם נקטעת באמצע.
 (async () => {
-  await initDb();
+  // מסד נעול בהפעלה (ה-poller באמצע כתיבה ארוכה) הפיל את האתר עם 500.1002 (22/10/2026).
+  // מנסים שוב עד ~20 שניות — בתוך הזמן ש-iisnode ממתין לתהליך לפני שהוא מוותר.
+  for (let attempt = 1; ; attempt++) {
+    try { await initDb(); break; }
+    catch (err) {
+      if (!/locked|busy/i.test(err.message) || attempt >= 10) throw err;
+      console.warn(`[DB] מסד הנתונים נעול (ניסיון ${attempt}) — מנסה שוב`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+
+  // שומר על ה-poller: התראה כשהוא מפסיק לפעול (ראה services/systemHealth.js)
+  const { watchMonitor } = require('./services/systemHealth');
+  setInterval(() => { try { watchMonitor(); } catch (e) { console.warn('[Health] בדיקת poller נכשלה:', e.message); } }, 60 * 1000);
 
   // הפעל מתזמן דוחות
   try { require('./services/report-scheduler').reload(); } catch (e) {

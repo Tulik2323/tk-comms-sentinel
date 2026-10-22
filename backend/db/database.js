@@ -119,6 +119,9 @@ async function initDb() {
   _sqlDb.exec('PRAGMA synchronous = NORMAL');
   // אם תהליך אחר מחזיק כתיבה — המתן במקום ליפול על SQLITE_BUSY
   _sqlDb.exec('PRAGMA busy_timeout = 5000');
+  // אחרי checkpoint מלא קובץ ה-WAL מקוצץ לגודל הזה. בלי מגבלה הוא נשאר בגודל המרבי שהגיע
+  // אליו (1.1GB ב-2026-10), וכל פתיחה ראשונה אחרי נפילה צריכה לסרוק את כולו.
+  _sqlDb.exec('PRAGMA journal_size_limit = 67108864');
 
   // הפעל schema (יוצר טבלאות אם לא קיימות)
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
@@ -142,6 +145,8 @@ async function initDb() {
     'ALTER TABLE user_accounts    ADD COLUMN totp_pending_secret TEXT',
     'ALTER TABLE audit_log        ADD COLUMN msg_key       TEXT',
     'ALTER TABLE audit_log        ADD COLUMN msg_params    TEXT',
+    // מתי נשמר uptime_sec — זיהוי אתחול משווה לזמן הפעולה הצפוי (ישן + הזמן שעבר מאז)
+    'ALTER TABLE devices          ADD COLUMN uptime_at     INTEGER',
   ]) {
     try { _sqlDb.exec(sql); } catch (_) {}   // כבר קיים — מתעלמים
   }
@@ -340,6 +345,16 @@ async function initDb() {
   return _facade;
 }
 
+// פתיחה לקריאה בלבד, בלי schema ובלי migrations — לשומר ה-poller (poller-watchdog.js),
+// שחייב לעבוד גם כשהדיסק מלא או כשתהליך אחר מחזיק נעילת כתיבה.
+function openDbReadOnly() {
+  if (_facade) return _facade;
+  _sqlDb = new DatabaseSync(getDbPath(), { readOnly: true });
+  _sqlDb.exec('PRAGMA busy_timeout = 5000');
+  _facade = new DbFacade();
+  return _facade;
+}
+
 function getDb() {
   if (!_facade) throw new Error('[DB] לא אותחל — קרא initDb() לפני שימוש');
   return _facade;
@@ -354,4 +369,4 @@ function setSetting(key, value) {
   getDb().prepare('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)').run(key, value);
 }
 
-module.exports = { initDb, getDb, getSetting, setSetting };
+module.exports = { initDb, openDbReadOnly, getDb, getSetting, setSetting };

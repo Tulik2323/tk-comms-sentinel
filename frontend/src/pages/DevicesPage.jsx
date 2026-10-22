@@ -11,6 +11,7 @@ import { formatBps, formatUptime } from '../lib/api';
 import api from '../lib/api';
 import { tempLevel, TEMP_COLORS } from '../lib/temperature';
 import { deviceLabel } from '../lib/deviceLabel';
+import { isStale, lastReadTs, fmtSince } from '../lib/staleness';
 
 function AddDeviceModal({ open, onClose, onAdded }) {
   const { t } = useTranslation();
@@ -732,6 +733,11 @@ export default function DevicesPage() {
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     {formatUptime(d.uptime_sec)}
+                    {isStale(d) && (
+                      <div title={t('data_stale_tip')} style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        ⚠️ {t('data_stale', { since: fmtSince(lastReadTs(d), i18n.language === 'he' ? 'he-IL' : 'en-GB') })}
+                      </div>
+                    )}
                   </td>
                   <td style={{ fontFamily: 'monospace', fontSize: 12 }}>
                     {(() => {

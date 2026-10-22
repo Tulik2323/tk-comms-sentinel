@@ -30,6 +30,10 @@ export function formatAlert(a, t) {
     });
   }
 
+  if (a.metric === 'reboot') {
+    return t('alert_device_reboot', { device });
+  }
+
   if (a.metric === 'path') {
     return t('alert_path_outage', { count: value });
   }

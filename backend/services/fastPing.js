@@ -19,6 +19,7 @@ const { noteFailure, noteRecovery, discardPendingFailure } = require('./uptimeLo
 const { logAudit } = require('../db/audit');
 const { deviceLabel } = require('../lib/deviceLabel');
 const { snmpAlive } = require('./snmp');
+const { beat } = require('./systemHealth');
 
 // מדידה (17/10/2026, 10 דקות, ping בכל שנייה): מתגי Aruba 2930M זורקים ping בפרצים של
 // כמה שניות (עד ~1%), ולפעמים עונים רק אחרי 1-2 שניות. ping בודד עם timeout של 800ms,
@@ -136,6 +137,8 @@ async function runPingCycle() {
       }
     };
     await Promise.all(Array.from({ length: Math.min(PING_CONCURRENCY, devices.length) }, worker));
+    // אות חיים: ה-poller פעיל. סבב ping רץ כל 20 שניות, ולכן הוא המדד הכי צמוד
+    beat();
   } catch (e) {
     console.error('[FastPing] שגיאה בסבב:', e.message);
   } finally {
