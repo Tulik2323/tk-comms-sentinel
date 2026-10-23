@@ -206,7 +206,18 @@ export default function Layout({ children }) {
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  {r.type === 'device' ? (
+                  {r.type === 'port' ? (
+                    <>
+                      {/* פורט: לפי תיאור (if_alias) אם יש, אחרת לפי שם הפורט */}
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                        🔌 <bdi dir="ltr">{r.if_alias || r.if_descr || r.if_name}</bdi>
+                      </div>
+                      <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
+                        {r.if_alias && r.if_name && <><bdi dir="ltr" style={{ whiteSpace: 'nowrap' }}>{r.if_name}</bdi> · </>}
+                        <bdi>{r.device_name}</bdi> · <bdi dir="ltr" style={{ whiteSpace: 'nowrap' }}>{r.device_ip}</bdi>
+                      </div>
+                    </>
+                  ) : r.type === 'device' ? (
                     <>
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                         🖧 <bdi>{deviceLabel(r)}</bdi>

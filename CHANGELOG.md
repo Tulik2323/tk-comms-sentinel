@@ -2,6 +2,14 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.15.3] — 2026-10-23
+
+### Added
+- **Search by port description and port name.** The global search box (top of the menu) now also finds ports by
+  their description (`if_alias`, for example "ESX-DR") and by their port name or switch description. Results show the
+  port, its switch and IP; clicking one opens the switch page with the port highlighted. Ports whose description
+  matches come first, and at most 10 port results are shown.
+
 ## [1.15.2] — 2026-10-22
 
 ### Fixed

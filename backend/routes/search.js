@@ -26,6 +26,18 @@ router.get('/', requireAuth, (req, res) => {
     LIMIT 8
   `).all(q, q, like, like, like).map(d => ({ type: 'device', ...d }));
 
+  // חיפוש פורט לפי תיאור (if_alias) או שם (if_name / if_descr). תיאור שמתאים קודם,
+  // ואחריו פורטים פעילים. מוגבל ל-10 כדי שחיפוש של שתי אותיות לא יציף את החלון.
+  const ports = db.prepare(`
+    SELECT p.device_id, p.if_index, p.if_name, p.if_descr, p.if_alias, p.oper_status,
+           d.ip AS device_ip, d.status AS device_status, ${DEVICE_LABEL_SQL()} AS device_name
+    FROM ports p
+    JOIN devices d ON d.id = p.device_id
+    WHERE p.if_alias LIKE ? OR p.if_name LIKE ? OR p.if_descr LIKE ?
+    ORDER BY (p.if_alias LIKE ?) DESC, (p.oper_status = 'up') DESC, device_name
+    LIMIT 10
+  `).all(like, like, like, like).map(p => ({ type: 'port', ...p }));
+
   // חיפוש endpoint (MAC/IP): מחזיר רק את פורט הקצה האמיתי — הפורט שלמד הכי
   // מעט MAC-ים. MAC של תחנה נלמד גם על כל ה-uplinks לליבה (אלפי MAC) וגם
   // כרשומת ARP על ה-GW; בלי הסינון החיפוש החזיר 5+ שורות רעש במקום המקום
@@ -78,7 +90,7 @@ router.get('/', requireAuth, (req, res) => {
   if (access.length === 0) access = macRows.slice(0, 10);
   const macs = attachHostnames(access.slice(0, 10)).map(m => ({ type: 'mac', ...m }));
 
-  res.json([...devices, ...macs]);
+  res.json([...devices, ...ports, ...macs]);
 });
 
 module.exports = router;

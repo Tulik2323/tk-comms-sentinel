@@ -93,7 +93,7 @@ const he = {
 
     // layout — מחרוזות ממשק
     net_monitoring:       'ניטור רשת ארגוני',
-    search_placeholder:   'IP / MAC / שם...',
+    search_placeholder:   'IP / MAC / שם / תיאור פורט...',
     no_results:           'לא נמצאו תוצאות',
     light_mode:           'מצב בהיר',
     dark_mode:            'מצב כהה',
@@ -948,7 +948,7 @@ const en = {
 
     // layout strings
     net_monitoring:       'Enterprise Network Monitoring',
-    search_placeholder:   'IP / MAC / Name...',
+    search_placeholder:   'IP / MAC / Name / Port description...',
     no_results:           'No results found',
     light_mode:           'Light mode',
     dark_mode:            'Dark mode',
