@@ -2,6 +2,24 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.15.4] — 2026-11-04
+
+### Fixed
+- **`tools/harden-server.ps1` could leave the server half-changed and lock files away from administrators.** On the
+  first live run it stopped in the middle of the file-permission step. Files the application pool had created (the
+  database `-wal`/`-shm` and the iisnode logs) were left reachable only by the pool, so SYSTEM (which runs the
+  poller) and administrators could no longer open them, and `-Restore` stopped at the first such file. The script now:
+  - gives SYSTEM and Administrators their own entries before it cuts inheritance, so they never lose access;
+  - checks afterwards that every item in the site folder can still be opened, and treats anything else as a failure;
+  - puts the saved permissions back by itself on any failure (before, it only printed the restore command);
+  - restores every target even when some items fail, checks the result instead of trusting icacls (whose `/restore`
+    exits 0 when it skips a file), and writes `restore-as-system.cmd` into the backup folder with the commands to
+    finish the job as SYSTEM (on servers where no administrator can take ownership of a file);
+  - writes the IIS anonymous identity into `applicationHost.config` for the site, because IIS locks that section for
+    the site's own `web.config`. If it still cannot be set, or with `-NoIisChanges`, IUSR keeps read-only access
+    instead of losing it;
+  - no longer aborts on the first icacls warning (PowerShell 5.1 turned icacls error output into a fatal error).
+
 ## [1.15.3] — 2026-10-23
 
 ### Added
