@@ -19,7 +19,7 @@
       this server, can read the JWT secret (.env), the database and the encryption key, and can also
       overwrite code that the poller runs as SYSTEM.
     * The application pool identity keeps read access to the code and write access only to the
-      folders it must write to (database, logs).
+      folders it must write to (database, logs, the switch photos uploaded from the Layout tab).
     * SYSTEM and Administrators keep full control, so the poller task and deploy-local.ps1 keep working.
     * The site's anonymous requests are switched from the shared IUSR account to the application pool
       identity (the setting recommended for Node sites). IIS locks that section by default, so it is
@@ -229,7 +229,7 @@ Write-Step '1/3  File permissions'
 $stamp  = Get-Date -Format 'yyyyMMdd-HHmmss'
 $backup = Join-Path $BackupRoot $stamp
 $backendDir = Join-Path $SiteRoot 'backend'
-$writable   = @('db', 'iisnode-logs', 'logs') | ForEach-Object { Join-Path $backendDir $_ } | Where-Object { Test-Path -LiteralPath $_ }
+$writable   = @('db', 'iisnode-logs', 'logs', 'switch-images') | ForEach-Object { Join-Path $backendDir $_ } | Where-Object { Test-Path -LiteralPath $_ }
 $siteData   = Join-Path $SiteRoot 'data'
 if (Test-Path -LiteralPath $siteData) { $writable += $siteData }
 

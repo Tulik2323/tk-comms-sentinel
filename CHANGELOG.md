@@ -2,6 +2,13 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.15.5] — 2026-11-05
+
+### Fixed
+- **`tools/harden-server.ps1` took write access away from the switch photos folder.** The list of folders the application
+  pool may write to was missing `backend\switch-images`, so after hardening, uploading or deleting a photo in the Layout
+  tab would fail while the site itself still looked healthy. The folder is now on the list.
+
 ## [1.15.4] — 2026-11-04
 
 ### Fixed
