@@ -14,11 +14,11 @@
 const { execFile } = require('child_process');
 const cron = require('node-cron');
 const { getDb } = require('../db/database');
-const { checkDeviceDown, resolveDeviceDown } = require('./alerts');
-const { noteFailure, noteRecovery, discardPendingFailure } = require('./uptimeLog');
+const { checkDeviceDown, resolveDeviceDown, alertDeviceReboot } = require('./alerts');
+const { noteFailure, noteRecovery, discardPendingFailure, noteUptime } = require('./uptimeLog');
 const { logAudit } = require('../db/audit');
 const { deviceLabel } = require('../lib/deviceLabel');
-const { snmpAlive } = require('./snmp');
+const { snmpAlive, snmpUptime } = require('./snmp');
 const { beat } = require('./systemHealth');
 
 // מדידה (17/10/2026, 10 דקות, ping בכל שנייה): מתגי Aruba 2930M זורקים ping בפרצים של
@@ -74,11 +74,37 @@ async function handleResult(device, ok) {
     pingFailCount.delete(device.id);
     if (device.status !== 'down') return;
 
+    // האם המתג אותחל? בודקים לפני שמסמנים אותו UP, כדי שהאתחול ייכנס להודעת החזרה עצמה. מתג שזה
+    // עתה עלה עשוי עוד לא לענות ל-SNMP; אז ה-poller יזהה את האתחול בסבב הבא וישלח הודעה משלו.
+    let reboot = null;
+    try {
+      const full = db.prepare('SELECT * FROM devices WHERE id = ?').get(device.id);
+      const uptime = full ? await snmpUptime(full).catch(() => null) : null;
+      const bootedAt = uptime != null
+        ? noteUptime(device.id, full.uptime_sec, uptime, Math.floor(Date.now() / 1000), full.uptime_at || null)
+        : null;
+      if (bootedAt) reboot = { bootedAt, prevUptimeSec: full.uptime_sec };
+    } catch (e) { console.warn(`[FastPing] בדיקת אתחול נכשלה עבור ${device.ip}: ${e.message}`); }
+    // בזמן הבדיקה ה-SNMP poller עשוי היה לטפל בחזרה בעצמו (כולל ההודעה): אל תכפיל
+    // (אם האתחול כבר נרשם כאן, ה-poller לא ראה אותו, ולכן הוא נשלח בנפרד)
+    if (db.prepare('SELECT status FROM devices WHERE id = ?').get(device.id)?.status !== 'down') {
+      if (reboot) {
+        try { alertDeviceReboot(device, reboot.bootedAt, reboot.prevUptimeSec, now); }
+        catch (e) { console.warn(`[FastPing] התראת אתחול נכשלה עבור ${device.ip}: ${e.message}`); }
+      }
+      return;
+    }
+
     db.prepare("UPDATE devices SET status = 'up' WHERE id = ?").run(device.id);
     try { noteRecovery(device.id, now); }
     catch (e) { console.warn(`[FastPing] סגירת נפילה נכשלה עבור ${device.ip}: ${e.message}`); }
-    try { resolveDeviceDown({ ...device, status: 'up' }); }
+    let told = false;
+    try { told = resolveDeviceDown({ ...device, status: 'up' }, reboot); }
     catch (e) { console.warn(`[FastPing] resolveDeviceDown נכשל עבור ${device.ip}: ${e.message}`); }
+    if (reboot && !told) {
+      try { alertDeviceReboot(device, reboot.bootedAt, reboot.prevUptimeSec, now); }
+      catch (e) { console.warn(`[FastPing] התראת אתחול נכשלה עבור ${device.ip}: ${e.message}`); }
+    }
     logAudit('info', 'poller', 'device_back_online',
       { device: deviceLabel(device) }, { device_id: device.id, ip: device.ip });
     return;

@@ -7,7 +7,7 @@ const { saveMetrics, pruneOldMetrics } = require('./history');
 const { checkThresholds, checkDeviceDown, resolveDeviceDown, alertDeviceReboot, maintainAlertEvents, sendAlertEmail, emailAllowed } = require('./alerts');
 const { logAudit } = require('../db/audit');
 const { refreshStaleHostnames } = require('./hostnames');
-const { sendTelegram, flushDelayedPortAlerts } = require('./telegram');
+const { sendTelegram, flushDelayedPortAlerts, flushTelegramOutbox } = require('./telegram');
 const { noteFailure, noteRecovery, closeOrphanOutage, noteUptime, markPathOutage, pruneUptimeLog } = require('./uptimeLog');
 const { startFastPing, pingReachable } = require('./fastPing');
 const { beat, checkDisk, reportStartupGap } = require('./systemHealth');
@@ -49,9 +49,9 @@ async function pollDevice(device, opts = {}) {
 
     // ירידה ב-uptime בין שני polls = אתחול. device.uptime_sec הוא הערך מה-poll הקודם.
     // device הוא תמונת המצב מתחילת הסבב; uptime_sec/uptime_at נשמרים רק כאן, ולכן הם עדכניים
+    let bootedAt = null;
     try {
-      const bootedAt = noteUptime(device.id, device.uptime_sec, info.uptime_sec, now, device.uptime_at || null);
-      if (bootedAt) alertDeviceReboot(device, bootedAt, device.uptime_sec);
+      bootedAt = noteUptime(device.id, device.uptime_sec, info.uptime_sec, now, device.uptime_at || null);
     } catch (e) { console.warn(`[Poller] רישום אתחול נכשל עבור ${device.ip}: ${e.message}`); }
 
     // עדכן מידע וסטטוס UP (כולל vendor/model מה-sysDescr)
@@ -60,6 +60,11 @@ async function pollDevice(device, opts = {}) {
     // דקות), וה-ping המהיר עשוי היה לסמן DOWN בינתיים. עם הסטטוס הישן הנפילה נשארה
     // פתוחה וההתראה לא נסגרה (10.221.0.90, 17/10/2026).
     const statusBefore = db.prepare('SELECT status FROM devices WHERE id = ?').get(device.id)?.status;
+    // נפילה שהסתיימה לאחרונה, לפני שזוהה האתחול (ה-ping המהיר כבר שלח את הודעת החזרה)
+    const recentOutage = bootedAt && statusBefore !== 'down'
+      ? db.prepare(`SELECT ended_at FROM device_outages WHERE device_id = ? AND ended_at >= ? AND started_at <= ?
+                    ORDER BY ended_at DESC LIMIT 1`).get(device.id, now - 3600, bootedAt + 120)
+      : null;
     db.prepare(`
       UPDATE devices
       SET status = 'up', sys_name = ?, sys_descr = ?, uptime_sec = ?, uptime_at = ?, vendor = ?, model = ?
@@ -67,12 +72,22 @@ async function pollDevice(device, opts = {}) {
     `).run(info.sys_name, info.sys_descr, info.uptime_sec, now, vendor, model, device.id);
 
     // אם חזר מ-down — סגור event ורשום audit
+    // אתחול שזוהה יחד עם החזרה נכנס להודעת החזרה; אחרת הודעת אתחול נפרדת
     if (statusBefore === 'down') {
       try { noteRecovery(device.id, now); }
       catch (e) { console.warn(`[Poller] סגירת נפילה נכשלה עבור ${device.ip}: ${e.message}`); }
-      resolveDeviceDown(device);
+      const reboot = bootedAt ? { bootedAt, prevUptimeSec: device.uptime_sec } : null;
+      const told = resolveDeviceDown(device, reboot);
+      if (bootedAt && !told) {
+        try { alertDeviceReboot(device, bootedAt, device.uptime_sec); }
+        catch (e) { console.warn(`[Poller] התראת אתחול נכשלה עבור ${device.ip}: ${e.message}`); }
+      }
       logAudit('info', 'poller', 'device_back_online', { device: deviceLabel(device) }, { device_id: device.id, ip: device.ip });
     } else {
+      if (bootedAt) {
+        try { alertDeviceReboot(device, bootedAt, device.uptime_sec, recentOutage?.ended_at || null); }
+        catch (e) { console.warn(`[Poller] התראת אתחול נכשלה עבור ${device.ip}: ${e.message}`); }
+      }
       // ניקוי יתומים: נפילה או התראת DOWN שנשארו פתוחות על מכשיר שמסומן UP
       try { closeOrphanOutage(device.id, now); }
       catch (e) { console.warn(`[Poller] סגירת נפילה יתומה נכשלה עבור ${device.ip}: ${e.message}`); }
@@ -540,8 +555,12 @@ function startPoller() {
   cron.schedule('7 * * * *', maintainAlerts);
 
   // התראות פורט עמוס שממתינות לטלגרם: עולות רק אם העומס נמשך מספיק זמן (ראה services/telegram.js)
+  // באותו סבב: הודעות שלא יצאו קודם (תור השליחה, ראה services/telegram.js) נשלחות שוב
   cron.schedule('* * * * *', () => {
-    flushDelayedPortAlerts().catch(err => console.error('[Poller] שליחת התראות פורט לטלגרם נכשלה:', err.message));
+    flushTelegramOutbox()
+      .catch(err => console.error('[Poller] שליחת תור הטלגרם נכשלה:', err.message))
+      .then(() => flushDelayedPortAlerts())
+      .catch(err => console.error('[Poller] שליחת התראות פורט לטלגרם נכשלה:', err.message));
   });
   maintainAlerts();
 

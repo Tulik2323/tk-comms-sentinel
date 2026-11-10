@@ -2,6 +2,20 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.15.6] — 2026-11-10
+
+### Fixed
+- **Telegram messages were lost when Telegram could not be reached for a moment.** After a failed send the poller
+  paused Telegram for 5 minutes and dropped every message in that time. On 2026-11-10 two switches went down and came
+  back: the "back up" message of both and the reboot of one were never delivered. Messages that cannot be sent now
+  wait in a queue (`telegram_outbox`) and are sent every minute, in order, once Telegram answers again, marked
+  "sent late" with the time of the event. A message still unsent after 12 hours is dropped.
+- **The recovery and reboot messages were unclear.** The "back up" message now gives the time the switch came back,
+  and when the switch also rebooted, says so in the same message. The fast ping reads the switch's uptime the moment
+  it answers again, so in most cases the reboot is known by then. A reboot found only later says it happened during
+  the outage and when the switch came back; a reboot with no outage says so and that the switch is running. Reboot
+  messages now follow the "back up" choice (`device_up`) for Telegram and email, instead of the "down" choice.
+
 ## [1.15.5] — 2026-11-05
 
 ### Fixed

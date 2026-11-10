@@ -97,26 +97,85 @@ async function sendNow(token, chatIds, text) {
   return sent;
 }
 
-// שליחת התראה לפי סוג. לא ממתין לתוצאה. מחזיר Promise<boolean>: האם ההודעה נשלחה בפועל
-// (משמש את מנגנון ההשהיה, שמסמן פורט כשנשלח רק אחרי שליחה מוצלחת).
-function sendTelegram(kind, text) {
+// ---- תור שליחה (telegram_outbox) ----
+// הודעה שלא יצאה לא נזרקת: היא נשמרת ונשלחת בסבב הבא (פעם בדקה, ב-poller), עם שעת האירוע המקורית.
+// הודעה ישנה מ-OUTBOX_MAX_AGE_SEC כבר לא שימושית ונמחקת. כל עוד יש בתור הודעות, גם הודעה חדשה
+// נכנסת לתור, כדי שהסדר יישמר ("חזר לפעול" לא יקדים את "לא מגיב").
+const OUTBOX_MAX_AGE_SEC = 12 * 3600;
+
+function enqueue(kind, text, eventAt, error) {
+  getDb().prepare('INSERT INTO telegram_outbox (kind, text, event_at, last_error) VALUES (?, ?, ?, ?)')
+    .run(kind, text, eventAt, error || null);
+}
+
+function outboxCount() {
+  return getDb().prepare('SELECT COUNT(*) AS n FROM telegram_outbox').get()?.n || 0;
+}
+
+function lateNote(eventAt) {
+  return `\n(נשלח באיחור, האירוע ב-${new Date(eventAt * 1000).toLocaleString('he-IL')})`;
+}
+
+// שליחת התראה לפי סוג. לא ממתין לתוצאה. מחזיר Promise<boolean>: האם ההודעה נשלחה עכשיו.
+// opts.queue=false: בלי תור, לקורא שמנהל ניסיונות חוזרים בעצמו (התראות פורט עמוס, ראה למטה).
+function sendTelegram(kind, text, opts = {}) {
   try {
     const cfg = readConfig();
     // 'system' = הניטור עצמו בסכנה (הפסיק לעבוד, דיסק מתמלא): נשלח בלי קשר לסוגים שנבחרו
     if (!cfg.enabled || (kind !== 'system' && !cfg.types.includes(kind))) return Promise.resolve(false);
     if (validateConfig(cfg.token, cfg.chatIds)) return Promise.resolve(false);
-    if (Date.now() < _failedUntil) return Promise.resolve(false);
+    const queue = opts.queue !== false;
+    const now = Math.floor(Date.now() / 1000);
+    if (Date.now() < _failedUntil || (queue && outboxCount() > 0)) {
+      if (queue) enqueue(kind, text, now, 'waiting');
+      return Promise.resolve(false);
+    }
 
     return sendNow(cfg.token, cfg.chatIds, text)
       .then(() => { _failedUntil = 0; console.log(`[Telegram] נשלח (${kind})`); return true; })
       .catch((err) => {
         _failedUntil = Date.now() + BACKOFF_MS;
-        console.error(`[Telegram] כשל בשליחה (${explainError(err)}). משהה ניסיונות ל-${BACKOFF_MS / 60000} דקות.`);
+        const why = explainError(err);
+        if (queue) enqueue(kind, text, now, why);
+        console.error(`[Telegram] כשל בשליחה (${why}). משהה ניסיונות ל-${BACKOFF_MS / 60000} דקות${queue ? ', וההודעה נשמרה לשליחה חוזרת' : ''}.`);
         return false;
       });
   } catch (err) {
     console.error('[Telegram] שגיאה בהכנת הודעה:', err.message);
     return Promise.resolve(false);
+  }
+}
+
+// שולח את התור. רץ פעם בדקה ב-poller. עוצר בכשל הראשון, כדי שהסדר יישמר.
+async function flushTelegramOutbox() {
+  const db = getDb();
+  const now = Math.floor(Date.now() / 1000);
+  const stale = db.prepare('DELETE FROM telegram_outbox WHERE event_at < ?').run(now - OUTBOX_MAX_AGE_SEC).changes;
+  if (stale > 0) console.warn(`[Telegram] נמחקו ${stale} הודעות שלא נשלחו במשך ${OUTBOX_MAX_AGE_SEC / 3600} שעות`);
+
+  const cfg = readConfig();
+  if (!cfg.enabled || validateConfig(cfg.token, cfg.chatIds)) return;
+  if (Date.now() < _failedUntil) return;
+
+  const rows = db.prepare('SELECT id, kind, text, event_at FROM telegram_outbox ORDER BY id LIMIT 30').all();
+  for (const r of rows) {
+    // סוג שהוסר מההגדרות בינתיים לא נשלח
+    if (r.kind !== 'system' && !cfg.types.includes(r.kind)) {
+      db.prepare('DELETE FROM telegram_outbox WHERE id = ?').run(r.id);
+      continue;
+    }
+    try {
+      await sendNow(cfg.token, cfg.chatIds, r.text + lateNote(r.event_at));
+      db.prepare('DELETE FROM telegram_outbox WHERE id = ?').run(r.id);
+      _failedUntil = 0;
+      console.log(`[Telegram] נשלח מהתור (${r.kind})`);
+    } catch (err) {
+      _failedUntil = Date.now() + BACKOFF_MS;
+      const why = explainError(err);
+      db.prepare('UPDATE telegram_outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?').run(why, r.id);
+      console.error(`[Telegram] שליחה מהתור נכשלה (${why}). ניסיון נוסף בעוד ${BACKOFF_MS / 60000} דקות.`);
+      return;
+    }
   }
 }
 
@@ -141,7 +200,7 @@ async function flushDelayedPortAlerts() {
   for (const r of rows) {
     const mins = Math.max(cfg.portMin, Math.round((Date.now() / 1000 - r.sent_at) / 60));
     const link = base && r.device_id ? `\n${base}/devices/${r.device_id}?port=${r.port_if_index}` : '';
-    const ok = await sendTelegram('port_bandwidth', `🔌 פורט עמוס — נמשך ${mins} דקות\n${r.message}${link}`);
+    const ok = await sendTelegram('port_bandwidth', `🔌 פורט עמוס — נמשך ${mins} דקות\n${r.message}${link}`, { queue: false });
     if (!ok) return;   // טלגרם לא זמין: מנסים שוב בדקה הבאה, בלי לסמן
     db.prepare('UPDATE alert_events SET tg_sent_at = unixepoch() WHERE id = ?').run(r.id);
   }
@@ -149,5 +208,5 @@ async function flushDelayedPortAlerts() {
 
 module.exports = {
   KINDS, DEFAULT_PORT_MIN, TOKEN_RE, CHAT_RE,
-  parseChatIds, validateConfig, readConfig, callApi, explainError, sendNow, sendTelegram, flushDelayedPortAlerts,
+  parseChatIds, validateConfig, readConfig, callApi, explainError, sendNow, sendTelegram, flushDelayedPortAlerts, flushTelegramOutbox, OUTBOX_MAX_AGE_SEC,
 };

@@ -330,6 +330,18 @@ async function initDb() {
       ended_at   INTEGER NOT NULL
     )
   `);
+  // הודעות טלגרם שלא יצאו (אין גישה לטלגרם, או בזמן ההשהיה אחרי כשל). נשלחות שוב בסדר שבו נוצרו,
+  // עם שעת האירוע המקורית (10/11/2026: הודעות "חזר לפעול" של שני מתגים אבדו בכשל רגעי).
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS telegram_outbox (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind       TEXT NOT NULL,
+      text       TEXT NOT NULL,
+      event_at   INTEGER NOT NULL,
+      attempts   INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT
+    )
+  `);
   // כמה שעות התחברות של המשתמש בתוקף. NULL = ברירת המחדל (8). נקבע על ידי מנהל בדף המשתמשים.
   try { _sqlDb.exec('ALTER TABLE user_accounts ADD COLUMN session_hours INTEGER'); } catch (_) {}
   // מתי התראת פורט עמוס עלתה לטלגרם (NULL = עוד לא, למשל כי העומס חלף לפני שעבר זמן ההשהיה)

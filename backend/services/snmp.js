@@ -503,6 +503,23 @@ function snmpAlive(device, timeoutMs = 3000) {
   });
 }
 
+// זמן הפעולה בשניות (sysUpTime), או null כשהמכשיר לא ענה. בדיקה קצרה כמו snmpAlive: ה-ping המהיר
+// קורא לה ברגע שמתג חוזר, כדי לדעת כבר בהודעת החזרה אם הוא אותחל.
+function snmpUptime(device, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    let session;
+    try { session = createSession(device, { timeout: timeoutMs, retries: 1 }); }
+    catch (_) { return resolve(null); }
+    const guard = setTimeout(() => { safeClose(session); resolve(null); }, timeoutMs * 2 + 1000);
+    session.get([OID.sysUpTime], (err, varbinds) => {
+      clearTimeout(guard);
+      safeClose(session);
+      const ok = !err && Array.isArray(varbinds) && varbinds.length > 0 && !snmp.isVarbindError(varbinds[0]);
+      resolve(ok && varbinds[0].value != null ? Math.floor(Number(varbinds[0].value) / 100) : null);
+    });
+  });
+}
+
 // מחלץ vendor ו-model מ-sysDescr (כבר נשמר בDB בכל poll)
 //
 // פורמט HPE Comware (הנפוץ ברשת פוריה):
@@ -980,4 +997,4 @@ async function getArpTable(device) {
   }
 }
 
-module.exports = { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getPortStatuses, getHardwareStatus, getStackMembers, getPortVlans, getArpTable, getMacBridgeTable, pingSnmp, snmpAlive, explainSnmpError, parseVendorModel, OID };
+module.exports = { getDeviceInfo, getInterfaces, getLldpNeighbors, getCpuMemory, getPortStatuses, getHardwareStatus, getStackMembers, getPortVlans, getArpTable, getMacBridgeTable, pingSnmp, snmpAlive, snmpUptime, explainSnmpError, parseVendorModel, OID };

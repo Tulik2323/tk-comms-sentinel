@@ -467,30 +467,53 @@ async function checkDeviceDown(device) {
 // נתפסה — אתחול מהיר, או שהניטור לא פעל באותה שעה (22/10/2026: מתגים אותחלו בלילה
 // בזמן שה-poller היה מושבת, ולא נשלחה שום הודעה). נרשם כאירוע סגור בלוג ההתראות,
 // ונשלח באותו ערוץ של התראות DOWN.
-function alertDeviceReboot(device, bootedAt, prevUptimeSec) {
-  const label = deviceLabel(device);
-  const when  = new Date(bootedAt * 1000).toLocaleString('he-IL');
-  const prevDays = Math.max(0, Math.round((prevUptimeSec || 0) / 86400));
+//
+// הודעת האתחול נשלחת עם הודעות החזרה (device_up), כי המתג פועל ברגע שהיא נכתבת. אם האתחול
+// היה בזמן נפילה שהודעת החזרה שלה כבר יצאה, recoveredAt הוא רגע החזרה, וההודעה אומרת זאת.
+// כשהאתחול ידוע כבר ברגע החזרה, הוא נכנס להודעת החזרה עצמה (resolveDeviceDown) ולא נשלח כאן.
+function eventTime(ts) {
+  const d = new Date(ts * 1000);
+  return d.toDateString() === new Date().toDateString()
+    ? d.toLocaleTimeString('he-IL')
+    : d.toLocaleString('he-IL');
+}
+
+function uptimeDays(sec) {
+  return Math.max(0, Math.round((sec || 0) / 86400));
+}
+
+function recordReboot(device, bootedAt, prevUptimeSec) {
   getDb().prepare(`
     INSERT INTO alert_events (device_id, metric, value, threshold, message, resolved_at)
     VALUES (?, 'reboot', ?, 0, ?, unixepoch())
-  `).run(device.id, prevDays, `${label} אותחל (זמן הפעולה התאפס) — עלה ב-${when}`);
+  `).run(device.id, uptimeDays(prevUptimeSec),
+    `${deviceLabel(device)} אותחל (זמן הפעולה התאפס) — עלה ב-${new Date(bootedAt * 1000).toLocaleString('he-IL')}`);
+}
 
-  sendTelegram('device_down',
-    `🔄 ${label} (${device.ip}) אותחל — עלה ב-${when}. לפני כן פעל ${prevDays} ימים${deviceLink(device.id)}`);
-  if (!emailAllowed('device_down')) return;
+function alertDeviceReboot(device, bootedAt, prevUptimeSec, recoveredAt = null) {
+  const label = deviceLabel(device);
+  const prevDays = uptimeDays(prevUptimeSec);
+  recordReboot(device, bootedAt, prevUptimeSec);
+
+  const what = recoveredAt
+    ? `אותחל ב-${eventTime(bootedAt)} במהלך הנפילה, וחזר לפעול ב-${eventTime(recoveredAt)}.`
+    : `אותחל ב-${eventTime(bootedAt)} בלי שזוהתה נפילה, וכרגע הוא פועל.`;
+  sendTelegram('device_up',
+    `🔄 ${label} (${device.ip}) ${what} לפני כן פעל ${prevDays} ימים.${deviceLink(device.id)}`);
+  if (!emailAllowed('device_up')) return;
   sendAlertEmail(
     `[NetMonitor] מתג אותחל: ${label}`,
     `מכשיר: ${label} (${device.ip})\n` +
-    `אותחל: זמן הפעולה התאפס, המתג עלה ב-${when}\n` +
+    `${what}\n` +
     `לפני האתחול פעל ${prevDays} ימים\n` +
     `זמן הזיהוי: ${new Date().toLocaleString('he-IL')}` +
     deviceLink(device.id)
   );
 }
 
-// סגור event DOWN כשמכשיר חוזר UP ושלח מייל אישור
-function resolveDeviceDown(device) {
+// סגור event DOWN כשמכשיר חוזר UP ושלח הודעת חזרה. reboot = { bootedAt, prevUptimeSec } כשכבר
+// ידוע שהמתג אותחל, ואז האתחול נכנס לאותה הודעה. מחזיר true אם נשלחה הודעת חזרה.
+function resolveDeviceDown(device, reboot = null) {
   const db = getDb();
   // הודעת "חזר" רק אם נפילה באמת נפתחה (3 כשלונות ברצף), כדי שכשל חולף לא ייצור הודעת חזרה בלי הודעת נפילה
   const open = db.prepare(`
@@ -498,13 +521,22 @@ function resolveDeviceDown(device) {
     WHERE device_id = ? AND metric = 'status' AND resolved_at IS NULL LIMIT 1
   `).get(device.id);
   if (open) {
-    const mins = Math.max(1, Math.round((Date.now() / 1000 - open.sent_at) / 60));
-    sendTelegram('device_up', `🟢 ${deviceLabel(device)} (${device.ip}) חזר לפעול — היה למטה ${mins} דקות${deviceLink(device.id)}`);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const mins = Math.max(1, Math.round((nowSec - open.sent_at) / 60));
+    const label = deviceLabel(device);
+    let rebootText = '';
+    if (reboot) {
+      recordReboot(device, reboot.bootedAt, reboot.prevUptimeSec);
+      rebootText = ` המתג אותחל ב-${eventTime(reboot.bootedAt)}, ולפני כן פעל ${uptimeDays(reboot.prevUptimeSec)} ימים.`;
+    }
+    sendTelegram('device_up',
+      `🟢 ${label} (${device.ip}) חזר לפעול ב-${eventTime(nowSec)}, אחרי ${mins} דקות למטה.${rebootText}${deviceLink(device.id)}`);
     if (emailAllowed('device_up')) {
       sendAlertEmail(
-        `[NetMonitor] מכשיר חזר: ${deviceLabel(device)}`,
-        `מכשיר: ${deviceLabel(device)} (${device.ip})\n` +
+        `[NetMonitor] מכשיר חזר: ${label}`,
+        `מכשיר: ${label} (${device.ip})\n` +
         `סטטוס: חזר לפעול — היה למטה כ-${mins} דקות\n` +
+        (reboot ? `אותחל: המתג עלה ב-${new Date(reboot.bootedAt * 1000).toLocaleString('he-IL')}, ולפני כן פעל ${uptimeDays(reboot.prevUptimeSec)} ימים\n` : '') +
         `זמן: ${new Date().toLocaleString('he-IL')}` +
         deviceLink(device.id)
       );
@@ -519,6 +551,7 @@ function resolveDeviceDown(device) {
 
   // נקה cooldown
   lastAlertSent.delete(`${device.id}_status`);
+  return !!open;
 }
 
 module.exports = { checkThresholds, checkDeviceDown, resolveDeviceDown, alertDeviceReboot, sendAlertEmail, emailAllowed, isQuietHoursNow: () => isQuietHours(), maintainAlertEvents, EMAIL_DEFAULT_KINDS };
