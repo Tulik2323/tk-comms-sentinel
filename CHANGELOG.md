@@ -2,6 +2,17 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.15.7] — 2026-11-12
+
+### Fixed
+- **A frozen poller was left running, so monitoring stayed down until someone closed it by hand.** On 2026-11-12 the
+  poller process froze (alive, no activity). The watchdog looks for it with a PowerShell process query, which took more
+  than 60 seconds when it ran as SYSTEM. The watchdog read the timeout as "no poller process", did not close the frozen
+  one, and the scheduled task could not start a new copy while it was still running. Now the poller saves its process id
+  next to its heartbeat, and when the query fails the watchdog checks that id with `tasklist`: a `node.exe` running as
+  SYSTEM is closed so the task restarts it. The site process (which runs as the application pool) is never touched. A
+  failed query is now written to `watchdog.log` with the reason and how long it took.
+
 ## [1.15.6] — 2026-11-10
 
 ### Fixed

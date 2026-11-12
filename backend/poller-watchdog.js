@@ -13,6 +13,11 @@
 // שבדק תהליכים (כ-30 שניות בשרת שרק עלה) ה-poller עלה — והשומר סגר אותו ושלח "הניטור
 // הפסיק" שקרי. לכן: לא פועלים ב-10 הדקות הראשונות אחרי אתחול, לא סוגרים poller צעיר
 // מ-5 דקות, וקוראים את ה-heartbeat שוב רגע לפני כל פעולה.
+//
+// ב-12/11/2026 ה-poller קפא (התהליך חי, בלי פעילות), אבל חיפוש התהליכים ב-PowerShell לקח יותר
+// מ-60 שניות כשהוא רץ כ-SYSTEM. השומר הסיק "אין תהליך poller" והשאיר את הקפוא פתוח, והמשימה
+// המתוזמנת לא יכלה להפעיל עותק חדש. לכן: כשהחיפוש נכשל, בודקים את מזהה התהליך שה-poller שמר
+// לצד ה-heartbeat (poller_pid), דרך tasklist המהיר.
 const path = require('path');
 const fs   = require('fs');
 const { execFileSync } = require('child_process');
@@ -49,20 +54,47 @@ function systemSnapshot() {
       `Where-Object { $_.CommandLine -like '*${target}*' } | ` +
       "ForEach-Object { 'PID ' + $_.ProcessId + ' ' + [int]($now - $_.CreationDate).TotalSeconds }",
   ].join('; ');
+  const started = Date.now();
   try {
     const out = execFileSync('powershell.exe', ['-NoProfile', '-Command', ps],
       { encoding: 'utf8', timeout: 60000, windowsHide: true });
     const boot = /BOOT (\d+)/.exec(out);
     const procs = [...out.matchAll(/PID (\d+) (\d+)/g)].map(m => ({ pid: Number(m[1]), ageSec: Number(m[2]) }));
-    return { bootAgeSec: boot ? Number(boot[1]) : null, procs };
-  } catch (_) {
-    return { bootAgeSec: null, procs: [] };
+    // בלי שורת BOOT הפקודה לא רצה עד הסוף: אי אפשר לסמוך על רשימת תהליכים ריקה
+    if (!boot) return { ok: false, bootAgeSec: null, procs, error: 'no output' };
+    return { ok: true, bootAgeSec: Number(boot[1]), procs };
+  } catch (e) {
+    const sec = Math.round((Date.now() - started) / 1000);
+    return { ok: false, bootAgeSec: null, procs: [], error: `${e.code || e.message} after ${sec}s` };
   }
+}
+
+// שורה אחת של tasklist /V /FO CSV /NH:
+// "Image","PID","Session","Session#","Mem","Status","User","CPU Time","Window Title"
+function parseTasklistLine(line) {
+  const f = [...String(line).matchAll(/"([^"]*)"/g)].map(m => m[1]);
+  if (f.length < 7 || !/^\d+$/.test(f[1])) return null;
+  return { image: f[0], pid: Number(f[1]), user: f[6] };
+}
+
+// גיבוי כשחיפוש התהליכים נכשל: התהליך שה-poller שמר את המזהה שלו לצד ה-heartbeat. נחשב poller רק
+// אם הוא חי, הוא node.exe, והוא רץ כ-SYSTEM כמו המשימה "NetMonitor Poller" (תהליך האתר רץ בזהות
+// ה-App Pool, כך שמזהה שעבר לתהליך האתר לא ייסגר). הגיל: המזהה נשמר לפני ה-heartbeat הראשון של אותו
+// תהליך, וה-heartbeat ישן מ-5 דקות, לכן התהליך חי לפחות 5 דקות.
+function pollerByPid(pid, run = (args) => execFileSync('tasklist.exe', args,
+    { encoding: 'utf8', timeout: 20000, windowsHide: true })) {
+  if (!pid || pid === process.pid) return null;
+  let out;
+  try { out = run(['/FI', `PID eq ${pid}`, '/V', '/FO', 'CSV', '/NH']); }
+  catch (e) { log(`גם בדיקת המזהה ${pid} נכשלה: ${e.code || e.message}`); return null; }
+  const p = String(out).split(/\r?\n/).map(parseTasklistLine).find(x => x && x.pid === pid);
+  if (!p || p.image.toLowerCase() !== 'node.exe' || !/\\SYSTEM$/i.test(p.user)) return null;
+  return { pid, ageSec: STALE_SEC };
 }
 
 async function main() {
   openDbReadOnly();
-  const { monitorStatus, diskStatus, sendSystemAlert } = require('./services/systemHealth');
+  const { monitorStatus, heartbeatPid, diskStatus, sendSystemAlert } = require('./services/systemHealth');
   const st = readState();
   const now = Math.floor(Date.now() / 1000);
   const fmt = (ts) => new Date(ts * 1000).toLocaleString('he-IL');
@@ -83,16 +115,25 @@ async function main() {
 
   if (stale) {
     const snap = systemSnapshot();
-    const stuck = snap.procs.filter(p => p.ageSec >= MIN_KILL_AGE_SEC);
+    let stuck = snap.procs.filter(p => p.ageSec >= MIN_KILL_AGE_SEC);
     const young = snap.procs.filter(p => p.ageSec < MIN_KILL_AGE_SEC);
+    if (!snap.ok) {
+      log(`חיפוש התהליכים נכשל (${snap.error}) — בודק את מזהה ה-poller ששמור לצד ה-heartbeat`);
+      if (!stuck.length && !young.length) {
+        const byPid = pollerByPid(heartbeatPid());
+        if (byPid) stuck = [byPid];
+      }
+    }
     if (young.length) {
       log(`heartbeat ישן ${m.age_sec} שניות, אבל ה-poller עלה לפני ${young[0].ageSec} שניות — ממתין`);
     } else if (stuck.length) {
       // קיים אבל לא מעדכן: תקוע. סגירה מאפשרת למשימה המתוזמנת להפעיל עותק חדש תוך דקה.
       log(`heartbeat ישן ${m.age_sec} שניות, תהליכי poller תקועים: ${stuck.map(p => p.pid).join(', ')} — סוגר`);
       for (const p of stuck) { try { process.kill(p.pid, 'SIGKILL'); } catch (e) { log(`סגירת ${p.pid} נכשלה: ${e.message}`); } }
-    } else {
+    } else if (snap.ok) {
       log(`heartbeat ישן ${m.age_sec} שניות ואין תהליך poller (ההפעלה נכשלת)`);
+    } else {
+      log(`heartbeat ישן ${m.age_sec} שניות, ולא נמצא poller פעיל (גם לפי המזהה השמור)`);
     }
     // poller צעיר: נותנים לו לעלות, בלי התראה. אם תהליך ה-web כבר התריע (מפתח ב-DB), לא שולחים שוב.
     if (!young.length && !st.downAlertedAt && !(Number(getSetting('monitor_down_alerted_at')) || 0)) {
@@ -123,4 +164,8 @@ async function main() {
   await new Promise(r => setTimeout(r, 15000));
 }
 
-main().then(() => process.exit(0)).catch((e) => { log('שגיאה:', e.message); process.exit(1); });
+if (require.main === module) {
+  main().then(() => process.exit(0)).catch((e) => { log('שגיאה:', e.message); process.exit(1); });
+}
+
+module.exports = { parseTasklistLine, pollerByPid };

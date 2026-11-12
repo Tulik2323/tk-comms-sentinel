@@ -19,9 +19,22 @@ const DISK_REALERT_SEC   = 6 * 3600;
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
+// מזהה התהליך של ה-poller שכותב את ה-heartbeat. נשמר לפני ה-heartbeat הראשון שלו, ולכן תמיד שייך
+// למי שכתב את ה-heartbeat האחרון. השומר (poller-watchdog.js) משתמש בו כשחיפוש התהליכים שלו נכשל:
+// ב-12/11/2026 החיפוש לקח יותר מ-60 שניות, השומר חשב שאין poller, ו-poller קפוא נשאר פתוח.
+const PID_KEY = 'poller_pid';
+let _pidSaved = false;
+
 function beat() {
-  try { setSetting(HEARTBEAT_KEY, String(nowSec())); }
+  try {
+    if (!_pidSaved) { setSetting(PID_KEY, String(process.pid)); _pidSaved = true; }
+    setSetting(HEARTBEAT_KEY, String(nowSec()));
+  }
   catch (e) { console.warn(`[Health] כתיבת heartbeat נכשלה: ${e.message}`); }
+}
+
+function heartbeatPid() {
+  return Number(getSetting(PID_KEY)) || null;
 }
 
 function monitorStatus() {
@@ -139,4 +152,4 @@ function reportStartupGap() {
     `אירועים מאותו זמן (נפילות קצרות) לא נתפסו. אתחולים של מתגים מזוהים בבדיקה הבאה של כל מתג.`);
 }
 
-module.exports = { beat, monitorStatus, diskStatus, checkDisk, sendSystemAlert, watchMonitor, reportStartupGap, STALE_AFTER_SEC };
+module.exports = { beat, heartbeatPid, monitorStatus, diskStatus, checkDisk, sendSystemAlert, watchMonitor, reportStartupGap, STALE_AFTER_SEC };
