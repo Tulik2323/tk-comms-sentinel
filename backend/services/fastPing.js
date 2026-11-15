@@ -174,7 +174,9 @@ async function runPingCycle() {
 
 function startFastPing() {
   console.log('[FastPing] מתחיל בדיקת ping מהירה (כל 20 שניות, כל המכשירים)');
-  cron.schedule('*/20 * * * * *', runPingCycle);
+  // recoverMissedExecutions: node-cron 3 בודק פעם בשנייה, ואם התהליך עסוק בדיוק בשנייה של
+  // הסבב הסבב פשוט נעלם בלי שום רישום. כך הוא רץ ברגע שהתהליך מתפנה (_cycleRunning מונע כפילות).
+  cron.schedule('*/20 * * * * *', runPingCycle, { recoverMissedExecutions: true });
 }
 
 // האם המכשיר עונה כרגע ל-ping (ענה בעבר, ואין כשלים פתוחים מאז). ה-SNMP poller משתמש

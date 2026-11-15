@@ -2,6 +2,27 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
+## [1.15.8] — 2026-11-15
+
+### Fixed
+- **The poller choked on its own database writes, stopped writing its heartbeat, and the watchdog closed it.** On
+  2026-11-15 the watchdog closed the poller at 02:50 and again at 03:05, the second time during the first round after
+  the restart. The process was not frozen: its event loop was blocked by synchronous SQLite work. Every switch sees
+  almost every MAC address on the network (about 1M rows in `mac_entries`), and each MAC poll wrote 3,500-4,800 rows
+  one commit at a time, up to about 8 seconds per switch on a copy of the database, longer on the busy server disk. While the
+  loop was blocked, node-cron silently dropped the fast ping rounds, so no heartbeat was written and short outages were
+  not seen. The first round after every start MAC-polled all devices together. Now:
+  - MAC and ARP rows are written in chunks of 100 per transaction, and the process yields between chunks. Port rows,
+    port changes and port samples of one device are written in one transaction.
+  - On the first round after a start only about a fifth of the devices read their MAC table, spread by device id.
+  - Old rows are no longer deleted in every poll of every device (a full scan of the table each time). Port samples
+    are deleted every 10 minutes in small chunks, using a new index on `port_samples(ts)`; port changes and MAC
+    entries once a day at 00:41.
+  - A fast ping round that was missed because the process was busy now runs as soon as it is free.
+  - The SQLite page cache is 32MB instead of 2MB.
+
+  The first start after the update builds the new index, which can take from a few seconds to about half a minute.
+
 ## [1.15.7] — 2026-11-12
 
 ### Fixed

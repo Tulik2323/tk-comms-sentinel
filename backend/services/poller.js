@@ -34,6 +34,19 @@ const MAC_POLL_EVERY = 5;
 const stackPollCount  = new Map();
 const STACK_POLL_EVERY = 12;
 
+// כתיבת הרבה שורות בלי לחנוק את התהליך: כל מנה בפעולה אחת (commit אחד), ובין המנות התהליך
+// מתפנה לטיימרים (בדיקת ה-ping המהירה, ה-heartbeat). מתג אחד מחזיר עד ~5,000 כתובות MAC;
+// ב-1.15.7 הן נכתבו שורה-שורה בבת אחת, והתהליך עמד שניות ארוכות לכל מתג (15/11/2026).
+// המנה קטנה בכוונה: כשהדיסק של השרת עמוס, מנה של 500 שורות לבדה החזיקה את התהליך עד 4.5 שניות.
+const WRITE_CHUNK = 100;
+async function writeInChunks(db, rows, write) {
+  for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
+    const part = rows.slice(i, i + WRITE_CHUNK);
+    db.transaction(() => { for (const r of part) write(r); })();
+    if (i + WRITE_CHUNK < rows.length) await new Promise(r => setImmediate(r));
+  }
+}
+
 // פולל מכשיר אחד — מחזיר { ok: true/false }
 //
 // opts.deferDownAlert — לא לשלוח התראת DOWN מיד, אלא להחזיר את העובדה
@@ -118,6 +131,9 @@ async function pollDevice(device, opts = {}) {
         port.pvid = pvids[port.if_index] || null;
       }
 
+      // כל הכתיבות של הפורטים בפעולה אחת: כל כתיבה נפרדת היא commit משלו, וזה עוצר את התהליך כולו
+      // (15/11/2026: כתיבות בודדות חנקו את ה-poller עד שבדיקת ה-ping לא רצה, והשומר סגר אותו)
+      db.transaction(() => {
       for (const port of ports) {
         // חשב bps מ-counter delta
         const counterKey = `${device.id}_${port.if_index}`;
@@ -210,8 +226,6 @@ async function pollDevice(device, opts = {}) {
             }
           }
         }
-        // ניקוי רשומות ישנות (14 ימים)
-        db.prepare("DELETE FROM port_changes WHERE changed_at < unixepoch() - 14*24*3600").run();
       } catch (_) {}
 
       // --- דגימות פורט לגרף היסטורי (48h) ---
@@ -223,11 +237,9 @@ async function pollDevice(device, opts = {}) {
           if (port.oper_status !== 'up') continue; // רק פורטים פעילים
           sampleInsert.run(device.id, port.if_index, port._inBps || 0, port._outBps || 0, port.in_errors || 0, port.out_errors || 0);
         }
-        // ניקוי חד-פעמי: מחק דגימות ישנות מכל המכשירים (לא כל poll כדי לחסוך I/O)
-        if (Math.random() < 0.05) {
-          db.prepare("DELETE FROM port_samples WHERE ts < unixepoch() - 48*3600").run();
-        }
       } catch (_) {}
+      })();
+      // מחיקת רשומות ישנות (port_changes, port_samples) רצה פעם בשעה, ראה pruneTables
 
     } catch (portErr) {
       console.warn(`[Poller] שגיאת ports עבור ${device.ip}: ${portErr.message}`);
@@ -293,7 +305,11 @@ async function pollDevice(device, opts = {}) {
 
     // --- MAC/ARP (כל MAC_POLL_EVERY polls, לחסוך SNMP load) ---
     try {
-      const count = (macPollCount.get(device.id) || 0) + 1;
+      // מכשיר שעוד לא נסרק מתחיל בהיסט לפי המזהה שלו: בלי זה, הסבב הראשון אחרי כל הפעלה קרא את
+      // טבלאות ה-MAC של כל המכשירים יחד (~99), וזה היה העומס הכבד ביותר. כך רק כחמישית מהם בכל סבב.
+      const count = macPollCount.has(device.id)
+        ? macPollCount.get(device.id) + 1
+        : 1 + (device.id % MAC_POLL_EVERY);
       macPollCount.set(device.id, count);
       if (count % MAC_POLL_EVERY === 1) {
         // ARP table → IP↔MAC mapping (if_index = VLAN interface)
@@ -307,7 +323,7 @@ async function pollDevice(device, opts = {}) {
               if_index   = excluded.if_index,
               last_seen  = excluded.last_seen
           `);
-          for (const e of arpEntries) upsert.run(e.mac, e.ip, device.id, e.if_index);
+          await writeInChunks(db, arpEntries, e => upsert.run(e.mac, e.ip, device.id, e.if_index));
         }
 
         // Bridge MAC table → MAC→physical port mapping (dot1dTpFdbTable)
@@ -320,11 +336,9 @@ async function pollDevice(device, opts = {}) {
               phys_if_index = excluded.phys_if_index,
               last_seen     = CASE WHEN last_seen > excluded.last_seen THEN last_seen ELSE excluded.last_seen END
           `);
-          for (const e of bridgeEntries) bridgeUpsert.run(e.mac, device.id, e.if_index);
-        }
-
-        if (arpEntries.length > 0 || bridgeEntries.length > 0) {
-          db.prepare("DELETE FROM mac_entries WHERE last_seen < unixepoch() - 30*24*3600").run();
+          // כל מתג רואה כמעט את כל הכתובות ברשת (3,500-4,800 שורות). שורה-שורה זה לקח עד כ-8 שניות
+          // למתג שבהן התהליך לא עשה דבר אחר (נמדד על העתק של מסד הנתונים, 15/11/2026)
+          await writeInChunks(db, bridgeEntries, e => bridgeUpsert.run(e.mac, device.id, e.if_index));
         }
       }
     } catch (_) {}
@@ -517,6 +531,31 @@ async function runCycle() {
   }
 }
 
+// מחיקת רשומות ישנות. עד 1.15.7 רצה בכל poll של כל מכשיר וסרקה בכל פעם את כל הטבלה
+// (כ-3 מיליון דגימות, מיליון כתובות MAC), והתהליך עמד בזמן הזה.
+//
+// דגימות הפורטים (כ-60 אלף בשעה) נמחקות כל 10 דקות, במנות קטנות בעזרת האינדקס על ts:
+// כל שורה יושבת גם באינדקס לפי מכשיר ופורט, ולכן מחיקה יקרה: מנה של 5,000 לקחה 2.5 שניות,
+// ומנה של 200 עד 2 שניות כשהדיסק עמוס. לכן 100 בכל מנה.
+const PRUNE_CHUNK = 100;
+async function pruneSamples() {
+  const del = getDb().prepare(`DELETE FROM port_samples WHERE rowid IN
+    (SELECT rowid FROM port_samples WHERE ts < unixepoch() - 48*3600 LIMIT ${PRUNE_CHUNK})`);
+  while (del.run().changes > 0) await new Promise(r => setImmediate(r));
+}
+
+// שינויי פורטים (14 יום) וכתובות MAC (30 יום): פעם ביום מספיק. המחיקה מה-MAC סורקת מיליון שורות.
+function pruneTables() {
+  const db = getDb();
+  for (const [table, sql] of [
+    ['port_changes', 'DELETE FROM port_changes WHERE changed_at < unixepoch() - 14*24*3600'],
+    ['mac_entries',  'DELETE FROM mac_entries WHERE last_seen < unixepoch() - 30*24*3600'],
+  ]) {
+    try { db.prepare(sql).run(); }
+    catch (err) { console.warn(`[Poller] ניקוי ${table} נכשל:`, err.message); }
+  }
+}
+
 // הפעל polling
 function startPoller() {
   console.log('[Poller] מתחיל polling scheduler');
@@ -553,6 +592,10 @@ function startPoller() {
     try { maintainAlertEvents(); } catch (err) { console.error('[Poller] תחזוקת אירועי התראה נכשלה:', err.message); }
   };
   cron.schedule('7 * * * *', maintainAlerts);
+  cron.schedule('*/10 * * * *', () => {
+    pruneSamples().catch(err => console.warn('[Poller] ניקוי port_samples נכשל:', err.message));
+  });
+  cron.schedule('41 0 * * *', pruneTables);
 
   // התראות פורט עמוס שממתינות לטלגרם: עולות רק אם העומס נמשך מספיק זמן (ראה services/telegram.js)
   // באותו סבב: הודעות שלא יצאו קודם (תור השליחה, ראה services/telegram.js) נשלחות שוב
@@ -579,4 +622,4 @@ async function forcePoll(deviceId) {
 }
 
 // runCycle מיוצא כדי לאפשר בדיקה של זיהוי נפילת נתיב בלי להמתין ל-cron
-module.exports = { startPoller, forcePoll, pollDevice, runCycle };
+module.exports = { startPoller, forcePoll, pollDevice, runCycle, pruneTables, pruneSamples };

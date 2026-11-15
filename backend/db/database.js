@@ -122,6 +122,8 @@ async function initDb() {
   // אחרי checkpoint מלא קובץ ה-WAL מקוצץ לגודל הזה. בלי מגבלה הוא נשאר בגודל המרבי שהגיע
   // אליו (1.1GB ב-2026-10), וכל פתיחה ראשונה אחרי נפילה צריכה לסרוק את כולו.
   _sqlDb.exec('PRAGMA journal_size_limit = 67108864');
+  // מטמון של 32MB במקום ברירת המחדל (2MB): מסד הנתונים כ-365MB, וטבלת ה-MAC לבדה מיליון שורות
+  _sqlDb.exec('PRAGMA cache_size = -32768');
 
   // הפעל schema (יוצר טבלאות אם לא קיימות)
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
@@ -296,6 +298,8 @@ async function initDb() {
     )
   `);
   try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_port_samples ON port_samples(device_id, if_index, ts)'); } catch (_) {}
+  // למחיקת הדגימות הישנות (כל 10 דקות, ראה pruneSamples): בלי אינדקס על ts כל מחיקה סורקת כ-3 מיליון שורות
+  try { _sqlDb.exec('CREATE INDEX IF NOT EXISTS idx_port_samples_ts ON port_samples(ts)'); } catch (_) {}
 
   // היסטוריית נפילות ואתחולים (ראה services/uptimeLog.js). additive בלבד: גם ה-web וגם ה-poller מריצים initDb.
   _sqlDb.exec(`
