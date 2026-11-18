@@ -60,11 +60,14 @@ router.post('/events/resolve', requireAdmin, (req, res) => {
 // התראות שחוזרות: אותו מכשיר / פורט / מטריקה שהתריע לפחות ב-3 ימים שונים ב-7 הימים
 // האחרונים. חזרה לאורך שבוע אומרת שזה לא ספייק חולף אלא מצב שדורש בדיקה, או סף שצריך
 // להתאים. נספרים גם אירועים סגורים — סגירה אוטומטית לא אמורה להסתיר חזרתיות.
+// מנהל יכול לאפס שורה: מאז נספרים רק אירועים חדשים (alert_recurring_resets), והשורה
+// חוזרת רק אם המכשיר מתריע שוב ב-3 ימים שונים.
 const RECURRING_WINDOW_DAYS = 7;
 const RECURRING_MIN_DAYS    = 3;
-router.get('/recurring', requireAuth, (req, res) => {
-  const db = getDb();
-  const items = db.prepare(`
+const RECURRING_METRICS     = ['bandwidth_in','bandwidth_out','cpu','mem','port_bandwidth_in','port_bandwidth_out'];
+
+function recurringItems(db) {
+  return db.prepare(`
     SELECT e.device_id, e.metric, e.port_if_index,
            COUNT(*) AS events,
            COUNT(DISTINCT date(e.sent_at, 'unixepoch', 'localtime')) AS days,
@@ -74,14 +77,59 @@ router.get('/recurring', requireAuth, (req, res) => {
     FROM alert_events e
     JOIN devices d ON d.id = e.device_id
     LEFT JOIN ports p ON p.device_id = e.device_id AND p.if_index = e.port_if_index
+    LEFT JOIN alert_recurring_resets r
+           ON r.device_id = e.device_id AND r.metric = e.metric
+          AND r.port_key = COALESCE(e.port_if_index, -1)
     WHERE e.sent_at >= unixepoch() - ?
-      AND e.metric IN ('bandwidth_in','bandwidth_out','cpu','mem','port_bandwidth_in','port_bandwidth_out')
+      AND e.sent_at > COALESCE(r.reset_at, 0)
+      AND e.metric IN (${RECURRING_METRICS.map(() => '?').join(',')})
     GROUP BY e.device_id, e.metric, e.port_if_index
     HAVING days >= ?
     ORDER BY days DESC, events DESC
     LIMIT 100
-  `).all(RECURRING_WINDOW_DAYS * 86400, RECURRING_MIN_DAYS);
-  res.json({ items, windowDays: RECURRING_WINDOW_DAYS, minDays: RECURRING_MIN_DAYS });
+  `).all(RECURRING_WINDOW_DAYS * 86400, ...RECURRING_METRICS, RECURRING_MIN_DAYS);
+}
+
+router.get('/recurring', requireAuth, (req, res) => {
+  res.json({ items: recurringItems(getDb()), windowDays: RECURRING_WINDOW_DAYS, minDays: RECURRING_MIN_DAYS });
+});
+
+// איפוס התראה חוזרת: { device_id, metric, port_if_index } לשורה אחת, או all=true לכל השורות
+// שמוצגות עכשיו. שום אירוע לא נמחק; רק נקודת ההתחלה של הספירה זזה לעכשיו.
+router.post('/recurring/reset', requireAdmin, (req, res) => {
+  const db = getDb();
+  const { device_id, metric, port_if_index, all } = req.body || {};
+  let targets, device;
+
+  if (all === true) {
+    targets = recurringItems(db);
+  } else if (Number.isInteger(device_id) && RECURRING_METRICS.includes(metric) &&
+             (port_if_index == null || Number.isInteger(port_if_index))) {
+    device = db.prepare('SELECT id, name, sys_name, ip FROM devices WHERE id = ?').get(device_id);
+    if (!device) return res.status(404).json({ error: 'מכשיר לא נמצא' });
+    targets = [{ device_id, metric, port_if_index: port_if_index ?? null }];
+  } else {
+    return res.status(400).json({ error: 'נדרש device_id, metric (ו-port_if_index לפורט), או all=true' });
+  }
+
+  const upsert = db.prepare(`
+    INSERT INTO alert_recurring_resets (device_id, metric, port_key, reset_at)
+    VALUES (?, ?, ?, unixepoch())
+    ON CONFLICT(device_id, metric, port_key) DO UPDATE SET reset_at = excluded.reset_at
+  `);
+  db.transaction(() => {
+    for (const t of targets) upsert.run(t.device_id, t.metric, t.port_if_index ?? -1);
+    // איפוס ישן מחלון הספירה כבר לא משפיע על שום דבר
+    db.prepare('DELETE FROM alert_recurring_resets WHERE reset_at < unixepoch() - ?').run(RECURRING_WINDOW_DAYS * 86400);
+  })();
+
+  if (targets.length > 0) {
+    logAudit('info', 'admin', all === true ? 'recurring_reset_all' : 'recurring_reset',
+      all === true ? { count: targets.length }
+                   : { device: deviceLabel(device), metric, port: port_if_index ?? '-' },
+      { username: req.user?.username, ip: req.ip });
+  }
+  res.json({ ok: true, reset: targets.length });
 });
 
 // הגדרות סף: גלובלי, למכשיר, ולפורט (כל סף פורט מסומן scope='port' ומכיל את ה-if_index)

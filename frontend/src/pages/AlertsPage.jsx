@@ -165,6 +165,7 @@ export default function AlertsPage() {
   const [closing,    setClosing]    = useState(false);
   const [recurring,  setRecurring]  = useState({ items: [], windowDays: 7, minDays: 3 });
   const [showAllRecurring, setShowAllRecurring] = useState(false);
+  const [resetting,  setResetting]  = useState(false);
   const lastClicked = useRef(null); // אינדקס השורה שסומנה אחרונה — נקודת ההתחלה לבחירת טווח עם Shift
   const PER_PAGE = 25;
   const RECURRING_PREVIEW = 5;
@@ -188,6 +189,20 @@ export default function AlertsPage() {
     api.get('/alerts/recurring')
       .then(r => setRecurring(r.data))
       .catch(console.error);
+  }
+
+  // איפוס התראה חוזרת: הספירה מתחילה מעכשיו, ההיסטוריה נשארת
+  async function resetRecurring(payload, confirmText) {
+    if (!window.confirm(confirmText)) return;
+    setResetting(true);
+    try {
+      await api.post('/alerts/recurring/reset', payload);
+    } catch (err) {
+      alert(err.response?.data?.error || t('error'));
+    } finally {
+      setResetting(false);
+    }
+    loadRecurring();
   }
 
   useEffect(() => {
@@ -302,8 +317,22 @@ export default function AlertsPage() {
           {/* התראות שחוזרות — לא ספייק חולף, ולכן דורשות בדיקה */}
           {recurring.items.length > 0 && (
             <div className="nm-card" style={{ marginBottom: 16, border: '1px solid #f97316' }}>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>
-                ⚠️ {t('recurring_title')} ({recurring.items.length})
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>
+                  ⚠️ {t('recurring_title')} ({recurring.items.length})
+                </div>
+                {isAdmin && (
+                  <button
+                    className="nm-btn nm-btn-ghost"
+                    style={{ marginInlineStart: 'auto', fontSize: 12 }}
+                    disabled={resetting}
+                    title={t('recurring_reset_tip', { min: recurring.minDays })}
+                    onClick={() => resetRecurring({ all: true },
+                      t('recurring_reset_all_confirm', { count: recurring.items.length, min: recurring.minDays }))}
+                  >
+                    ↺ {t('recurring_reset_all')}
+                  </button>
+                )}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
                 {t('recurring_hint', { min: recurring.minDays, window: recurring.windowDays })}
@@ -316,6 +345,7 @@ export default function AlertsPage() {
                     <th>{t('col_days')}</th>
                     <th>{t('col_events')}</th>
                     <th>{t('col_last_seen')}</th>
+                    {isAdmin && <th></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -336,6 +366,25 @@ export default function AlertsPage() {
                       <td style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                         {new Date(r.last_at * 1000).toLocaleString()}
                       </td>
+                      {isAdmin && (
+                        <td style={{ textAlign: 'end' }}>
+                          <button
+                            className="nm-btn nm-btn-ghost"
+                            style={{ fontSize: 12, padding: '2px 10px' }}
+                            disabled={resetting}
+                            title={t('recurring_reset_tip', { min: recurring.minDays })}
+                            onClick={() => resetRecurring(
+                              { device_id: r.device_id, metric: r.metric, port_if_index: r.port_if_index },
+                              t('recurring_reset_confirm', {
+                                name: (r.device_name || r.device_ip) +
+                                  (r.port_if_index != null ? ` · ${r.port_label || `${t('port_label')} ${r.port_if_index}`}` : ''),
+                                min: recurring.minDays,
+                              }))}
+                          >
+                            ↺ {t('recurring_reset')}
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

@@ -199,6 +199,19 @@ async function initDb() {
     )
   `);
 
+  // איפוס של התראה חוזרת: הפאנל "התראות שחוזרות" סופר רק אירועים אחרי reset_at.
+  // port_key = if_index של הפורט, או -1 להתראת מכשיר (כדי שה-UNIQUE יעבוד גם בלי פורט).
+  // האירועים עצמם לא נמחקים.
+  _sqlDb.exec(`
+    CREATE TABLE IF NOT EXISTS alert_recurring_resets (
+      device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+      metric    TEXT    NOT NULL,
+      port_key  INTEGER NOT NULL DEFAULT -1,
+      reset_at  INTEGER NOT NULL,
+      PRIMARY KEY (device_id, metric, port_key)
+    )
+  `);
+
   // טוקנים (לפי jti) שבוטלו ביציאה מהמערכת. שורה שהטוקן שלה פג ממילא נמחקת בניקוי.
   _sqlDb.exec(`
     CREATE TABLE IF NOT EXISTS revoked_tokens (

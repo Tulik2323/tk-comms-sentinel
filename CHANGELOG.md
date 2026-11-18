@@ -2,7 +2,16 @@
 
 All notable changes to TK Comms Sentinel are documented here.
 
-## [1.15.8] — 2026-11-15
+## [1.16.0] — 2026-11-18
+
+### Added
+- **Reset for recurring alerts.** The "Needs review: recurring alerts" panel at the top of the Alerts screen now has
+  a **Reset** button on each row and a **Reset all** button (admins only, with a confirmation). After a reset the
+  panel counts only alerts raised from that moment on, so the row comes back only if the same device or port raises
+  alerts again on 3 different days. No alert is deleted: the events stay in the log, and the reset time is kept in
+  a new `alert_recurring_resets` table. Every reset is written to the Audit log.
+
+ — 2026-11-15
 
 ### Fixed
 - **The poller choked on its own database writes, stopped writing its heartbeat, and the watchdog closed it.** On
